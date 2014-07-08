@@ -184,7 +184,7 @@ def query_ontol_type(id):
 ## Returns all genes (their IDs and names) for a given gene set. The gene name
 ## that is returned is the preferred (ode_pref) name.
 #
-## arg0, a gene set ID (int)
+## arg0, a tuple of gene set IDs
 ## ret, list of tuples containing the ode_gene_id and ode_ref_id.
 #
 def queryGenes(id):
@@ -339,8 +339,8 @@ def geneSymbolToId(symbols):
 
 if __name__ == '__main__':
 
-    print len(queryGenes((14921,)))#, 14923)))
-    print queryGenes((14921,))#, 14923)))
+    print len(queryGenes((14921, 14923)))
+    print queryGenes((14921, 14923))
     #terms = queryJaccards(31361, [2,3])
     #print terms[0][0]
     #print queryGenesetSize(31361)
