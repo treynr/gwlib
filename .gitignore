@@ -1,0 +1,10 @@
+
+## .gitignore for generank repo
+#
+
+# Ignore everything inside lib.
+# This folder has a separate repo called gw_lib.
+lib/**
+
+# Ignore those stupid compiled python files
+*.pyc
