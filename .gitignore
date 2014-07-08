@@ -1,10 +1,8 @@
 
-## .gitignore for generank repo
+## .gitignore for gw lib repo
 #
-
-# Ignore everything inside lib.
-# This folder has a separate repo called gw_lib.
-lib/**
 
 # Ignore those stupid compiled python files
 *.pyc
+# Ignore vim swp files
+*.swp

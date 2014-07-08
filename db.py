@@ -191,10 +191,12 @@ def queryGenes(id):
     if (id is None) or (id == 0):
         return []
 
-    query = ("SELECT eg.ode_gene_id, eg.ode_ref_id FROM extsrc.gene eg JOIN "
+    #query = ("SELECT eg.ode_gene_id, eg.ode_ref_id FROM extsrc.gene eg JOIN "
+    #         "extsrc.geneset_value egv ON eg.ode_gene_id=egv.ode_gene_id "
+    #         "WHERE eg.ode_pref='t' AND egv.gs_id=%s;")
+    query = ("SELECT eg.ode_gene_id FROM extsrc.gene eg FULL OUTER JOIN "
              "extsrc.geneset_value egv ON eg.ode_gene_id=egv.ode_gene_id "
-             "WHERE eg.ode_pref='t' AND egv.gs_id=%s;")
-
+             "WHERE eg.ode_pref='t' and egv.gs_id IN %s;")
     g_cur.execute(query, [id])
 
     res = g_cur.fetchall()
@@ -337,8 +339,10 @@ def geneSymbolToId(symbols):
 
 if __name__ == '__main__':
 
-    terms = queryJaccards(31361, [2,3])
-    print terms[0][0]
+    print len(queryGenes((14921,)))#, 14923)))
+    print queryGenes((14921,))#, 14923)))
+    #terms = queryJaccards(31361, [2,3])
+    #print terms[0][0]
     #print queryGenesetSize(31361)
 
     #print len(set(terms))
