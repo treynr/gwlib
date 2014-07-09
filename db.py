@@ -348,13 +348,16 @@ def queryGsName(ids):
     query = ('SELECT gs_id, gs_name FROM production.geneset WHERE gs_id = '
              'ANY(%s);')
 
-    g_cur.execute(query, ids)
+    g_cur.execute(query, [ids])
 
     res = g_cur.fetchall()
+    gmap = {}
 
-    print res
+    # The result is a list of tuples: fst = gs_id, snd = gs_name
+    for r in res:
+        gmap[str(r[0])] = r[1]
 
-    #return map(lambda x: x[0], res)
+    return gmap
 
 if __name__ == '__main__':
 
