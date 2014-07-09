@@ -348,6 +348,10 @@ def queryGsName(ids):
     query = ('SELECT gs_id, gs_name FROM production.geneset WHERE gs_id = '
              'ANY(%s);')
 
+    # Python's disgusting type system doesn't catch any text -> int errors, so
+    # we need to manually convert any ids provided as strings to ints
+    ids = map(int, ids)
+
     g_cur.execute(query, [ids])
 
     res = g_cur.fetchall()
