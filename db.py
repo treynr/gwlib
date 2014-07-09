@@ -337,6 +337,25 @@ def geneSymbolToId(symbols):
 
     return g_cur.fetchall()
 
+## queryGsName
+#
+## Given a list of geneset IDs, returns a dict mapping gs_id --> gs_name.
+#
+def queryGsName(ids):
+    if not ids:
+        return {}
+
+    query = ('SELECT gs_id, gs_name FROM production.geneset WHERE gs_id = '
+             'ANY(%s);')
+
+    g_cur.execute(query, ids)
+
+    res = g_cur.fetchall()
+
+    print res
+
+    #return map(lambda x: x[0], res)
+
 if __name__ == '__main__':
 
     print len(queryGenes((14921, 14923)))
