@@ -203,6 +203,19 @@ def queryGenes(id):
 
     return map(lambda x: x[0], res)
 
+def queryGenesAsName(id):
+    if (id is None) or (id == 0):
+        return []
+
+    query = ("SELECT eg.ode_ref_id FROM extsrc.gene eg FULL OUTER JOIN "
+             "extsrc.geneset_value egv ON eg.ode_gene_id=egv.ode_gene_id "
+             "WHERE eg.ode_pref='t' and egv.gs_id IN %s;")
+    g_cur.execute(query, [id])
+
+    res = g_cur.fetchall()
+
+    return map(lambda x: x[0], res)
+
 ## find_geneset_with_ontol
 #
 ## Returns all gene set IDs (gs_id) associated with a given ontology id 
