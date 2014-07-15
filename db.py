@@ -194,9 +194,12 @@ def queryGenes(id):
     #query = ("SELECT eg.ode_gene_id, eg.ode_ref_id FROM extsrc.gene eg JOIN "
     #         "extsrc.geneset_value egv ON eg.ode_gene_id=egv.ode_gene_id "
     #         "WHERE eg.ode_pref='t' AND egv.gs_id=%s;")
-    query = ("SELECT eg.ode_gene_id FROM extsrc.gene eg FULL OUTER JOIN "
-             "extsrc.geneset_value egv ON eg.ode_gene_id=egv.ode_gene_id "
-             "WHERE eg.ode_pref='t' and egv.gs_id IN %s;")
+    #query = ("SELECT eg.ode_gene_id FROM extsrc.gene eg FULL OUTER JOIN "
+    #         "extsrc.geneset_value egv ON eg.ode_gene_id=egv.ode_gene_id "
+    #         "WHERE eg.ode_pref='t' and egv.gs_id IN %s;")
+    query = ("SELECT DISTINCT(eg.ode_gene_id) FROM extsrc.gene eg, "
+             "extsrc.geneset_value egv WHERE eg.ode_pref='t' and "
+             "eg.ode_gene_id=egv.ode_gene_id AND egv.gs_id IN %s; ")
     g_cur.execute(query, [id])
 
     res = g_cur.fetchall()
@@ -206,10 +209,10 @@ def queryGenes(id):
 def queryGenesAsName(id):
     if (id is None) or (id == 0):
         return []
+    query = ("SELECT DISTINCT(eg.ode_ref_id) FROM extsrc.gene eg, "
+             "extsrc.geneset_value egv WHERE eg.ode_pref='t' and "
+             "eg.ode_gene_id=egv.ode_gene_id AND egv.gs_id IN %s; ")
 
-    query = ("SELECT eg.ode_ref_id FROM extsrc.gene eg FULL OUTER JOIN "
-             "extsrc.geneset_value egv ON eg.ode_gene_id=egv.ode_gene_id "
-             "WHERE eg.ode_pref='t' and egv.gs_id IN %s;")
     g_cur.execute(query, [id])
 
     res = g_cur.fetchall()
