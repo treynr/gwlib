@@ -350,6 +350,32 @@ def geneSymbolToId(symbols):
 
     return g_cur.fetchall()
 
+## queryGsName
+#
+## Given a list of geneset IDs, returns a dict mapping gs_id --> gs_name.
+#
+def queryGsName(ids):
+    if not ids:
+        return {}
+
+    query = ('SELECT gs_id, gs_name FROM production.geneset WHERE gs_id = '
+             'ANY(%s);')
+
+    # Python's disgusting type system doesn't catch any text -> int errors, so
+    # we need to manually convert any ids provided as strings to ints
+    ids = map(int, ids)
+
+    g_cur.execute(query, [ids])
+
+    res = g_cur.fetchall()
+    gmap = {}
+
+    # The result is a list of tuples: fst = gs_id, snd = gs_name
+    for r in res:
+        gmap[str(r[0])] = r[1]
+
+    return gmap
+
 if __name__ == '__main__':
 
     print len(queryGenes((14921, 14923)))
