@@ -209,7 +209,11 @@ def queryGenes(id):
 def queryGenesAsName(id):
     if (id is None) or (id == 0):
         return []
-    query = ("SELECT DISTINCT(eg.ode_ref_id) FROM extsrc.gene eg, "
+
+    #query = ("SELECT DISTINCT(eg.ode_ref_id) FROM extsrc.gene eg, "
+    #         "extsrc.geneset_value egv WHERE eg.ode_pref='t' and "
+    #         "eg.ode_gene_id=egv.ode_gene_id AND egv.gs_id IN %s; ")
+    query = ("SELECT eg.ode_ref_id, egv.gs_id FROM extsrc.gene eg, "
              "extsrc.geneset_value egv WHERE eg.ode_pref='t' and "
              "eg.ode_gene_id=egv.ode_gene_id AND egv.gs_id IN %s; ")
 
@@ -217,7 +221,9 @@ def queryGenesAsName(id):
 
     res = g_cur.fetchall()
 
-    return map(lambda x: x[0], res)
+    # Returns a list of tuples
+    return res
+    #return map(lambda x: x[0], res)
 
 ## find_geneset_with_ontol
 #
