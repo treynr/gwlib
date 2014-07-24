@@ -46,13 +46,26 @@ def queryGenesets(tiers=None, size=1000):
     # Iterates over the list and moves the gs_id from the tuple to a new list
     return map(lambda x: x[0], res)
 
+def queryGenesAsName(id):
+    query = ("SELECT eg.ode_ref_id, egv.gs_id FROM extsrc.gene eg, "
+             "extsrc.geneset_value egv WHERE eg.ode_pref='t' and "
+             "eg.ode_gene_id=egv.ode_gene_id AND egv.gs_id IN %s; ")
+
+    g_cur.execute(query, [id])
+
+    res = g_cur.fetchall()
+
+    # Returns a list of tuples
+    return res
+
 def queryGenesetSize(id):
-    query = 'SELECT gs_count FROM production.geneset WHERE gs_id=%s;'
+    query = 'SELECT gs_id, gs_count FROM production.geneset WHERE gs_id IN %s;'
 
     g_cur.execute(query, [id])
 
     # Only get the first result
-    return g_cur.fetchall()[0][0] # [(value,)] --> value
+    #return g_cur.fetchall()[0][0] # [(value,)] --> value
+    return g_cur.fetchall()
 
 ## query_ontol_ids
 #
@@ -76,7 +89,7 @@ def query_ontol_ids(id):
 #
 ## Given an ontology term, returns all the genesets annotated to that term.
 #
-def findGenesetsWithOntology(ont):
+def findGenesetsWithOntology(ont, tiers=[3,4,5]):
     if not ont:
         return []
 
@@ -85,17 +98,43 @@ def findGenesetsWithOntology(ont):
     #         'extsrc.geneset_ontology AS ego JOIN extsrc.ontology AS eo ON '
     #         'ego.ont_id=eo.ont_id WHERE eo.ont_name=\'%s\' AND eo.ontdb_id=4 '
     #         ';')
-    query = (' SELECT ego.gs_id, ego.ont_id, eo.ont_name FROM '
+    #query = ('SELECT ego.gs_id, ego.ont_id, eo.ont_name FROM '
+    query = ('SELECT ego.gs_id, pg.gs_name FROM '
              'extsrc.geneset_ontology AS ego JOIN extsrc.ontology AS eo ON '
              'ego.ont_id=eo.ont_id JOIN production.geneset AS pg ON '
-             'pg.gs_id=ego.gs_id WHERE eo.ont_name=%s AND eo.ontdb_id=4 '
-             'AND pg.gs_count < 1000 AND (pg.cur_id=3 OR pg.cur_id=4 OR pg.cur_id=5);')
+             #'pg.gs_id=ego.gs_id WHERE eo.ont_name=%s ' #AND eo.ontdb_id=4 '
+             'pg.gs_id=ego.gs_id WHERE eo.ont_name IN %s ' #AND eo.ontdb_id=4 '
+             'AND pg.gs_count < 1000 AND pg.cur_id=ANY(%s);')
 
-    g_cur.execute(query, [ont])
+    g_cur.execute(query, [ont, tiers])
 
     res = g_cur.fetchall();
 
-    return map(lambda x: x[0], res)
+    return res
+    #return map(lambda x: x[0], res)
+
+def genericOntologySearch(ont, name=False):
+    #query = ('SELECT ont_name, ont_description FROM extsrc.ontology WHERE '
+    #         'ont_description LIKE %%%s%%;')
+    if name:
+        query = ('SELECT ont_name, ont_description FROM extsrc.ontology WHERE '
+                 'ont_name ILIKE \'%%\'||%s||\'%%\';')
+    else:
+        query = ('SELECT ont_name, ont_description FROM extsrc.ontology WHERE '
+                 'ont_description ILIKE \'%%\'||%s||\'%%\';')
+
+    g_cur.execute(query, [ont])
+
+    return g_cur.fetchall();
+
+## Given a tuple of gs_ids, returns the species for each as a (gs_id, sp_id)
+## tuple.
+def queryGenesetSpecies(ids):
+    query = 'SELECT gs_id, sp_id FROM production.geneset WHERE gs_id IN %s;'
+
+    g_cur.execute(query, [ids])
+
+    return g_cur.fetchall()
 
 ## query_ontols
 #
@@ -206,6 +245,10 @@ def queryGenes(id):
 
     return map(lambda x: x[0], res)
 
+## queryGenesAsName
+#
+## Returns a list of tuples (gs_id, gene_name) for list of geneset IDs. The
+## list of geneset IDs is actually a giant tuple. 
 def queryGenesAsName(id):
     if (id is None) or (id == 0):
         return []
