@@ -7,6 +7,7 @@
 ## GeneWeaver DB.
 #
 
+import datetime as dt
 import psycopg2
 
 # Attempt db connection
@@ -402,6 +403,46 @@ def geneSymbolToId(symbols):
 
     return g_cur.fetchall()
 
+## queryGeneFromRef
+#
+## Will probably replace the above querySymbolToId function. This function 
+## takes a list of ode_ref_ids and returns a list of tuples 
+## (ode_gene_id, ode_ref_id). Can be used to map gene IDs from other DBs
+## (like NCBI) to the internal identifiers GeneWeaver uses.
+#
+def queryGeneFromRef(ids, asdict=True):
+    if type(ids) is list:
+        ids = tuple(ids)
+
+    query = ('SELECT ode_ref_id, ode_gene_id FROM extsrc.gene WHERE '
+            'ode_ref_id IN %s;')
+    g_cur.execute(query, [ids])
+    res = g_cur.fetchall()
+
+    if asdict:
+        d = {}
+        for t in res:
+            d[t[0]] = t[1]
+
+        res = d
+
+    return res
+
+    #return g_cur.fetchall()
+    #return map(lambda x: x[0], res)
+
+## Convert ode_gene_id -> symbol/entity name/whatever it's called
+def queryGeneName(ids):
+    if type(ids) is list:
+        ids = tuple(ids)
+
+    query = ('SELECT ode_gene_id, ode_ref_id FROM extsrc.gene WHERE '
+            'ode_pref=\'t\' AND ode_gene_id IN %s')
+
+    g_cur.execute(query, [ids])
+
+    return g_cur.fetchall()
+
 ## queryGsName
 #
 ## Given a list of geneset IDs, returns a dict mapping gs_id --> gs_name.
@@ -428,10 +469,52 @@ def queryGsName(ids):
 
     return gmap
 
-if __name__ == '__main__':
+## createGeneset
+#
+## Creates a geneset.
+#
+def createGeneset(cur_id, sp_id, thresh_type, thresh, cnt, name, abbrev, desc):
+    usr = 3507787 # My usr_id
+    query = ('INSERT INTO geneset (file_id, usr_id, cur_id, sp_id, '
+            #'gs_threshold_type, gs_threshold, gs_groups, gs_created, '
+            'gs_threshold_type, gs_threshold, gs_created, '
+            'gs_updated, gs_status, gs_count, gs_uri, gs_gene_id_type, '
+            'gs_name, gs_abbreviation, gs_description, gs_attribution) VALUES '
+            '(0, %s, %s, %s, %s, %s, NOW(), NOW(), \'normal\', %s, \'\', -7, '
+            '%s, %s, %s, 0) RETURNING gs_id;')
+    g_cur.execute('set search_path = extsrc,production,odestatic;')
+    g_cur.execute(query, [usr, cur_id, sp_id, thresh_type, thresh, cnt, name, abbrev, desc])
 
-    print len(queryGenes((14921, 14923)))
-    print queryGenes((14921, 14923))
+    # Make the changes permanent
+    #conn.commit()
+
+    return map(lambda x: x[0], g_cur.fetchall())[0]
+
+def createGenesetValue(gs_id, gene_id, value, name, thresh):
+    query = ('INSERT INTO extsrc.geneset_value (gs_id, ode_gene_id, '
+            'gsv_value, gsv_hits, gsv_source_list, gsv_value_list, '
+            'gsv_in_threshold, gsv_date) VALUES (%s, %s, %s, 0, %s, ARRAY[0], '
+            '%s, %s);')
+
+    g_cur.execute(query, [gs_id, gene_id, value, [name], thresh, 
+        dt.date.today()])
+
+## commitChanges
+#
+## Makes any changes to the database permanent. Needed after database 
+## alterations (e.g. INSERT, DELETE, etc.).
+#
+def commitChanges():
+    conn.commit()
+
+#if __name__ == '__main__':
+
+    #gsid = createGeneset(2, 2, 1, 0.5, 0, 'Test MeSH Set Test', 'mesh set testing', 'mesh set testing')
+    #createGenesetValue(gsid[0], 53023, 1.0, 'JAK3', 't')
+    #print gsid
+    #commitChanges()
+    #print len(queryGenes((14921, 14923)))
+    #print queryGenes((14921, 14923))
     #terms = queryJaccards(31361, [2,3])
     #print terms[0][0]
     #print queryGenesetSize(31361)
