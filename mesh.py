@@ -159,10 +159,15 @@ def saveP2m(fp, p2m):
 ## arg, g2m, gene2mesh (or mesh2gene) dict
 ## arg, wts, weight for the gene-mesh associations
 #
-def saveG2m(fp, g2m, wts=None):
+def saveG2m(fp, g2m, wts=None, tab=False):
     with open(fp, 'w') as f:
         for k, v in g2m.items():
-            print >> f, (str(k) + '|' + '|'.join(v))
+            if len(v) <= 1:
+                continue
+            if tab:
+                print >> f, (str(k) + '\t' + '\t'.join(map(lambda x: str(x), v)))
+            else:
+                print >> f, (str(k) + '|' + '|'.join(v))
 
     if wts:
         with open(fp + '.wts', 'w') as f:
