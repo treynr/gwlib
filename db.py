@@ -59,6 +59,19 @@ def queryGenesAsName(id):
     # Returns a list of tuples
     return res
 
+## Given a gs_id, returns a list of tuples containing the ode_gene_id and 
+## gsv_value of all geneset_values associated with the gs_id.
+def queryGeneValues(id):
+    query = ('SELECT ode_gene_id, gsv_value FROM extsrc.geneset_value '
+             'WHERE gs_id=%s;')
+
+    g_cur.execute(query, [id])
+
+    res = g_cur.fetchall()
+
+    # Returns a list of tuples
+    return res
+
 def queryGenesetSize(id):
     query = 'SELECT gs_id, gs_count FROM production.geneset WHERE gs_id IN %s;'
 
@@ -518,6 +531,22 @@ def findMeshSet(term):
         return res[0][0]
     else:
         return None
+
+## getMeshSets
+#
+## Returns the gs_ids for all the MeSH sets in the database. Finds MeSH sets
+## using simple string matching. If the MeSH set names ever change this will
+## need to be updated. 
+#
+def getMeshSets():
+    query = ('SELECT gs_id FROM production.geneset WHERE gs_name LIKE '
+             '\'MeSH Set ("\' AND gs_status LIKE \'normal\';')
+
+    g_cur.execute(query)
+
+    res = g_cur.fetchall()
+
+    return map(lambda x: x[0], res)
 
 ## updateMeshSet
 #
