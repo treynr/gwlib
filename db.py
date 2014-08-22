@@ -372,6 +372,17 @@ def queryJaccards(id, tiers=None, size=1000):
 
     return (resl, resr)
 
+## Returns jaccard values for the given gs_id and all MeSH genesets.
+#
+def meshSetJaccards(gs_id):
+    query = ('SELECT gs_id_right, jac_value FROM extsrc.geneset_jaccard '
+             'WHERE gs_id_left = %s AND gs_id_right IN (SELECT gs_id FROM '
+             'production.geneset WHERE gs_name LIKE \'Mesh Set ("%%\');')
+
+    g_cur.execute(query, [gs_id])
+
+    return g_cur.fetchall()
+
 ## queryAllMeshTerms
 #
 ## Returns all the MeSH terms in the database. These are retrieved from my 
@@ -540,7 +551,7 @@ def findMeshSet(term):
 #
 def getMeshSets():
     query = ('SELECT gs_id FROM production.geneset WHERE gs_name LIKE '
-             '\'MeSH Set ("\' AND gs_status LIKE \'normal\';')
+             '\'MeSH Set ("%%\' AND gs_status LIKE \'normal\';')
 
     g_cur.execute(query)
 
