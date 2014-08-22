@@ -570,6 +570,21 @@ def updateMeshSet(term, cnt, terms):
 
     return nid
 
+## calcJaccard
+#
+## Calculates Jaccard indices for a given gs_id. Code essentially ripped from 
+## the OfflineSimilarity tool. This is just done so I can target particular
+## genesets (or update Jaccards after adding new genesets) and don't have to 
+## wait for the script to finish.
+#
+## arg, gs_id, the geneset ID to use in the calculate_jaccard function
+#
+def calcJaccard(gs_id):
+    g_cur.execute('SET search_path TO production,extsrc,odestatic;')
+    g_cur.execute('SELECT calculate_jaccard(%s);' % (gs_id,))
+    conn.commit()
+    
+
 #def updateMeshSet
 ## commitChanges
 #

@@ -159,13 +159,16 @@ def saveP2m(fp, p2m):
 ## arg, g2m, gene2mesh (or mesh2gene) dict
 ## arg, wts, weight for the gene-mesh associations
 #
-def saveG2m(fp, g2m, wts=None, tab=False):
+def saveG2m(fp, g2m, wts=None, tab=False, gnames=None):
     with open(fp, 'w') as f:
         for k, v in g2m.items():
             if len(v) <= 1:
                 continue
             if tab:
-                print >> f, (str(k) + '\t' + '\t'.join(map(lambda x: str(x), v)))
+                # This was added for Charles' mesh2gene data and can now
+                # probably be deleted, the gnames argument above can also
+                # be deleted
+                print >> f, (str(k) + '\t' + '\t'.join(map(lambda x: gnames[x], filter(lambda x: gnames.has_key(x), v))))
             else:
                 print >> f, (str(k) + '|' + '|'.join(v))
 
