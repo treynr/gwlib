@@ -406,26 +406,32 @@ def queryAllG2m():
 
     return map(lambda x: x[0], res)
 
-## Returns an ode_gene_id for a given list of symbols. Assumes humans as 
-## the species, specifies a gdb_id of 7 (gene symbol) for the query, and
-## ensures the ID is ode_pref(erred).
-#
-def geneSymbolToId(symbols):
+def geneSymbolToId(symbols, sp_id=2):
+    if type(symbols) == list:
+        symbols = tuple(symbols)
     # For some reason this query returns duplicate values without the DISTINCT
-    # clause. Must be a bug in psycopg because this query doesn't return 
+    # clause. Must be a bug in psycopg because this query doesn't return
     # duplicates without the DISTINCT when entered from psql.
+    # 9/11/14 - a late note, but I fixed this problem in July, turned out to
+    # be a shit ton of duplicates in the GW DB that was causing it. No idea how
+    # the fuck those duplicates got in there since they weren't there in May.
+    # talking about the bepo db btw, I now consider it the retarded child of 
+    # Erich's machines.
+    ##query = ('SELECT DISTINCT ode_gene_id, ode_ref_id FROM extsrc.gene WHERE gdb_id=7 '
+    ##         'AND sp_id=2 AND ode_pref=true AND (')
     query = ('SELECT DISTINCT ode_gene_id, ode_ref_id FROM extsrc.gene WHERE gdb_id=7 '
-             'AND sp_id=2 AND ode_pref=true AND (')
+             'AND sp_id=%s AND ode_pref=true AND ode_ref_id IN %s;')
 
-    for i in range(len(symbols)):
-        if i == (len(symbols) - 1):
-            query += 'ode_ref_id=%s);'
-        else:
-            query += 'ode_ref_id=%s OR '
+    ##for i in range(len(symbols)):
+    ##    if i == (len(symbols) - 1):
+    ##        query += 'ode_ref_id=%s);'
+    ##    else:
+    ##        query += 'ode_ref_id=%s OR '
 
-    g_cur.execute(query, symbols)
+    g_cur.execute(query, [sp_id, symbols])
 
     return g_cur.fetchall()
+
 
 ## queryGeneFromRef
 #
