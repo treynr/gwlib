@@ -73,6 +73,9 @@ def queryGeneValues(id):
     return res
 
 def queryGenesetSize(id):
+    if type(id) == list:
+        id = tuple(id)
+
     query = 'SELECT gs_id, gs_count FROM production.geneset WHERE gs_id IN %s;'
 
     g_cur.execute(query, [id])
@@ -558,6 +561,20 @@ def findMeshSet(term):
 def getMeshSets():
     query = ('SELECT gs_id FROM production.geneset WHERE gs_name LIKE '
              '\'MeSH Set ("%%\' AND gs_status LIKE \'normal\';')
+
+    g_cur.execute(query)
+
+    res = g_cur.fetchall()
+
+    return map(lambda x: x[0], res)
+
+## getAbaSets
+#
+## Returns the gs_ids for all the ABA sets in the database.
+#
+def getAbaSets():
+    query = ('SELECT gs_id FROM production.geneset WHERE gs_name LIKE '
+             '\'ABA Set - %%\' AND gs_status LIKE \'normal\';')
 
     g_cur.execute(query)
 
