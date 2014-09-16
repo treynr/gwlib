@@ -269,6 +269,8 @@ def queryGenes(id):
 def queryGenesAsName(id):
     if (id is None) or (id == 0):
         return []
+    if type(id) == list:
+        id = tuple(id)
 
     #query = ("SELECT DISTINCT(eg.ode_ref_id) FROM extsrc.gene eg, "
     #         "extsrc.geneset_value egv WHERE eg.ode_pref='t' and "
@@ -618,6 +620,23 @@ def calcJaccard(gs_id):
     g_cur.execute('SELECT calculate_jaccard(%s);' % (gs_id,))
     conn.commit()
     
+
+## gene2snp
+#
+##
+#
+def gene2snp(gids):
+    if type(gids) == list:
+        gids = tuple(gids)
+
+    query = ('SELECT ode_gene_id, snp_ref_id FROM extsrc.snp WHERE '
+             'ode_gene_id IN %s;')
+
+    g_cur.execute(query, [gids])
+
+    #res = g_cur.fetchall()
+    return g_cur.fetchall()
+
 
 #def updateMeshSet
 ## commitChanges
