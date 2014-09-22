@@ -59,6 +59,20 @@ def queryGenesAsName(id):
     # Returns a list of tuples
     return res
 
+def queryGenesAsId(id):
+    if type(id) == list:
+        id = tuple(id)
+    query = ("SELECT eg.ode_gene_id, egv.gs_id FROM extsrc.gene eg, "
+             "extsrc.geneset_value egv WHERE eg.ode_pref='t' and "
+             "eg.ode_gene_id=egv.ode_gene_id AND egv.gs_id IN %s; ")
+
+    g_cur.execute(query, [id])
+
+    res = g_cur.fetchall()
+
+    # Returns a list of tuples
+    return res
+
 ## Given a gs_id, returns a list of tuples containing the ode_gene_id and 
 ## gsv_value of all geneset_values associated with the gs_id.
 def queryGeneValues(id):
@@ -485,13 +499,17 @@ def queryGeneName(ids):
 def queryGsName(ids):
     if not ids:
         return {}
+    if type(ids) == list:
+        ids = tuple(ids)
 
     query = ('SELECT gs_id, gs_name FROM production.geneset WHERE gs_id = '
              'ANY(%s);')
+    query = ('SELECT gs_id, gs_name FROM production.geneset WHERE gs_id IN '
+             '%s;')
 
     # Python's disgusting type system doesn't catch any text -> int errors, so
     # we need to manually convert any ids provided as strings to ints
-    ids = map(int, ids)
+    #ids = map(int, ids)
 
     g_cur.execute(query, [ids])
 
@@ -500,7 +518,7 @@ def queryGsName(ids):
 
     # The result is a list of tuples: fst = gs_id, snd = gs_name
     for r in res:
-        gmap[str(r[0])] = r[1]
+        gmap[r[0]] = r[1]
 
     return gmap
 
@@ -637,6 +655,48 @@ def gene2snp(gids):
     #res = g_cur.fetchall()
     return g_cur.fetchall()
 
+## getHomologySourceId
+#
+##
+#
+def getHomologySourceId(ids):
+    if type(ids) == list:
+        ids = tuple(ids)
+
+    query = ('SELECT ode_gene_id, hom_source_id FROM extsrc.homology WHERE '
+             'hom_source_name LIKE \'Homologene\' AND ode_gene_id IN %s;')
+
+    g_cur.execute(query, [ids])
+
+    return g_cur.fetchall()
+
+## getHomologyId
+#
+## gets the hom_id for the list of ode_gene_ids
+#
+def getHomologyId(ids, asdict=False):
+    if type(ids) == list:
+        ids = tuple(ids)
+
+    query = ('SELECT ode_gene_id, hom_id FROM extsrc.homology WHERE '
+             'hom_source_name LIKE \'Homologene\' AND ode_gene_id IN %s;')
+
+    g_cur.execute(query, [ids])
+    res = g_cur.fetchall()
+
+    if not asdict:
+        return res
+
+    hmap = {}
+    for tup in res:
+        hmap[tup[0]] = tup[1]
+
+    # if there weren't any hom_ids for an ode_gene_id, map it to itself
+    for i in ids:
+        if not hmap.has_key(i):
+            hmap[i] = i
+
+    return hmap
 
 #def updateMeshSet
 ## commitChanges
