@@ -6,6 +6,38 @@
 ## auth:    TR
 # 
 
+## tup2dict
+#
+## Finally fucking wrote this because I need this functionality quite often 
+## and writing a for loop every time was getting annoying.
+## Converts a tuple into a dict. Use key to specifiy which tuple index (0/1)
+## should be used as the key (only supports two-element tuples right now).
+## If lst == True, then the dictionary values are treated as lists instead of
+## just some single variable.  
+#
+## arg, tup, tuple that will converted to a dict
+## arg, key, tuple index to use as the key
+## arg, lst, specifies if dict values should be treated as lists 
+## ret, dictionary
+#
+def tup2dict(tup, key=0, lst=False):
+	val = 0 # Tuple index to use as values
+
+	if key == 0:
+		val = 1
+	if lst:
+		tmap = dd(list)
+	else:
+		tmap = {}
+	
+	for t in tup:
+		if lst:
+			tmap[t[key]].append(t[val])
+		else:
+			tmap[t[key]] = t[val]
+
+	return tmap
+
 ## splitList
 #
 ## Splits a comma separated string into a list. Removes any extraneous spaces
