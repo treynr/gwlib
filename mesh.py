@@ -264,8 +264,8 @@ def makeG2m(g2p, p2m, tree, make_m2g=True, weight=False, closure=False):
 					for anc in tree[mesh]['ancestors']:
 						#print anc
 						#exit()
-						if mesh not in g2m[gene]:
-							g2m[gene].add(mesh)
+						if anc not in g2m[gene]:
+							g2m[gene].add(anc)
 							# alter the count too since we calc weights later on
 							g2m_count[gene][anc] += 1
 
