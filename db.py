@@ -167,6 +167,18 @@ def queryGenesetSpecies(ids):
 
 	return g_cur.fetchall()
 
+def queryGenesetNames(ids):
+	if type(ids) == str or type(ids) == int or type(ids) == long:
+		ids = [long(ids)]
+	if type(ids) == list:
+		ids = tuple(ids)
+
+	query = 'SELECT gs_id, gs_name FROM production.geneset WHERE gs_id IN %s;'
+
+	g_cur.execute(query, [ids])
+
+	return g_cur.fetchall()
+
 ## query_ontols
 #
 ## Returns all the ontologies associated with a particular gene set.
