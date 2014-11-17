@@ -714,6 +714,18 @@ def findGenesetsWithGenes(genes)
 	# de-tuple the results
 	return map(lambda x: x[0], g_cur.fetchall())
 
+def getSetsWithoutJaccards():
+	## 11/14/14 - For some fucking reason this query is taking forever. 
+	## specifically its any select query on geneset_jaccard.
+	query = ('SELECT gs_id FROM production.geneset WHERE gs_status NOT LIKE '
+			 '\'de%%\' AND gs_id NOT IN (SELECT DISTINCT gs_id_left FROM '
+			 'production.geneset_jaccard) ORDER BY gs_id DESC;')
+
+	g_cur.execute(query)
+
+	# de-tuple the results
+	return map(lambda x: x[0], g_cur.fetchall())
+
 ## getGenesForJaccard
 #
 ## Given a list of gs_ids, returns all the genes (ode_gene_ids) associatd 
@@ -770,6 +782,36 @@ def getHomologySourceId(ids):
 	g_cur.execute(query, [ids])
 
 	return g_cur.fetchall()
+
+## getGeneHomologs
+#
+## Gets all homologous ode_gene_ids for a list of ode_gene_ids. Can return
+## the results as a dict.
+#
+def getGeneHomologs(ids, asdict=False):
+	if type(ids) == list:
+		ids = tuple(ids)
+	
+	query = ('SELECT b.ode_gene_id, a.ode_gene_id FROM extsrc.homology WHERE '
+			 'a.hom_id=b.hom_id AND b.ode_gene_id IN %s;')
+
+	g_cur.execute(query, [ids])
+	res = g_cur.fetchall()
+
+	if not asdict:
+		return res
+
+	hmap = dd(list)
+	for tup in res:
+		#hmap[tup[0]] = tup[1]
+		hmap[tup[0]].append(tup[1])
+
+	# if there weren't any hom_ids for an ode_gene_id, map it to itself
+	for i in ids:
+		if not hmap.has_key(i):
+			hmap[i] = [i]
+
+	return hmap
 
 ## getHomologyId
 #
