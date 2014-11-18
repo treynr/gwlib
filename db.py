@@ -688,7 +688,7 @@ def addJaccards(jacs):
 #
 ## Deletes all jaccard values for a given list of genesets.
 #
-def deleteJaccards(gsids)
+def deleteJaccards(gsids):
 	if type(gsids) == list:
 		gsids = tuple(gsids)
 
@@ -702,9 +702,9 @@ def deleteJaccards(gsids)
 ## Returns a list of genesets that contain at least one gene from a given list
 ## of genes. Assuming ode_gene_ids are given.
 #
-def findGenesetsWithGenes(genes)
-	if type(gsids) == list:
-		gsids = tuple(gsids)
+def findGenesetsWithGenes(genes):
+	if type(genes) == list:
+		genes = tuple(genes)
 
 	query = ('SELECT DISTINCT gs_id FROM extsrc.geneset_value WHERE '
 			 'ode_gene_id IN %s;')
@@ -740,9 +740,12 @@ def getGenesForJaccard(gsids):
 
 	query = ('SELECT gv.gs_id, gv.ode_gene_id FROM extsrc.geneset_value AS gv '
 			 'INNER JOIN production.geneset AS gs ON gv.gs_id = gs.gs_id '
-			 'WHERE gv.ode_gene_id IN %s AND gs.gs_status NOT LIKE \'de%\';')
+			 'WHERE gsv_in_threshold = \'t\' AND gs.gs_id IN %s;') #AND gs.gs_status NOT LIKE \'de%%\';')
+	#query = ('SELECT gv.gs_id, gv.ode_gene_id FROM extsrc.geneset_value AS gv, '
+	#		 'production.geneset as gs WHERE gv.gs_id = gs.gs_id AND '
+	#		 'gv.gsv_in_threshold = \'t\' AND gs.gs_id IN %s;') #AND gs.gs_status NOT LIKE \'de%%\';')
 
-	g_cur.execute(query, [genes])
+	g_cur.execute(query, [gsids])
 
 	res = g_cur.fetchall()
 	gmap = dd(list)
@@ -789,11 +792,14 @@ def getHomologySourceId(ids):
 ## the results as a dict.
 #
 def getGeneHomologs(ids, asdict=False):
+	from collections import defaultdict as dd
+
 	if type(ids) == list:
 		ids = tuple(ids)
 	
-	query = ('SELECT b.ode_gene_id, a.ode_gene_id FROM extsrc.homology WHERE '
-			 'a.hom_id=b.hom_id AND b.ode_gene_id IN %s;')
+	query = ('SELECT b.ode_gene_id, a.ode_gene_id FROM extsrc.homology AS a, '
+			 'extsrc.homology AS b WHERE a.hom_id=b.hom_id AND '
+			 'b.ode_gene_id IN %s;')
 
 	g_cur.execute(query, [ids])
 	res = g_cur.fetchall()
