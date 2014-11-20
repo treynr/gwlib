@@ -719,7 +719,7 @@ def getSetsWithoutJaccards():
 	## specifically its any select query on geneset_jaccard.
 	query = ('SELECT gs_id FROM production.geneset WHERE gs_status NOT LIKE '
 			 '\'de%%\' AND gs_id NOT IN (SELECT DISTINCT gs_id_left FROM '
-			 'production.geneset_jaccard) ORDER BY gs_id DESC;')
+			 'extsrc.geneset_jaccard) ORDER BY gs_id DESC;')
 
 	g_cur.execute(query)
 
