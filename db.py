@@ -10,7 +10,7 @@
 import datetime as dt
 import psycopg2
 
-# Attempt db connection
+# Attempt local db connection
 try:
 	conn = psycopg2.connect(("dbname='geneweaver' user='odeadmin' "
 							 "password='odeadmin'"))
@@ -162,6 +162,18 @@ def genericOntologySearch(ont, name=False):
 ## tuple.
 def queryGenesetSpecies(ids):
 	query = 'SELECT gs_id, sp_id FROM production.geneset WHERE gs_id IN %s;'
+
+	g_cur.execute(query, [ids])
+
+	return g_cur.fetchall()
+
+def queryGenesetNames(ids):
+	if type(ids) == str or type(ids) == int or type(ids) == long:
+		ids = [long(ids)]
+	if type(ids) == list:
+		ids = tuple(ids)
+
+	query = 'SELECT gs_id, gs_name FROM production.geneset WHERE gs_id IN %s;'
 
 	g_cur.execute(query, [ids])
 
@@ -639,7 +651,109 @@ def calcJaccard(gs_id):
 	g_cur.execute('SET search_path TO production,extsrc,odestatic;')
 	g_cur.execute('SELECT calculate_jaccard(%s);' % (gs_id,))
 	conn.commit()
+
+## Functions related to python-based jaccard calculation
+
+## updateJacStart
+#
+## Updates the date a jaccard calculation was started for a particular 
+## geneset by altering the gsi_jac_started column found in geneset_info. Sets
+## the time started to now().
+#
+## arg, 
+#
+def updateJacStart(gsids):
+	if type(gsids) == list:
+		gsids = tuple(gsids)
 	
+	query = ('UPDATE production.geneset_info SET gsi_jac_started=NOW() WHERE '
+			 'gs_id IN %s;')
+
+	#g_cur.execute('SET search_path TO production,extsrc,odestatic;')
+	g_cur.execute(query, [gsids])
+
+## addJaccards
+#
+## Given a list of tuples (id_left, id_right, jac) this function adds the
+## jaccard values to the DB.
+#
+def addJaccards(jacs):
+	query = ('INSERT INTO extsrc.geneset_jaccard '
+			 '(gs_id_left, gs_id_right, jac_value) VALUES (%s, %s, %s);')
+
+	for j in jacs:
+		g_cur.execute(query, list(j))
+
+## deleteJaccards
+#
+## Deletes all jaccard values for a given list of genesets.
+#
+def deleteJaccards(gsids):
+	if type(gsids) == list:
+		gsids = tuple(gsids)
+
+	query = ('DELETE FROM extsrc.geneset_jaccard WHERE gs_id_left IN %s OR '
+			 'gs_id_right IN %s;')
+
+	g_cur.execute(query, [gsids, gsids])
+
+## findGenesetWithGenes
+#
+## Returns a list of genesets that contain at least one gene from a given list
+## of genes. Assuming ode_gene_ids are given.
+#
+def findGenesetsWithGenes(genes):
+	if type(genes) == list:
+		genes = tuple(genes)
+
+	query = ('SELECT DISTINCT gs_id FROM extsrc.geneset_value WHERE '
+			 'ode_gene_id IN %s;')
+
+	g_cur.execute(query, [genes])
+
+	# de-tuple the results
+	return map(lambda x: x[0], g_cur.fetchall())
+
+def getSetsWithoutJaccards():
+	## 11/14/14 - For some fucking reason this query is taking forever. 
+	## specifically its any select query on geneset_jaccard.
+	query = ('SELECT gs_id FROM production.geneset WHERE gs_status NOT LIKE '
+			 '\'de%%\' AND gs_id NOT IN (SELECT DISTINCT gs_id_left FROM '
+			 'extsrc.geneset_jaccard) ORDER BY gs_id DESC;')
+
+	g_cur.execute(query)
+
+	# de-tuple the results
+	return map(lambda x: x[0], g_cur.fetchall())
+
+## getGenesForJaccard
+#
+## Given a list of gs_ids, returns all the genes (ode_gene_ids) associatd 
+## with each geneset that are within the geneset_value threshold. Returns the
+## results as a dictionary, gs_ids -> [ode_gene_id]. 
+#
+def getGenesForJaccard(gsids):
+	from collections import defaultdict as dd
+
+	if type(gsids) == list:
+		gsids = tuple(gsids)
+
+	query = ('SELECT gv.gs_id, gv.ode_gene_id FROM extsrc.geneset_value AS gv '
+			 'INNER JOIN production.geneset AS gs ON gv.gs_id = gs.gs_id '
+			 'WHERE gsv_in_threshold = \'t\' AND gs.gs_id IN %s;') #AND gs.gs_status NOT LIKE \'de%%\';')
+	#query = ('SELECT gv.gs_id, gv.ode_gene_id FROM extsrc.geneset_value AS gv, '
+	#		 'production.geneset as gs WHERE gv.gs_id = gs.gs_id AND '
+	#		 'gv.gsv_in_threshold = \'t\' AND gs.gs_id IN %s;') #AND gs.gs_status NOT LIKE \'de%%\';')
+
+	g_cur.execute(query, [gsids])
+
+	res = g_cur.fetchall()
+	gmap = dd(list)
+
+	for r in res:
+		gmap[r[0]].append(r[1])
+
+	return gmap
 
 ## gene2snp
 #
@@ -671,6 +785,39 @@ def getHomologySourceId(ids):
 	g_cur.execute(query, [ids])
 
 	return g_cur.fetchall()
+
+## getGeneHomologs
+#
+## Gets all homologous ode_gene_ids for a list of ode_gene_ids. Can return
+## the results as a dict.
+#
+def getGeneHomologs(ids, asdict=False):
+	from collections import defaultdict as dd
+
+	if type(ids) == list:
+		ids = tuple(ids)
+	
+	query = ('SELECT b.ode_gene_id, a.ode_gene_id FROM extsrc.homology AS a, '
+			 'extsrc.homology AS b WHERE a.hom_id=b.hom_id AND '
+			 'b.ode_gene_id IN %s;')
+
+	g_cur.execute(query, [ids])
+	res = g_cur.fetchall()
+
+	if not asdict:
+		return res
+
+	hmap = dd(list)
+	for tup in res:
+		#hmap[tup[0]] = tup[1]
+		hmap[tup[0]].append(tup[1])
+
+	# if there weren't any hom_ids for an ode_gene_id, map it to itself
+	for i in ids:
+		if not hmap.has_key(i):
+			hmap[i] = [i]
+
+	return hmap
 
 ## getHomologyId
 #

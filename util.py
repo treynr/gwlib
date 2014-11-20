@@ -6,16 +6,19 @@
 ## auth:    TR
 # 
 
+from collections import defaultdict as dd
+import json
+
 ## tup2dict
 #
 ## Finally fucking wrote this because I need this functionality quite often 
 ## and writing a for loop every time was getting annoying.
-## Converts a tuple into a dict. Use key to specifiy which tuple index (0/1)
-## should be used as the key (only supports two-element tuples right now).
-## If lst == True, then the dictionary values are treated as lists instead of
-## just some single variable.  
+## Converts a list of tuples into a dict. Use key to specifiy which tuple 
+## index (0/1) should be used as the key (only supports two-element tuples 
+## right now). If lst == True, then the dictionary values are treated as 
+## lists instead of just some single variable.  
 #
-## arg, tup, tuple that will converted to a dict
+## arg, tup, list of tuples that will converted to a dict
 ## arg, key, tuple index to use as the key
 ## arg, lst, specifies if dict values should be treated as lists 
 ## ret, dictionary
@@ -62,4 +65,20 @@ def splitList(strs):
 def chunkList(l, n):
     for i in xrange(0, len(l), n):
         yield l[i:i+n]
+
+## exportJson
+#
+## Takes a filepath and some data structure (usually a list of objects) and 
+## dumps the data to a JSON file at the given path. 
+#
+## arg, fp, filepath to write to
+## arg, data, data to export
+## arg, dtag, OPTIONAL data tag string used to tag the data w/ script arguments
+#
+def exportJson(fp, data, dtag=''):
+	with open(fp, 'w') as fl:
+		if dtag == '':
+			print >> fl, json.dumps(data)
+		else:
+			print >> fl, json.dumps([dtag, data])
 
