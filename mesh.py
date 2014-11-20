@@ -3,7 +3,7 @@
 ## file:	mesh.py
 ## desc:	MeSH function library for retrieving MeSH and pubmed information
 ##			from NCBI. Uses the NCBI e-util URLs. 
-## vers:	0.1
+## vers:	0.1.0
 ## auth:	TR
 # 
 
@@ -24,8 +24,6 @@ def getArticleInfo(id):
 	import urllib as ul # For NCBI e-utils crap
 
 	# NCBI efetch util url, no xml because it's pig disgusting
-	#url = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?'
-	#		'db=pubmed&id=')
 	url = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?'
 		   'tool=geneweaver_gene2mesh&email=timothy_reynolds@baylor.edu'
 		   '&db=pubmed&rettype=medline&retmode=text&id=')
@@ -34,7 +32,8 @@ def getArticleInfo(id):
 		return None
 	else:
 		for i in id:
-			url += str(id) + ','# Just in case the uid is an int for some reason
+			# Just in case the uid is an int for some reason
+			url += str(id) + ','
 
 	# Return the article information
 	return ul.urlopen(url).read()
@@ -246,24 +245,13 @@ def makeG2m(g2p, p2m, tree, make_m2g=True, weight=False, closure=False):
 	# Checks the counts for gene -> mesh associations, anything less than two
 	# is discarded. Creates a g2m mapping
 	for gene, mdict in g2m_count.items():
-		#print gene
 		for mesh, count in mdict.items():
-			#print count
 			if count > 1:
-				#print g2m[gene]
-				#for term in g2m[gene]:
-				#for term in g2m_count[gene]:
-				#print mesh
-				#print g2m_count[gene][mesh]
 				if g2m_count[gene][mesh] > 1:
 					# add the MeSH to this gene
 					g2m[gene].add(mesh)
 					# add the term to all ancestor nodes (closure)
-					#print 'yeah'
-					#print tree[mesh]['ancestors']
 					for anc in tree[mesh]['ancestors']:
-						#print anc
-						#exit()
 						if anc not in g2m[gene]:
 							g2m[gene].add(anc)
 							# alter the count too since we calc weights later on
@@ -303,25 +291,7 @@ def makeG2m(g2p, p2m, tree, make_m2g=True, weight=False, closure=False):
 	for gene, meshes in g2m.items():
 		for mesh in meshes:
 			m2g[mesh].add(gene)
-	# Iterates over the gene2mesh dict and keeps only the most granular term
-	# associated with a gene, all other ancestral terms are discarded
-	# TODO, think of a faster, more efficient way to do this
-	#for gene in g2m.keys():
-	#	 terms = g2m[gene]
 
-
-
-
-		#print m2g
-		#exit()
-			#if pubs in p2m:
-				#g2m[g].update(p2m[pubs])
-			# This statement is only called in the case of an incomplete pub2mesh
-			# data file, which should never be the case.
-			#else: 
-			#	 g2m[g].update([])
-
-	#return g2m
 	if weight:
 		return (m2g, g2m_count)
 	else:
@@ -439,14 +409,3 @@ def loadMeshData(fp, nmap=False):
 
 	return (terms, mtree)
 
-
-#g2p = readG2p('../data/ncbi.gene2pubmed.data')
-##plst = map(lambda x: x[0], utl.chunkList(g2p.values(), 15))
-#plst = []
-#for v in g2p.values():
-#	 plst.extend(list(v))
-#plst = list(set(plst))
-#print 'here'
-#for p in utl.chunkList(plst, 300):
-#	 getArticleInfo(p)
-#	 exit()
