@@ -492,6 +492,35 @@ def queryGeneFromRef(ids, asdict=True):
 	#return g_cur.fetchall()
 	#return map(lambda x: x[0], res)
 
+## queryGeneFromRef2
+#
+## Will probably replace the above querySymbolToId function. This function 
+## takes a list of ode_ref_ids and returns a list of tuples 
+## (ode_gene_id, ode_ref_id). Can be used to map gene IDs from other DBs
+## (like NCBI) to the internal identifiers GeneWeaver uses.
+#
+## new function so changing the old one wouldn't break any scripts. I'll have
+## to update the scripts eventually. Added ability to query based on 
+## species (sp_id). sp_id = 2 is humans.
+#
+def queryGeneFromRef2(ids, sp=2, asdict=True):
+	if type(ids) is list:
+		ids = tuple(ids)
+
+	query = ('SELECT ode_ref_id, ode_gene_id FROM extsrc.gene WHERE '
+			'sp_id=%s AND ode_ref_id IN %s;')
+	g_cur.execute(query, [sp, ids])
+	res = g_cur.fetchall()
+
+	if asdict:
+		d = {}
+		for t in res:
+			d[t[0]] = t[1]
+
+		res = d
+
+	return res
+
 ## Convert ode_gene_id -> symbol/entity name/whatever it's called
 def queryGeneName(ids):
 	if type(ids) is list:
