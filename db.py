@@ -1,16 +1,17 @@
 #!/usr/bin/python
 
-## db.py
-## v 0.1
-#
-## Contains all the important functions for accessing and querying the 
-## GeneWeaver DB.
-#
+#### file:	db.py
+#### desc:	Contains all the important functions for accessing and querying the
+####		GeneWeaver DB.
+#### vers:	0.1.0
+#### auth:	TR
+##
 
 import datetime as dt
 import psycopg2
 
-# Attempt local db connection
+## Attempt local db connection; only time this really ever fails is when the
+## postgres server isn't running.
 try:
 	conn = psycopg2.connect(("dbname='geneweaver' user='odeadmin' "
 							 "password='odeadmin'"))
@@ -18,16 +19,107 @@ except:
 	print "[!] Oh noes, failed to connect to the db"
 	exit()
 
-# Get db_cursor
+## Globals are bad, mmkay?
 g_cur = conn.cursor()
 
-## query_genesets
-#
-## Returns all gene set IDs (gs_id) that meet the following criteria: < 1000 
-## genes in a set and have g_curation tiers specified by the user. 
-#
-## ret, list of IDs for all gene sets that meet the above criteria
-#
+
+#### New version functions
+##
+
+#### getGeneIds
+##
+#### Given a list of gene symbols (ode_ref_ids), this function returns a symbol
+#### mapping, (ode_ref_id) --> ode_gene_ids. If pref is True, which by default 
+#### it is, then the function only looks for preferred ode_gene_ids
+#### (ode_pref == true). If the symbol doesn't exist in the DB or can't be
+#### found, it is mapped to None.
+##
+def getGeneIds(syms, pref=True):
+	if type(syms) == list:
+        syms = tuple(syms)
+
+	## ode_pref doesn't matter for this query
+    query = ('SELECT DISTINCT ode_ref_id, ode_gene_id FROM extsrc.gene '
+             'WHERE ')
+	if pref:
+		query += 'ode_pref = true AND ode_ref_id IN (%s);'
+	else:
+		query += 'ode_ref_id IN (%s);'
+
+    self.cur.execute(query, [syms])
+
+    ## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
+    res = self.cur.fetchall()
+    d = {}
+
+    found = map(lambda x: x[0], res)
+
+	## Map symbols that weren't found to None
+	for nf in (set(syms) - set(found)):
+		res.append((nf, None))
+
+    ## We return a dict of ode_ref_id --> ode_gene_ids
+    for tup in res:
+        d[tup[0]] = tup[1]
+
+    return d
+
+#### getGenesetsByTier
+##
+#### Returns all gs_ids in the given tiers and under the specified 
+#### count limit (gs_count). 
+##
+#### ret, list of IDs for all gene sets that meet the above criteria
+##
+def getGenesetsByTier(tiers=None, size=1000):
+	if not tiers:
+		tiers = [1, 2, 3, 4, 5]
+
+	# Remove anything that isn't an actual tier (should only be 1 - 5)
+	tiers = tuple([x for x in tiers if (x >= 1) and (x <= 5)])
+
+	query = ('SELECT gs_id FROM production.geneset WHERE gs_count < %s AND '
+			 'cur_id = IN(%s);')
+
+	g_cur.execute(query, [size, tiers])
+
+	res = g_cur.fetchall()
+
+	# Strip out the tuples, only returning a list
+	return map(lambda x: x[0], res)
+
+#### getGenesetGeneIds
+##
+#### Returns all ode_gene_ids for the given gs_ids. The results are returned
+#### as a dict, mapping gs_ids --> [ode_gene_ids].
+##
+def getGenesetGeneIds(gsids):
+	if type(gsids) == list:
+		gsids = tuple(gsids)
+
+	query = ('SELECT gs_id, ode_gene_id FROM extsrc.geneset_value '
+			 'WHERE gs_id IN (%s);')
+    d = {}
+
+	g_cur.execute(query, [gsids])
+
+	res = g_cur.fetchall()
+
+	## We return a dict, k: gs_id; v: [ode_gene_id]
+    for tup in res:
+		if d.get(tup[0], None):
+			d[tup[0]].append(tup[1])
+		else:
+			d[tup[0]] = [tup[1]]
+
+	return d
+
+#### query_genesets
+##
+#### Returns all gene set IDs (gs_id) that meet the following criteria: < 1000 
+#### genes in a set and have g_curation tiers specified by the user. 
+##
+#### ret, list of IDs for all gene sets that meet the above criteria
 def queryGenesets(tiers=None, size=1000):
 	import re
 
