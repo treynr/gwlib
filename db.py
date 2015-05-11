@@ -22,14 +22,13 @@ except:
 ## Globals are bad, mmkay?
 g_cur = conn.cursor()
 
-
 #### New version functions
 ##
 
 #### getGeneIds
 ##
 #### Given a list of gene symbols (ode_ref_ids), this function returns a symbol
-#### mapping, (ode_ref_id) --> ode_gene_ids. If pref is True, which by default 
+#### mapping, ode_ref_id --> ode_gene_ids. If pref is True, which by default 
 #### it is, then the function only looks for preferred ode_gene_ids
 #### (ode_pref == true). If the symbol doesn't exist in the DB or can't be
 #### found, it is mapped to None.
@@ -93,6 +92,9 @@ def getGenesetsByTier(tiers=None, size=1000):
 #### Returns all ode_gene_ids for the given gs_ids. The results are returned
 #### as a dict, mapping gs_ids --> [ode_gene_ids].
 ##
+#### arg, int list of gs_ids
+#### ret, dict mapping gs_ids (int) to list of ode_gene_ids ([int])
+##
 def getGenesetGeneIds(gsids):
 	if type(gsids) == list:
 		gsids = tuple(gsids)
@@ -113,6 +115,47 @@ def getGenesetGeneIds(gsids):
 			d[tup[0]] = [tup[1]]
 
 	return d
+
+#### insertGeneset
+##
+#### Given a dict whose keys refer to columns of the geneset table,
+#### this function inserts a new geneset into the db. 
+#### Don't forget to commit changes after calling this function.
+##
+def insertGeneset(self, gd):
+	query = ('INSERT INTO geneset (file_id, usr_id, cur_id, sp_id, '
+			 'gs_threshold_type, gs_threshold, gs_created, gs_updated, '
+			 'gs_status, gs_count, gs_uri, gs_gene_id_type, gs_name, '
+			 'gs_abbreviation, gs_description, gs_attribution, gs_groups '
+			 'pub_id) '
+			 'VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW(), \'normal\', '
+			 '%s, \'\', %s, %s, %s, %s, 0, %s, %s) RETURNING gs_id;')
+
+	vals = [gd['file_id'], gd['usr_id'], gd['cur_id'], gd['sp_id'], 
+			gd['gs_threshold_type'], gd['gs_threshold'], gd['gs_count'], 
+			gd['gs_gene_id_type'], gd['gs_name'], gd['gs_abbreviation'],
+			gd['gs_description'], gd['gs_groups'], gd['pub_id']]
+
+	self.cur.execute('set search_path = extsrc,production,odestatic;')
+	self.cur.execute(query, vals)
+
+	## Returns a list of tuples [(gs_id)]
+	res = self.cur.fetchall()
+
+	return res[0][0]
+
+#### insertGenesetValue
+##
+#### Inserts a new row into the geneset_value table using the given gs_id. 
+##
+def insertGenesetValue(self, gs_id, gene_id, value, name, thresh):
+	query = ('INSERT INTO extsrc.geneset_value (gs_id, ode_gene_id, '
+			'gsv_value, gsv_hits, gsv_source_list, gsv_value_list, '
+			'gsv_in_threshold, gsv_date) VALUES (%s, %s, %s, 0, %s, ARRAY[0], '
+			'%s, NOW());')
+	vals = [gs_id, gene_id, value, [name], thresh]
+
+	self.cur.execute(query, vals)
 
 #### query_genesets
 ##
