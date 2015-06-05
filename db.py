@@ -707,7 +707,7 @@ def findGenesetsWithGenes(genes):
 		genes = tuple(genes)
 
 	query = ("SELECT DISTINCT gs_id FROM extsrc.geneset_value WHERE "
-			 "gs_status not like 'de%%' AND ode_gene_id IN %s;")
+			 "ode_gene_id IN %s;")
 
 	g_cur.execute(query, [genes])
 
