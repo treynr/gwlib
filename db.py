@@ -37,7 +37,8 @@ def queryGenesets(tiers=None, size=1000):
 		# Remove anything that isn't an actual tier (should only be #'s 1 - 5)
 		tiers = [x for x in tiers if (x >= 1) and (x <= 5)]
 
-	query = ('SELECT gs_id FROM production.geneset WHERE gs_count < %s AND '
+	query = ("SELECT gs_id FROM production.geneset WHERE "
+			 "gs_status NOT LIKE 'de%%' AND gs_count < %s AND "
 			 'cur_id = ANY(%s);')
 
 	g_cur.execute(query, [size, tiers])
@@ -692,8 +693,9 @@ def deleteJaccards(gsids):
 	if type(gsids) == list:
 		gsids = tuple(gsids)
 
-	query = ('DELETE FROM extsrc.geneset_jaccard WHERE gs_id_left IN %s OR '
-			 'gs_id_right IN %s;')
+	query = 'DELETE FROM extsrc.geneset_jaccard WHERE gs_id_left IN %s;'
+	#query = ('DELETE FROM extsrc.geneset_jaccard WHERE gs_id_left IN %s OR '
+	#		 'gs_id_right IN %s;')
 
 	g_cur.execute(query, [gsids, gsids])
 
@@ -706,8 +708,11 @@ def findGenesetsWithGenes(genes):
 	if type(genes) == list:
 		genes = tuple(genes)
 
-	query = ("SELECT DISTINCT gs_id FROM extsrc.geneset_value WHERE "
-			 "ode_gene_id IN %s;")
+	query = ("SELECT DISTINCT pg.gs_id FROM production.geneset AS pg, "
+			 "extsrc.geneset_value AS egv WHERE pg.gs_status NOT LIKE 'de%%' "
+			 "AND egv.ode_gene_id IN %s;")
+	#query = ("SELECT DISTINCT gs_id FROM extsrc.geneset_value WHERE "
+	#		 "ode_gene_id IN %s;")
 
 	g_cur.execute(query, [genes])
 
@@ -738,9 +743,12 @@ def getGenesForJaccard(gsids):
 	if type(gsids) == list:
 		gsids = tuple(gsids)
 
-	query = ('SELECT gv.gs_id, gv.ode_gene_id FROM extsrc.geneset_value AS gv '
-			 'INNER JOIN production.geneset AS gs ON gv.gs_id = gs.gs_id '
-			 'WHERE gsv_in_threshold = \'t\' AND gs.gs_id IN %s;') #AND gs.gs_status NOT LIKE \'de%%\';')
+	query = ("SELECT gs_id, ode_gene_id FROM extsrc.geneset_value WHERE "
+			 "gsv_in_threshold = 't' AND gs_id IN %s;")
+	#query = ('SELECT gv.gs_id, gv.ode_gene_id FROM extsrc.geneset_value AS gv '
+	#		 'INNER JOIN production.geneset AS gs ON gv.gs_id = gs.gs_id '
+	#		 'WHERE gsv_in_threshold = \'t\' AND gs.gs_id IN %s;') #AND gs.gs_status NOT LIKE \'de%%\';')
+
 	#query = ('SELECT gv.gs_id, gv.ode_gene_id FROM extsrc.geneset_value AS gv, '
 	#		 'production.geneset as gs WHERE gv.gs_id = gs.gs_id AND '
 	#		 'gv.gsv_in_threshold = \'t\' AND gs.gs_id IN %s;') #AND gs.gs_status NOT LIKE \'de%%\';')
