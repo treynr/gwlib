@@ -56,15 +56,19 @@ def splitList(strs):
 
 ## chunkList
 #
-## Takes a list and chunks it into lists of size n.
+## Takes a list and chunks it into lists of size n. Use n == 0 to specify
+## a chunk the size of the initial list.
 #
 ## arg, l, the list to chunk
 ## arg, n, the size of the newly generated sublists/chunks
 ## ret, list of lists
 #
 def chunkList(l, n):
-    for i in xrange(0, len(l), n):
-        yield l[i:i+n]
+	if n == 0:
+		n = len(l)
+
+	for i in xrange(0, len(l), n):
+		yield l[i:i+n]
 
 ## exportJson
 #

@@ -697,7 +697,8 @@ def deleteJaccards(gsids):
 	#query = ('DELETE FROM extsrc.geneset_jaccard WHERE gs_id_left IN %s OR '
 	#		 'gs_id_right IN %s;')
 
-	g_cur.execute(query, [gsids, gsids])
+	#g_cur.execute(query, [gsids, gsids])
+	g_cur.execute(query, [gsids])
 
 ## findGenesetWithGenes
 #
@@ -724,7 +725,8 @@ def getSetsWithoutJaccards():
 	## specifically its any select query on geneset_jaccard.
 	query = ('SELECT gs_id FROM production.geneset WHERE gs_status NOT LIKE '
 			 '\'de%%\' AND gs_id NOT IN (SELECT DISTINCT gs_id_left FROM '
-			 'extsrc.geneset_jaccard) ORDER BY gs_id DESC;')
+			 #'extsrc.geneset_jaccard) ORDER BY gs_id DESC;')
+			 'extsrc.geneset_jaccard);')
 
 	g_cur.execute(query)
 
@@ -831,7 +833,7 @@ def getGeneHomologs(ids, asdict=False):
 #
 ## gets the hom_id for the list of ode_gene_ids
 #
-def getHomologyId(ids, asdict=False):
+def getHomologyIds(ids, asdict=False):
 	if type(ids) == list:
 		ids = tuple(ids)
 
