@@ -70,6 +70,15 @@ def chunkList(l, n):
 	for i in xrange(0, len(l), n):
 		yield l[i:i+n]
 
+#### flatten
+##
+#### Takes a list of lists (inner list lengths don't have to be equal) and 
+#### flattens everything so we just have one giant list of whatever shit 
+#### was in the inner lists.
+##
+def flatten(outlst):
+    return [a for inlst in outlst for a in inlst]
+
 ## exportJson
 #
 ## Takes a filepath and some data structure (usually a list of objects) and 

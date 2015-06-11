@@ -50,7 +50,7 @@ def insertGeneset(gd):
     query = ('INSERT INTO geneset (file_id, usr_id, cur_id, sp_id, '
              'gs_threshold_type, gs_threshold, gs_created, gs_updated, '
              'gs_status, gs_count, gs_uri, gs_gene_id_type, gs_name, '
-             'gs_abbreviation, gs_description, gs_attribution, gs_groups '
+             'gs_abbreviation, gs_description, gs_attribution, gs_groups, '
              'pub_id) '
              'VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW(), \'normal\', '
              '%s, \'\', %s, %s, %s, %s, 0, %s, %s) RETURNING gs_id;')
@@ -143,7 +143,7 @@ def getGenesetAbbreviations(gsids):
         gsids = tuple(gsids)
 
     query = ('SELECT gs_id, gs_abbreviation FROM production.geneset '
-             'WHERE gs_id IN (%s);')
+             'WHERE gs_id IN %s;')
     d = {}
 
     g_cur.execute(query, [gsids])
@@ -632,6 +632,7 @@ def geneSymbolToId(symbols, sp_id=2):
 
 
 ## queryGeneFromRef
+## DEPRECATED -- REPLACED BY getGeneIds
 #
 ## Will probably replace the above querySymbolToId function. This function 
 ## takes a list of ode_ref_ids and returns a list of tuples 
@@ -659,7 +660,50 @@ def queryGeneFromRef(ids, asdict=True):
 	#return g_cur.fetchall()
 	#return map(lambda x: x[0], res)
 
+#### getGeneIds
+##
+#### Given a list of gene symbols (ode_ref_ids), this function returns a symbol
+#### mapping, ode_ref_id --> ode_gene_ids. If pref is True, which by default
+#### it is, then the function only looks for preferred ode_gene_ids
+#### (ode_pref == true). If the symbol doesn't exist in the DB or can't be
+#### found, it is mapped to None.
+##
+#### pref shouldn't matter
+##
+def getGeneIds(syms, pref=False):
+    if type(syms) == list:
+        syms = tuple(syms)
+
+    ## ode_pref doesn't matter for this query
+    query = ('SELECT DISTINCT ode_ref_id, ode_gene_id FROM extsrc.gene '
+             'WHERE ')
+    if pref:
+        query += 'ode_pref = true AND ode_ref_id IN %s;'
+    else:
+        query += 'ode_ref_id IN %s;'
+
+    g_cur.execute(query, [syms])
+
+    ## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
+    res = g_cur.fetchall()
+    d = {}
+
+    found = map(lambda x: x[0], res)
+
+    #print found
+    ## Map symbols that weren't found to None
+    for nf in (set(syms) - set(found)):
+        res.append((nf, None))
+
+    ## We return a dict of ode_ref_id --> ode_gene_ids
+    for tup in res:
+        d[tup[0]] = tup[1]
+
+    return d
+
+
 ## Convert ode_gene_id -> symbol/entity name/whatever it's called
+## DEPRECATED -- REPLACED BY getGeneNames
 def queryGeneName(ids):
 	if type(ids) is list:
 		ids = tuple(ids)
@@ -670,6 +714,38 @@ def queryGeneName(ids):
 	g_cur.execute(query, [ids])
 
 	return g_cur.fetchall()
+
+#### getGeneNames
+##
+#### Returns an ode_ref_id (where ode_pref = true) for the given ode_gene_ids.
+#### The results are returned as a dict, mapping ode_gene_ids --> ode_ref_id.
+##
+#### arg, int list of ode_gene_ids
+#### ret, dict mapping ode_gene_ids (int) to an ode_ref_id (string)
+##
+def getGeneNames(gids):
+    if type(gids) == list:
+        gids = tuple(gids)
+
+    query = ("SELECT ode_gene_id, ode_ref_id FROM extsrc.gene WHERE "
+             "ode_pref = 't' AND ode_gene_id IN %s;")
+    d = {}
+
+    g_cur.execute(query, [gids])
+
+    res = g_cur.fetchall()
+
+    found = map(lambda x: x[0], res)
+
+    ## Map ode_gene_ids with no preferred ode_ref_id to itself
+    for nf in (set(gids) - set(found)):
+        res.append((nf, str(nf)))
+
+    ## We return a dict, k: ode_gene_id; v: ode_ref_id
+    for tup in res:
+        d[tup[0]] = tup[1]
+
+    return d
 
 ## queryGsName
 #
