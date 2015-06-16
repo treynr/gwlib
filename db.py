@@ -53,12 +53,12 @@ def insertGeneset(gd):
              'gs_abbreviation, gs_description, gs_attribution, gs_groups, '
              'pub_id) '
              'VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW(), \'normal\', '
-             '%s, \'\', %s, %s, %s, %s, 0, %s, %s) RETURNING gs_id;')
+             '%s, \'\', %s, %s, %s, %s, %s, %s, %s) RETURNING gs_id;')
 
     vals = [gd['file_id'], gd['usr_id'], gd['cur_id'], gd['sp_id'],
             gd['gs_threshold_type'], gd['gs_threshold'], gd['gs_count'],
             gd['gs_gene_id_type'], gd['gs_name'], gd['gs_abbreviation'],
-            gd['gs_description'], gd['gs_groups'], gd['pub_id']]
+            gd['gs_description'], gd['gs_attribution'], gd['gs_groups'], gd['pub_id']]
 
     g_cur.execute('set search_path = extsrc,production,odestatic;')
     g_cur.execute(query, vals)
