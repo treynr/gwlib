@@ -98,6 +98,14 @@ def exportJson(fp, data, dtag=''):
 ##
 def getToday():
 	now = dt.datetime.now()
+	year = str(now.year)
+	month = str(now.month)
+	day = str(now.day)
 
-	return (str(now.year) + '-' + str(now.month) + '-' + str(now.day))
+	if len(month) == 1:
+		month = '0' + month
+	if len(day) == 1:
+		day = '0' + day
+
+	return year + '-' + month + '-' + day
 
