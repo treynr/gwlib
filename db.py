@@ -9,6 +9,7 @@
 
 import datetime as dt
 import psycopg2
+import random
 
 ## Attempt local db connection; only time this really ever fails is when the
 ## postgres server isn't running.
@@ -27,43 +28,44 @@ g_cur = conn.cursor()
 
 #### getGeneIds
 ##
-#### Given a list of gene symbols (ode_ref_ids), this function returns a symbol
-#### mapping, ode_ref_id --> ode_gene_ids. If pref is True, which by default 
-#### it is, then the function only looks for preferred ode_gene_ids
-#### (ode_pref == true). If the symbol doesn't exist in the DB or can't be
-#### found, it is mapped to None.
+#### Given a list of external references for genes (ode_ref_ids), this 
+#### function returns a symbol mapping, ode_ref_id --> ode_gene_ids. 
+#### If pref is True, which by default it is, then the function only 
+#### looks for preferred ode_gene_ids (ode_pref == true). If the symbol 
+#### doesn't exist in the DB or can't be found, it is mapped to None.
 ##
-#### pref shouldn't matter
+#### arg: [string], refs, list of external gene refs to map ode IDs to
+#### ret: dict, ode_ref_id -> ode_gene_id mapping
 ##
-def getGeneIds(syms, pref=True):
-	if type(syms) == list:
-        syms = tuple(syms)
+def getGeneIds(refs, pref=True):
+	if type(refs) == list:
+		refs = tuple(refs)
 
-	## ode_pref doesn't matter for this query
-    query = ('SELECT DISTINCT ode_ref_id, ode_gene_id FROM extsrc.gene '
-             'WHERE ')
+	query = '''SELECT DISTINCT ode_ref_id, ode_gene_id 
+			   FROM extsrc.gene
+			   WHERE ''' #ode_ref_id IN (%s);'''
 	if pref:
-		query += 'ode_pref = true AND ode_ref_id IN (%s);'
+		query += 'ode_pref = true AND ode_ref_id IN %s;'
 	else:
-		query += 'ode_ref_id IN (%s);'
+		query += 'ode_ref_id IN %s;'
 
-    self.cur.execute(query, [syms])
+	g_cur.execute(query, [refs])
 
-    ## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
-    res = self.cur.fetchall()
-    d = {}
+	## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
+	res = g_cur.fetchall()
+	d = {}
 
-    found = map(lambda x: x[0], res)
+	found = map(lambda x: x[0], res)
 
 	## Map symbols that weren't found to None
-	for nf in (set(syms) - set(found)):
+	for nf in (set(refs) - set(found)):
 		res.append((nf, None))
 
-    ## We return a dict of ode_ref_id --> ode_gene_ids
-    for tup in res:
-        d[tup[0]] = tup[1]
+	## We return a dict of ode_ref_id --> ode_gene_ids
+	for tup in res:
+		d[tup[0]] = tup[1]
 
-    return d
+	return d
 
 def getGeneIdsBySpecies(syms, spec, pref=True):
 	if type(syms) == list:
@@ -133,14 +135,14 @@ def getGenesetGeneIds(gsids):
 
 	query = ('SELECT gs_id, ode_gene_id FROM extsrc.geneset_value '
 			 'WHERE gs_id IN (%s);')
-    d = {}
+	d = {}
 
 	g_cur.execute(query, [gsids])
 
 	res = g_cur.fetchall()
 
 	## We return a dict, k: gs_id; v: [ode_gene_id]
-    for tup in res:
+	for tup in res:
 		if d.get(tup[0], None):
 			d[tup[0]].append(tup[1])
 		else:
@@ -148,7 +150,7 @@ def getGenesetGeneIds(gsids):
 
 	return d
 
-#### getGeneNames
+#### getGeneRefs
 ##
 #### Returns an ode_ref_id (where ode_pref = true) for the given ode_gene_ids.
 #### The results are returned as a dict, mapping ode_gene_ids --> ode_ref_id.
@@ -156,26 +158,27 @@ def getGenesetGeneIds(gsids):
 #### arg, int list of ode_gene_ids
 #### ret, dict mapping ode_gene_ids (int) to an ode_ref_id (string)
 ##
-def getGeneNames(gids):
+def getGeneRefs(gids):
 	if type(gids) == list:
-		gsids = tuple(gsids)
+		gids = tuple(gids)
 
-	query = ("SELECT ode_gene_id, ode_ref_id FROM extsrc.gene WHERE "
-			 "ode_pref = 't' AND ode_gene_id IN (%s);")
-    d = {}
+	query = '''SELECT ode_gene_id, ode_ref_id 
+			   FROM extsrc.gene 
+			   WHERE ode_pref = 't' AND ode_gene_id IN %s;'''
 
 	g_cur.execute(query, [gids])
 
 	res = g_cur.fetchall()
+	d = {}
 
-    found = map(lambda x: x[0], res)
+	found = map(lambda x: x[0], res)
 
 	## Map ode_gene_ids with no preferred ode_ref_id to itself
 	for nf in (set(gids) - set(found)):
 		res.append((nf, str(nf)))
 
 	## We return a dict, k: ode_gene_id; v: ode_ref_id
-    for tup in res:
+	for tup in res:
 		d[tup[0]] = tup[1]
 
 	return d
@@ -194,14 +197,14 @@ def getGenesetNames(gsids):
 
 	query = ('SELECT gs_id, gs_name FROM production.geneset '
 			 'WHERE gs_id IN (%s);')
-    d = {}
+	d = {}
 
 	g_cur.execute(query, [gsids])
 
 	res = g_cur.fetchall()
 
 	## We return a dict, k: gs_id; v: gs_name
-    for tup in res:
+	for tup in res:
 			d[tup[0]] = tup[1]
 
 	return d
@@ -220,14 +223,14 @@ def getGenesetAbbreviations(gsids):
 
 	query = ('SELECT gs_id, gs_abbreviation FROM production.geneset '
 			 'WHERE gs_id IN (%s);')
-    d = {}
+	d = {}
 
 	g_cur.execute(query, [gsids])
 
 	res = g_cur.fetchall()
 
 	## We return a dict, k: gs_id; v: gs_name
-    for tup in res:
+	for tup in res:
 			d[tup[0]] = tup[1]
 
 	return d
@@ -249,7 +252,7 @@ def getMeshIdsOld():
 	query = ("SELECT gs_id FROM production.geneset WHERE "
 			 "gs_status NOT LIKE 'de%%' AND "
 			 "gs_name ilike 'mesh set (%%';")
-    d = {}
+	d = {}
 
 	g_cur.execute(query, [])
 
@@ -270,7 +273,7 @@ def getMeshIds():
 	query = ("SELECT gs_id FROM production.geneset WHERE "
 			 "gs_status NOT LIKE 'de%%' AND "
 			 "gs_name like '[MeSH] %%:%%';")
-    d = {}
+	d = {}
 
 	g_cur.execute(query, [])
 
@@ -333,31 +336,133 @@ def parseMeshTerm(s):
 
 	return re.match('MeSH Set \("(.+)"')[1]
 
+#### getAttributionId
+##
+#### Given an attribution abbreviation, this function retrieves the attribution
+#### ID (at_id) for that abbreviation.
+##
+#### arg: string, abbr, the attribution abbreviation to search for
+#### ret: int, at_id for the given abbrev. returns 0 if nothing is found
+##
+def getAttributionId(abbr):
+	query = '''SELECT at_id
+			   FROM odestatic.attribution
+			   WHERE at_abbrev ilike %s;'''
+
+	g_cur.execute(query, [abbr])
+
+	res = g_cur.fetchall()
+
+	if not res:
+		return 0
+	else:
+		return res[0][0]
+
+#### makeRandomFilename
+##
+#### Generates a random filename for the file_uri column in the file table.
+#### The string returned is 'GW_' + date + '_' + a random six letter
+#### alphanumeric string.
+##
+def makeRandomFilename():
+	lets = 'abcdefghijklmnopqrstuvwxyz1234567890'
+	rstr = ''
+	now = dt.datetime.now()
+
+	for i in range(6):
+		rstr += random.choice(lets)
+
+	return ('GW_' + str(now.year) + '-' + str(now.month) + '-' +
+			str(now.day) + '_' + rstr)
+
+#### makeGeneset
+##
+#### Given a shitload of arguments, this function returns a dictionary
+#### representation of a single geneset. Each key is a different column
+#### found in the geneset table. Not all columns are represented.
+##
+##
+def makeGeneset(name, abbr, desc, spec, pub, grp, ttype, thresh, gtype, vals,
+				usr=0, cur_id=5, file_id=0, at_id=0):
+	gs = {}
+
+	gs['gs_name'] = name
+	gs['gs_abbreviation'] = abbr
+	gs['gs_description'] = desc
+	gs['sp_id'] = int(spec)
+	gs['gs_groups'] = grp
+	gs['pub_id'] = pub	# The pubmed article still needs to retrieved
+	gs['gs_threshold_type'] = int(ttype)
+	gs['gs_threshold'] = thresh
+	gs['gs_gene_id_type'] = int(gtype)
+	gs['usr_id'] = int(usr)
+	gs['values'] = vals # Not a column in the geneset table; processed later
+	gs['file_id'] = file_id
+	gs['gs_attribution'] = at_id
+
+	## Other fields we can fill out
+	gs['gs_count'] = len(vals)
+	gs['cur_id'] = cur_id			# auto private tier?
+
+	return gs
+
+#### insertFile
+##
+#### Inserts a new row into the file table. Most of the columns for the file
+#### table are required as arguments.
+##
+def insertFileIntoDb(size, uri, contents, comments):
+	query = '''INSERT INTO production.file 
+			   (file_size, file_uri, file_contents, file_comments, 
+			   file_created, file_changes)
+			   VALUES (%s, %s, %s, %s, NOW(), \'\') 
+			   RETURNING file_id;'''
+	vals = [size, uri, contents, comments]
+
+	g_cur.execute('set search_path = extsrc,production,odestatic;')
+	g_cur.execute(query, vals)
+
+	## Returns a list of tuples [(file_id)]
+	res = g_cur.fetchall()
+
+	return res[0][0]
+
+## score type 5
+def insertFile(gsv):
+	contents = ''
+
+	for t in gsv:
+		contents += (str(t[0]) + '\t' + str(t[1]) + '\n')
+
+	return insertFileIntoDb(len(gsv), makeRandomFilename(), contents, '')
+
+
 #### insertGeneset
 ##
 #### Given a dict whose keys refer to columns of the geneset table,
 #### this function inserts a new geneset into the db. 
 #### Don't forget to commit changes after calling this function.
 ##
-def insertGeneset(self, gd):
+def insertGeneset(gd):
 	query = ('INSERT INTO geneset (file_id, usr_id, cur_id, sp_id, '
 			 'gs_threshold_type, gs_threshold, gs_created, gs_updated, '
 			 'gs_status, gs_count, gs_uri, gs_gene_id_type, gs_name, '
-			 'gs_abbreviation, gs_description, gs_attribution, gs_groups '
+			 'gs_abbreviation, gs_description, gs_attribution, gs_groups, '
 			 'pub_id) '
 			 'VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW(), \'normal\', '
-			 '%s, \'\', %s, %s, %s, %s, 0, %s, %s) RETURNING gs_id;')
+			 '%s, \'\', %s, %s, %s, %s, %s, %s, %s) RETURNING gs_id;')
 
 	vals = [gd['file_id'], gd['usr_id'], gd['cur_id'], gd['sp_id'], 
 			gd['gs_threshold_type'], gd['gs_threshold'], gd['gs_count'], 
 			gd['gs_gene_id_type'], gd['gs_name'], gd['gs_abbreviation'],
-			gd['gs_description'], gd['gs_groups'], gd['pub_id']]
+			gd['gs_description'], gd['gs_attribution'], gd['gs_groups'], 
+			gd['pub_id']]
 
-	self.cur.execute('set search_path = extsrc,production,odestatic;')
-	self.cur.execute(query, vals)
+	g_cur.execute('set search_path = extsrc,production,odestatic;')
+	g_cur.execute(query, vals)
 
 	## Returns a list of tuples [(gs_id)]
-	res = self.cur.fetchall()
+	res = g_cur.fetchall()
 
 	return res[0][0]
 
@@ -365,14 +470,14 @@ def insertGeneset(self, gd):
 ##
 #### Inserts a new row into the geneset_value table using the given gs_id. 
 ##
-def insertGenesetValue(self, gs_id, gene_id, value, name, thresh):
-	query = ('INSERT INTO extsrc.geneset_value (gs_id, ode_gene_id, '
-			'gsv_value, gsv_hits, gsv_source_list, gsv_value_list, '
-			'gsv_in_threshold, gsv_date) VALUES (%s, %s, %s, 0, %s, ARRAY[0], '
-			'%s, NOW());')
+def insertGenesetValue(gs_id, gene_id, value, name, thresh):
+	query = '''INSERT INTO extsrc.geneset_value 
+			   (gs_id, ode_gene_id, gsv_value, gsv_hits, gsv_source_list, 
+			   gsv_value_list, gsv_in_threshold, gsv_date) 
+			   VALUES (%s, %s, %s, 0, %s, ARRAY[0], %s, NOW());'''
 	vals = [gs_id, gene_id, value, [name], thresh]
 
-	self.cur.execute(query, vals)
+	g_cur.execute(query, vals)
 
 #### updateGenesetCount
 ##
