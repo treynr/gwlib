@@ -65,6 +65,36 @@ def getGeneIds(syms, pref=True):
 
     return d
 
+def getGeneIdsBySpecies(syms, spec, pref=True):
+	if type(syms) == list:
+        syms = tuple(syms)
+
+    query = '''SELECT DISTINCT ode_ref_id, ode_gene_id 
+			   FROM extsrc.gene
+               WHERE sp_id = %s AND '''
+	if pref:
+		query += 'ode_pref = true AND ode_ref_id IN (%s);'
+	else:
+		query += 'ode_ref_id IN (%s);'
+
+    self.cur.execute(query, [syms, spec])
+
+    ## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
+    res = self.cur.fetchall()
+    d = {}
+
+    found = map(lambda x: x[0], res)
+
+	## Map symbols that weren't found to None
+	for nf in (set(syms) - set(found)):
+		res.append((nf, None))
+
+    ## We return a dict of ode_ref_id --> ode_gene_ids
+    for tup in res:
+        d[tup[0]] = tup[1]
+
+    return d
+
 #### getGenesetsByTier
 ##
 #### Returns all gs_ids in the given tiers and under the specified 
