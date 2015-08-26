@@ -69,33 +69,33 @@ def getGeneIds(refs, pref=True):
 
 def getGeneIdsBySpecies(syms, spec, pref=True):
 	if type(syms) == list:
-        syms = tuple(syms)
+		syms = tuple(syms)
 
-    query = '''SELECT DISTINCT ode_ref_id, ode_gene_id 
+	query = '''SELECT DISTINCT ode_ref_id, ode_gene_id 
 			   FROM extsrc.gene
-               WHERE sp_id = %s AND '''
+			   WHERE sp_id = %s AND '''
 	if pref:
-		query += 'ode_pref = true AND ode_ref_id IN (%s);'
+		query += 'ode_pref = true AND ode_ref_id IN %s;'
 	else:
-		query += 'ode_ref_id IN (%s);'
+		query += 'ode_ref_id IN %s;'
 
-    self.cur.execute(query, [syms, spec])
+	g_cur.execute(query, [spec, syms])
 
-    ## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
-    res = self.cur.fetchall()
-    d = {}
+	## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
+	res = g_cur.fetchall()
+	d = {}
 
-    found = map(lambda x: x[0], res)
+	found = map(lambda x: x[0], res)
 
 	## Map symbols that weren't found to None
 	for nf in (set(syms) - set(found)):
 		res.append((nf, None))
 
-    ## We return a dict of ode_ref_id --> ode_gene_ids
-    for tup in res:
-        d[tup[0]] = tup[1]
+	## We return a dict of ode_ref_id --> ode_gene_ids
+	for tup in res:
+		d[tup[0]] = tup[1]
 
-    return d
+	return d
 
 #### getGenesetsByTier
 ##
