@@ -40,7 +40,7 @@ def getSpecies():
 
 	## We return a dict of sp_name --> sp_id
 	for tup in res:
-		d[tup[0]] = tup[1]
+		d[tup[0].lower()] = tup[1]
 
 	return d
 
