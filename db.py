@@ -26,6 +26,24 @@ g_cur = conn.cursor()
 #### New version functions
 ##
 
+#### Returns all species in the DB as a mapping, sp_name -> sp_id
+##
+def getSpecies():
+	query = '''SELECT sp_name, sp_id
+			   FROM odestatic.species;'''
+
+	g_cur.execute(query)
+
+	## Returns a list of tuples [(sp_name, sp_id)]
+	res = g_cur.fetchall()
+	d = {}
+
+	## We return a dict of sp_name --> sp_id
+	for tup in res:
+		d[tup[0]] = tup[1]
+
+	return d
+
 #### getGeneIds
 ##
 #### Given a list of external references for genes (ode_ref_ids), this 

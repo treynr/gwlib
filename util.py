@@ -107,5 +107,5 @@ def getToday():
 	if len(day) == 1:
 		day = '0' + day
 
-	return year + '-' + month + '-' + day
+	return year + '.' + month + '.' + day
 
