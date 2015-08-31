@@ -258,6 +258,8 @@ def getGenesetNames(gsids):
 #### ret, dict mapping gs_ids (int) to a gs_name (string)
 ##
 def getGenesetAbbreviations(gsids):
+	if not gsids:
+		return {}
 	if type(gsids) == list:
 		gsids = tuple(gsids)
 
