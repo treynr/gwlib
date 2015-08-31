@@ -26,6 +26,28 @@ g_cur = conn.cursor()
 #### New version functions
 ##
 
+#### findAncientMeshSets
+##
+#### Returns the gs_ids of MeSH genesets from the time before gene2mesh.
+##
+def findAncientMeshSets():
+    query = ("SELECT gs_id FROM production.geneset WHERE cur_id IS NULL AND "
+              "gs_name NOT ILIKE '%%in ctd%%' AND gs_name ILIKE '%%mesh%%';")
+
+    g_cur.execute(query)
+
+    res = g_cur.fetchall()
+
+    return map(lambda x: x[0], res)
+
+#### deleteGeneset
+##
+#### Marks a geneset as deleted. Since nothing is ever deleted, it's
+#### simply marked as such.
+##
+def deleteGeneset(gs_id):
+    updateGenesetStatus(gs_id, 'deleted')
+
 #### Returns all species in the DB as a mapping, sp_name -> sp_id
 ##
 def getSpecies():
@@ -240,7 +262,7 @@ def getGenesetAbbreviations(gsids):
 		gsids = tuple(gsids)
 
 	query = ('SELECT gs_id, gs_abbreviation FROM production.geneset '
-			 'WHERE gs_id IN (%s);')
+			 'WHERE gs_id IN %s;')
 	d = {}
 
 	g_cur.execute(query, [gsids])
@@ -501,7 +523,7 @@ def insertGenesetValue(gs_id, gene_id, value, name, thresh):
 ##
 #### Updates gs_count for a given gs_id.
 ##
-def updateGenesetCount(self, gs_id, count):
+def updateGenesetCount(gs_id, count):
 	query = 'UPDATE production.geneset SET gs_count = %s WHERE gs_id = %s;'
 
 	g_cur.execute(query, [count, gs_id])
@@ -510,24 +532,24 @@ def updateGenesetCount(self, gs_id, count):
 ##
 #### Updates gs_count for a given gs_id.
 ##
-def updateGenesetStatus(self, gs_id, status):
+def updateGenesetStatus(gs_id, status):
 	query = 'UPDATE production.geneset SET gs_status = %s WHERE gs_id = %s;'
 
-	g_cur.execute(query, [count, gs_id])
+	g_cur.execute(query, [status, gs_id])
 
 #### deprecateGeneset
 ##
 #### Marks a geneset for deprecation. Since nothing is ever deleted, it's
 #### simply marked as such.
 ##
-def deprecateGeneset(self, gs_id):
+def deprecateGeneset(gs_id):
 	updateGenesetStatus(gs_id, 'deprecated')
 
 #### deleteGenesetValues
 ##
 #### Removes all geneset_values for a given gs_id.
 ##
-def deleteGenesetValues(self, gs_id):
+def deleteGenesetValues(gs_id):
 	if not gs_id:
 		return
 
