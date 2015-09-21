@@ -23,10 +23,13 @@ except:
 ## Globals are bad, mmkay?
 g_cur = conn.cursor()
 
+###############################################################################
+################################### Queries ###################################
+
 #### New version functions
 ##
 
-#### findAncientMeshSets
+#### findAncientMeshSets (DEPRECATED)
 ##
 #### Returns the gs_ids of MeSH genesets from the time before gene2mesh.
 ##
@@ -48,7 +51,11 @@ def findAncientMeshSets():
 def deleteGeneset(gs_id):
     updateGenesetStatus(gs_id, 'deleted')
 
-#### Returns all species in the DB as a mapping, sp_name -> sp_id
+#### getSpecies
+##
+#### Returns all species in the DB as a mapping, sp_name -> sp_id.
+##
+#### ret: dict, mapping of species names to their internal IDs
 ##
 def getSpecies():
 	query = '''SELECT sp_name, sp_id
@@ -74,7 +81,7 @@ def getSpecies():
 #### looks for preferred ode_gene_ids (ode_pref == true). If the symbol 
 #### doesn't exist in the DB or can't be found, it is mapped to None.
 ##
-#### arg: [string], refs, list of external gene refs to map ode IDs to
+#### arg: [string], list of external gene refs
 #### ret: dict, ode_ref_id -> ode_gene_id mapping
 ##
 def getGeneIds(refs, pref=True):
@@ -107,6 +114,17 @@ def getGeneIds(refs, pref=True):
 
 	return d
 
+#### getGeneIdsBySpecies
+##
+#### Given a list of external references for genes (ode_ref_ids), this 
+#### function returns a symbol mapping, ode_ref_id --> ode_gene_ids, but
+#### only for a single species. If the symbol doesn't exist in the DB or 
+#### can't be found, it is mapped to None.
+##
+#### arg: [string], list of external gene refs
+#### arg: integer, GW species ID
+#### ret: dict, ode_ref_id -> ode_gene_id mapping
+##
 def getGeneIdsBySpecies(syms, spec, pref=True):
 	if type(syms) == list:
 		syms = tuple(syms)
@@ -139,20 +157,21 @@ def getGeneIdsBySpecies(syms, spec, pref=True):
 
 #### getGenesetsByTier
 ##
-#### Returns all gs_ids in the given tiers and under the specified 
-#### count limit (gs_count). 
+#### Returns all gs_ids in the given tier(s) and that are smaller than a
+#### certain size. Calling the function with no arguments will return all
+#### genesets in all tiers that have less than 1000 members.
 ##
+#### arg: [integer], list of tiers to use when querying genesets
+#### arg: integer, size limit (default: 1000)
 #### ret, list of IDs for all gene sets that meet the above criteria
 ##
 def getGenesetsByTier(tiers=None, size=1000):
 	if not tiers:
 		tiers = [1, 2, 3, 4, 5]
 
-	# Remove anything that isn't an actual tier (should only be 1 - 5)
-	tiers = tuple([x for x in tiers if (x >= 1) and (x <= 5)])
-
-	query = ('SELECT gs_id FROM production.geneset WHERE gs_count < %s AND '
-			 'cur_id = IN(%s);')
+	query = '''SELECT gs_id 
+			   FROM production.geneset 
+			   WHERE gs_count < %s AND cur_id IN %s;'''
 
 	g_cur.execute(query, [size, tiers])
 
@@ -163,18 +182,19 @@ def getGenesetsByTier(tiers=None, size=1000):
 
 #### getGenesetGeneIds
 ##
-#### Returns all ode_gene_ids for the given gs_ids. The results are returned
-#### as a dict, mapping gs_ids --> [ode_gene_ids].
+#### Returns the contents (ode_gene_ids) of a given list of genesets.
+#### The results are returned as a mapping of gs_ids -> ode_gene_ids.
 ##
-#### arg, int list of gs_ids
-#### ret, dict mapping gs_ids (int) to list of ode_gene_ids ([int])
+#### arg: [integer],  a list of gs_ids
+#### ret: dict, a mapping of gs_ids (int) to list of ode_gene_ids ([int])
 ##
 def getGenesetGeneIds(gsids):
 	if type(gsids) == list:
 		gsids = tuple(gsids)
 
-	query = ('SELECT gs_id, ode_gene_id FROM extsrc.geneset_value '
-			 'WHERE gs_id IN (%s);')
+	query = '''SELECT gs_id, ode_gene_id 
+			   FROM extsrc.geneset_value
+			   WHERE gs_id IN %s;'''
 	d = {}
 
 	g_cur.execute(query, [gsids])
@@ -193,10 +213,10 @@ def getGenesetGeneIds(gsids):
 #### getGeneRefs
 ##
 #### Returns an ode_ref_id (where ode_pref = true) for the given ode_gene_ids.
-#### The results are returned as a dict, mapping ode_gene_ids --> ode_ref_id.
+#### The results are returned as mapping of ode_gene_id -> ode_ref_id.
 ##
-#### arg, int list of ode_gene_ids
-#### ret, dict mapping ode_gene_ids (int) to an ode_ref_id (string)
+#### arg: [integer], list of ode_gene_ids
+#### ret: dict, mapping of ode_gene_ids (int) to an ode_ref_id (string)
 ##
 def getGeneRefs(gids):
 	if type(gids) == list:
@@ -226,17 +246,18 @@ def getGeneRefs(gids):
 #### getGenesetNames
 ##
 #### Returns all gs_names for the given gs_ids. The results are returned
-#### as a dict, mapping gs_ids --> gs_name.
+#### as a mapping of gs_ids -> gs_name.
 ##
-#### arg, int list of gs_ids
-#### ret, dict mapping gs_ids (int) to a gs_name (string)
+#### arg: [integer],  list of gs_ids
+#### ret: dict, mapping of gs_ids (int) to a gs_name (string)
 ##
 def getGenesetNames(gsids):
 	if type(gsids) == list:
 		gsids = tuple(gsids)
 
-	query = ('SELECT gs_id, gs_name FROM production.geneset '
-			 'WHERE gs_id IN (%s);')
+	query = '''SELECT gs_id, gs_name 
+			   FROM production.geneset
+			   WHERE gs_id IN %s;'''
 	d = {}
 
 	g_cur.execute(query, [gsids])
@@ -252,10 +273,10 @@ def getGenesetNames(gsids):
 #### getGenesetAbbreviations
 ##
 #### Returns all gs_abbreviations for the given gs_ids. The results are
-#### returned as a dict, mapping gs_ids --> gs_abbreviation.
+#### returned as a mapping of gs_ids -> gs_abbreviation.
 ##
-#### arg, int list of gs_ids
-#### ret, dict mapping gs_ids (int) to a gs_name (string)
+#### arg: [integer],  list of gs_ids
+#### ret: dict, mapping of gs_ids (int) to a gs_name (string)
 ##
 def getGenesetAbbreviations(gsids):
 	if not gsids:
@@ -263,8 +284,9 @@ def getGenesetAbbreviations(gsids):
 	if type(gsids) == list:
 		gsids = tuple(gsids)
 
-	query = ('SELECT gs_id, gs_abbreviation FROM production.geneset '
-			 'WHERE gs_id IN %s;')
+	query = '''SELECT gs_id, gs_abbreviation 
+			   FROM production.geneset
+			   WHERE gs_id IN %s;'''
 	d = {}
 
 	g_cur.execute(query, [gsids])
@@ -305,10 +327,10 @@ def getMeshIdsOld():
 
 #### getMeshIds
 ##
-#### Returns a list of gs_ids for all MeSH sets generated by gene2mesh. 
+#### Returns a list of gs_ids for all current, non-deprecated MeSH sets 
+#### generated by gene2mesh. 
 ##
-#### arg, int list of gs_ids
-#### ret, dict mapping gs_ids (int) to list of ode_gene_ids ([int])
+#### ret: [integer], list of gs_ids corresponding to MeSH sets 
 ##
 def getMeshIds():
 
@@ -339,20 +361,21 @@ def getMeshSetsOld():
 
 #### getMeshSets
 ##
-#### Returns all current MeSH genesets. Result is returned as a dict, gs_ids ->
-#### [ode_gene_id]. 
+#### Returns the contents (ode_gene_ids) of all current, non-deprecated MeSH genesets. 
 ##
-#### ret, dict mapping gs_ids (int) to list of ode_gene_ids ([int])
+#### ret: dict, mapping gs_ids (int) to list of ode_gene_ids ([int])
 ##
 def getMeshSets():
 	return getGenesetGeneIds(getMeshIds())
 
 #### getMeshSetNames
 ##
-#### Returns all current MeSH geneset names (terms). Result is returned as a 
-#### dict, gs_ids -> term. 
+#### Returns all current, non-deprecated MeSH terms. The latest version of
+#### gene2mesh puts the MeSH term (by itself) as the gs_abbreviation. The term
+#### can also be found in the gs_name and gs_description, but it would have to
+#### be parsed out.
 ##
-#### ret, dict mapping gs_ids (int) to MeSH term (string)
+#### ret: dict, mapping gs_ids (int) to MeSH term (string)
 ##
 def getMeshSetNames():
 	return getGenesetAbbreviations(getMeshIds())
@@ -422,6 +445,7 @@ def makeRandomFilename():
 #### Given a shitload of arguments, this function returns a dictionary
 #### representation of a single geneset. Each key is a different column
 #### found in the geneset table. Not all columns are represented.
+#### Just a note: grp should (usually) be '-1'.
 ##
 ##
 def makeGeneset(name, abbr, desc, spec, pub, grp, ttype, thresh, gtype, vals,
