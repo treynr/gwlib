@@ -501,7 +501,7 @@ def queryGeneFromRef(ids, asdict=True):
 #
 ## new function so changing the old one wouldn't break any scripts. I'll have
 ## to update the scripts eventually. Added ability to query based on 
-## species (sp_id). sp_id = 2 is humans.
+## species (sp_id). sp_id = 2 is humans, 1 = mus musculus
 #
 def queryGeneFromRef2(ids, sp=2, asdict=True):
 	if type(ids) is list:
