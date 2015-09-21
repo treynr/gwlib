@@ -7,6 +7,7 @@
 # 
 
 from collections import defaultdict as dd
+import datetime as dt
 import json
 
 ## tup2dict
@@ -56,15 +57,37 @@ def splitList(strs):
 
 ## chunkList
 #
-## Takes a list and chunks it into lists of size n.
+## Takes a list and chunks it into lists of size n. Use n == 0 to specify
+## a chunk the size of the initial list.
 #
 ## arg, l, the list to chunk
 ## arg, n, the size of the newly generated sublists/chunks
 ## ret, list of lists
 #
 def chunkList(l, n):
-    for i in xrange(0, len(l), n):
-        yield l[i:i+n]
+	if n == 0:
+		n = len(l)
+
+	for i in xrange(0, len(l), n):
+		yield l[i:i+n]
+
+#### flatten
+##
+#### Takes a list of lists (inner list lengths don't have to be equal) and 
+#### flattens everything so we just have one giant list of whatever shit 
+#### was in the inner lists.
+##
+def flatten(outlst):
+    return [a for inlst in outlst for a in inlst]
+
+#### flatten
+##
+#### This ugly fucker of a list comprehension just takes a list of lists 
+#### (inner list lengths don't have to be equal) and flattens everything so we
+#### just have one giant list of whatever shit was in the inner lists.
+##
+def flattenList(outlst):
+    return [a for inlst in outlst for a in inlst]
 
 ## exportJson
 #
@@ -81,4 +104,21 @@ def exportJson(fp, data, dtag=''):
 			print >> fl, json.dumps(data)
 		else:
 			print >> fl, json.dumps([dtag, data])
+
+#### getToday
+##
+#### Returns today's date as a string in the format YYYY-MM-DD.
+##
+def getToday():
+	now = dt.datetime.now()
+	year = str(now.year)
+	month = str(now.month)
+	day = str(now.day)
+
+	if len(month) == 1:
+		month = '0' + month
+	if len(day) == 1:
+		day = '0' + day
+
+	return year + '.' + month + '.' + day
 
