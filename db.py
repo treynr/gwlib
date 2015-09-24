@@ -70,6 +70,13 @@ def getSpecies():
 
 	return d
 
+## There's a subtle difference between getGeneIds and the "sensitive" version
+## below it. getGeneIds requires gene symbols to exactly match their
+## counterparts in the DB. The SQL query considers the genes BRCA1 and Brca1 as
+## different. The sensitive version, doesn't require proper capitalization BUT
+## this comes at the expense of run time. The SQL query takes FOREVER and
+## should only be used in certain cases.
+
 #### getGeneIds
 ##
 #### Given a list of external references for genes (e.g. symbols), this 
@@ -87,6 +94,39 @@ def getGeneIds(refs, pref=True):
 	query = '''SELECT DISTINCT ode_ref_id, ode_gene_id 
 			   FROM extsrc.gene
 			   WHERE ode_ref_id IN %s'''
+
+	g_cur.execute(query, [refs])
+
+	## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
+	res = g_cur.fetchall()
+	d = {}
+
+	found = map(lambda x: x[0], res)
+
+	## Map symbols that weren't found to None
+	for nf in (set(refs) - set(found)):
+		res.append((nf, None))
+
+	## We return a dict of ode_ref_id --> ode_gene_ids
+	for tup in res:
+		d[tup[0]] = tup[1]
+
+	return d
+
+#### getGeneIdsSensitive
+##
+#### Given a list of external references for genes (e.g. symbols), this 
+#### function returns a mapping, ode_ref_id --> ode_gene_ids. 
+#### If the symbol doesn't exist in the DB or can't be found, it is mapped
+#### to None.
+##
+#### arg: [string], list of external gene refs
+#### ret: dict, ode_ref_id -> ode_gene_id mapping
+##
+def getGeneIdsSensitive(refs, pref=True):
+	query = '''SELECT DISTINCT ode_ref_id, ode_gene_id 
+			   FROM extsrc.gene
+			   WHERE ode_ref_id LIKE ANY (%s)'''
 
 	g_cur.execute(query, [refs])
 
