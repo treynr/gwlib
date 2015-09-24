@@ -26,9 +26,6 @@ g_cur = conn.cursor()
 ###############################################################################
 ################################### Queries ###################################
 
-#### New version functions
-##
-
 #### findAncientMeshSets (DEPRECATED)
 ##
 #### Returns the gs_ids of MeSH genesets from the time before gene2mesh.
@@ -75,11 +72,10 @@ def getSpecies():
 
 #### getGeneIds
 ##
-#### Given a list of external references for genes (ode_ref_ids), this 
-#### function returns a symbol mapping, ode_ref_id --> ode_gene_ids. 
-#### If pref is True, which by default it is, then the function only 
-#### looks for preferred ode_gene_ids (ode_pref == true). If the symbol 
-#### doesn't exist in the DB or can't be found, it is mapped to None.
+#### Given a list of external references for genes (e.g. symbols), this 
+#### function returns a mapping, ode_ref_id --> ode_gene_ids. 
+#### If the symbol doesn't exist in the DB or can't be found, it is mapped
+#### to None.
 ##
 #### arg: [string], list of external gene refs
 #### ret: dict, ode_ref_id -> ode_gene_id mapping
@@ -90,11 +86,7 @@ def getGeneIds(refs, pref=True):
 
 	query = '''SELECT DISTINCT ode_ref_id, ode_gene_id 
 			   FROM extsrc.gene
-			   WHERE ''' #ode_ref_id IN (%s);'''
-	if pref:
-		query += 'ode_pref = true AND ode_ref_id IN %s;'
-	else:
-		query += 'ode_ref_id IN %s;'
+			   WHERE ode_ref_id IN %s'''
 
 	g_cur.execute(query, [refs])
 
@@ -119,7 +111,7 @@ def getGeneIds(refs, pref=True):
 #### Given a list of external references for genes (ode_ref_ids), this 
 #### function returns a symbol mapping, ode_ref_id --> ode_gene_ids, but
 #### only for a single species. If the symbol doesn't exist in the DB or 
-#### can't be found, it is mapped to None.
+#### can't be found, it is mapped to None. humans = 2
 ##
 #### arg: [string], list of external gene refs
 #### arg: integer, GW species ID
@@ -138,6 +130,45 @@ def getGeneIdsBySpecies(syms, spec, pref=True):
 		query += 'ode_ref_id IN %s;'
 
 	g_cur.execute(query, [spec, syms])
+
+	## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
+	res = g_cur.fetchall()
+	d = {}
+
+	found = map(lambda x: x[0], res)
+
+	## Map symbols that weren't found to None
+	for nf in (set(syms) - set(found)):
+		res.append((nf, None))
+
+	## We return a dict of ode_ref_id --> ode_gene_ids
+	for tup in res:
+		d[tup[0]] = tup[1]
+
+	return d
+
+#### getGeneIdsBySpecies2 (sql query changes)
+##
+#### Given a list of external references for genes (ode_ref_ids), this 
+#### function returns a symbol mapping, ode_ref_id --> ode_gene_ids, but
+#### only for a single species. If the symbol doesn't exist in the DB or 
+#### can't be found, it is mapped to None. humans = 2
+##
+#### arg: [string], list of external gene refs
+#### arg: integer, GW species ID
+#### ret: dict, ode_ref_id -> ode_gene_id mapping
+##
+def getGeneIdsBySpecies2(syms, spec, pref=True):
+	query = '''SELECT DISTINCT ode_ref_id, ode_gene_id 
+			   FROM extsrc.gene
+			   WHERE sp_id = %s AND ode_ref_id LIKE ANY (%s);'''
+
+	#if pref:
+	#	query += 'ode_pref = true AND ode_ref_id IN %s;'
+	#else:
+	#	query += 'ode_ref_id IN %s;'
+
+	g_cur.execute(query, [spec, [syms]])
 
 	## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
 	res = g_cur.fetchall()
@@ -296,6 +327,50 @@ def getGenesetAbbreviations(gsids):
 	## We return a dict, k: gs_id; v: gs_name
 	for tup in res:
 			d[tup[0]] = tup[1]
+
+	return d
+
+#### getGeneType
+##
+#### Returns the gdb_id for the given short name.
+##
+#### arg: string, gdb_shortname to use for retrieving the gdb_id
+#### ret: integer, gdb_id for SNP type. None if it doesn't exist in the DB
+##
+def getGeneType(short):
+	query = '''SELECT gdb_id
+			   FROM odestatic.genedb
+			   WHERE gdb_shortname LIKE %s;'''
+
+	g_cur.execute(query, [short])
+
+	res = g_cur.fetchone()
+
+	if not res:
+		return None
+	else:
+		return res[0]
+
+#### getSnpGenes
+##
+#### Returns a mapping of all rolled up SNPs in the DB. 
+##
+#### arg: [int], gdb_id for the SNP gene type
+#### ret: dict, mapping of SNP ID (ode_ref_id) -> ode_gene_id
+##
+def getSnpGenes(gdbid):
+	query = '''SELECT ode_ref_id, ode_gene_id
+			   FROM extsrc.gene
+			   WHERE gdb_id = %s;''' 
+	
+	g_cur.execute(query, [gdbid])
+
+	## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
+	res = g_cur.fetchall()
+	d = {}
+
+	for tup in res:
+		d[tup[0]] = tup[1]
 
 	return d
 
@@ -542,6 +617,15 @@ def insertGenesetValue(gs_id, gene_id, value, name, thresh):
 			   gsv_value_list, gsv_in_threshold, gsv_date) 
 			   VALUES (%s, %s, %s, 0, %s, ARRAY[0], %s, NOW());'''
 	vals = [gs_id, gene_id, value, [name], thresh]
+
+	g_cur.execute(query, vals)
+
+def insertGene(gene_id, ref_id, gdb_id, sp_id, pref='f'):
+	query = '''INSERT INTO extsrc.gene
+			   (ode_gene_id, ode_ref_id, gdb_id, sp_id, ode_pref, ode_date)
+			   VALUES
+			   (%s, %s, %s, %s, %s, NOW());'''
+	vals = [gene_id, ref_id, gdb_id, sp_id, pref]
 
 	g_cur.execute(query, vals)
 
