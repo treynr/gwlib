@@ -1431,9 +1431,8 @@ def findGenesetsWithGenes(genes):
 	# de-tuple the results
 	return map(lambda x: x[0], g_cur.fetchall())
 
+#### This query takes awhile. Like awhile. You've been warned.
 def getSetsWithoutJaccards():
-	## 11/14/14 - For some fucking reason this query is taking forever. 
-	## specifically its any select query on geneset_jaccard.
 	queryl = '''SELECT gs_id
 			    FROM production.geneset
 			    WHERE gs_status NOT LIKE 'de%%' AND
