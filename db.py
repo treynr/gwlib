@@ -202,7 +202,9 @@ def getGenesetsByTier(tiers=None, size=1000):
 
 	query = '''SELECT gs_id 
 			   FROM production.geneset 
-			   WHERE gs_count < %s AND cur_id IN %s;'''
+			   WHERE gs_status NOT LIKE 'de%%' AND 
+			   		 gs_count < %s AND 
+			   		 cur_id IN %s;'''
 
 	g_cur.execute(query, [size, tiers])
 
