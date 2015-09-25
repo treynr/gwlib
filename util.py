@@ -44,16 +44,17 @@ def tup2dict(tup, key=0, lst=False):
 
 ## splitList
 #
-## Splits a comma separated string into a list. Removes any extraneous spaces
+## Splits a character delimited string into a list. Removes any extraneous spaces
 ## from each word too.
 #
-## arg, strs, string to split
-## ret, list of words
+## arg: string, what's being split
+## arg: char, character to split at
+## ret: [string], list of words
 #
-def splitList(strs):
-    if strs is None: 
-        return None
-    return [l.strip() for l in strs.split(',')] 
+def splitList(xs, split=','):
+	if not xs:
+        return []
+    return [l.strip() for l in xs.split(split)] 
 
 ## chunkList
 #
