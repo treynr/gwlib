@@ -74,8 +74,8 @@ def getSpecies():
 ## below it. getGeneIds requires gene symbols to exactly match their
 ## counterparts in the DB. The SQL query considers the genes BRCA1 and Brca1 as
 ## different. The sensitive version, doesn't require proper capitalization BUT
-## this comes at the expense of run time. The SQL query takes FOREVER and
-## should only be used in certain cases.
+## this comes at the expense of run time. The SQL query takes for-fucking-ever
+## and should only be used in certain cases.
 
 #### getGeneIds
 ##
@@ -225,6 +225,16 @@ def getGeneIdsBySpecies2(syms, spec, pref=True):
 		d[tup[0]] = tup[1]
 
 	return d
+
+def getGenesetValues(gsids):
+	if type(gsids) == list:
+		gsids = tuple(gsids)
+
+	query = '''SELECT gs_id, ode_gene_id, gsv_value
+			   FROM extsrc.geneset_value
+			   WHERE gs_id IN %s;'''
+
+	g_cur.execute(query, [gsids])
 
 #### getGenesetsByTier
 ##
