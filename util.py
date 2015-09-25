@@ -80,15 +80,6 @@ def chunkList(l, n):
 def flatten(outlst):
     return [a for inlst in outlst for a in inlst]
 
-#### flatten
-##
-#### This ugly fucker of a list comprehension just takes a list of lists 
-#### (inner list lengths don't have to be equal) and flattens everything so we
-#### just have one giant list of whatever shit was in the inner lists.
-##
-def flattenList(outlst):
-    return [a for inlst in outlst for a in inlst]
-
 ## exportJson
 #
 ## Takes a filepath and some data structure (usually a list of objects) and 
