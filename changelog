@@ -1,0 +1,18 @@
+
+GeneWeaver Python Libraries - CHANGELOG
+
+db.py contains functions for accessing and modifying the GW DB.
+log.py contains a class for logging output to files and stdout.
+mesh.py contains functions for parsing the MeSH tree (will be removed in a
+future update).
+util.py contains miscellaneous functions frequently used in GW python scripts.
+
+[0.2.1] 2015.09.27
+	[+] Added logging module
+
+[0.1.1] 2015.09.14
+	[+] Added more documentation and function comments
+	[*] Changed SQL queries to use multiline strings
+
+[0.1.0] 2014.07.07
+	[*] Initial, working release
