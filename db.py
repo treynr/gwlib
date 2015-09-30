@@ -247,8 +247,13 @@ def getGenesetValues(gsids):
 #### ret, list of IDs for all gene sets that meet the above criteria
 ##
 def getGenesetsByTier(tiers=None, size=1000):
+
 	if not tiers:
-		tiers = [1, 2, 3, 4, 5]
+		tiers = (1, 2, 3, 4, 5)
+
+	else:
+		tiers = tuple(tiers)
+
 
 	query = '''SELECT gs_id 
 			   FROM production.geneset 
@@ -1486,15 +1491,13 @@ def getSetsWithoutJaccards():
 	queryl = '''SELECT gs_id
 			    FROM production.geneset
 			    WHERE gs_status NOT LIKE 'de%%' AND
-			   		  gs_id NOT IN
-			   		  (SELECT DISTINCT gs_id_left 
-					   FROM extsrc.geneset_jaccard);'''
+			   		  gs_id NOT IN (SELECT DISTINCT gs_id_left
+					  	FROM extsrc.geneset_jaccard);'''
 	queryr = '''SELECT gs_id
 			    FROM production.geneset
 			    WHERE gs_status NOT LIKE 'de%%' AND
-			   		  gs_id NOT IN
-			   		  (SELECT DISTINCT gs_id_right 
-					   FROM extsrc.geneset_jaccard);'''
+			   		  gs_id NOT IN (SELECT DISTINCT gs_id_right
+					  	FROM extsrc.geneset_jaccard);'''
 
 	g_cur.execute(queryl)
 

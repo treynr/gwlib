@@ -51,10 +51,11 @@ def tup2dict(tup, key=0, lst=False):
 ## arg: char, character to split at
 ## ret: [string], list of words
 #
-def splitList(xs, split=','):
+def splitList(xs, sp=','):
 	if not xs:
-        return []
-    return [l.strip() for l in xs.split(split)] 
+		return []
+
+	return [l.strip() for l in xs.split(sp)]
 
 ## chunkList
 #
