@@ -7,6 +7,7 @@
 ## auth:	TR
 # 
 
+from collections import defaultdict as dd
 from itertools import groupby
 import util as utl
 
@@ -317,27 +318,20 @@ def parseMeshData(lines):
 	## Dict where key = term and the values are another dict (keys in parens): 
 	## MeSH heading (MH), description (MS), ID (UI), tree node ID (MN)
 	terms = {} 
-	treenums = {} # Dict. where key = tree number and val = MeSH term
-	mtree = {} # Dict. of MeSH tree structure and closure, each key is a term
 
-	import re
-	# Iterate over all the records, extracting only the necessary information and
-	# storing that in a dict
 	for r in recs:
-		data = {'MN' : list(), 'MS' : '', 'nodes' : list()}
+		data = {'MN' : list(), 'nodes' : list()}
 
 		for s in r:
 			## MH: MeSH Heading, i.e. the MeSH term
 			## MS: Scope note, a description of the term
 			## UI: unique ID
-			if s[:3] == 'MH' or
-			   s[:3] == 'MS' or
-			   s[:3] == 'UI':
-				   data[s[:3]] = s.split(' = ')[1]
+			if s[:3] == 'MH ' or s[:2] == 'MS ' or s[:2] == 'UI ':
+			   data[s[:2]] = s.split(' = ')[1]
 
 			## Tree number, the ID of this term's node in the MeSH tree. There
 			## may be more than one, and the ID includes the terms ancestors
-			elif s[:3] == 'MN':
+			elif s[:3] == 'MN ':
 				ts = s.split(' = ')[1]
 
 				data['MN'].append(ts)
@@ -348,37 +342,256 @@ def parseMeshData(lines):
 				## Generate all ancestral nodes
 				## e.g A01.111.236 --> [A01, A01.111, A01.111.236]
 				ts = ts.split('.')
-				ts = map(lambda i: '.'.join(ancs[:i]), range(1, 1 + len(ancs)))
+				ts = map(lambda i: '.'.join(ts[:i]), range(1, 1 + len(ts)))
 
 				data['nodes'].extend(ts)
 
-			if s[:3] == 'MH ': # MeSH Heading 
-				data['MH'] = s.split(' = ')[1]
+		terms[data['MH']] = data
+	
+	return terms
 
-			elif s[:3] == 'MS ': # Scope note, basically a description
-				data['MS'] = s.split(' = ')[1]
+class Tree(dd):
 
-			elif s[:3] == 'UI ': # Unique ID
-				data['UI'] = s.split(' = ')[1]
+	def __getattr__(self, key):
 
-			elif s[:3] == 'MN ': # MeSH tree number, there may be more than one
-				ts = s.split(' = ')[1]
-				data['MN'].append(ts)
-				# Should be safe as MH always comes before MN in the MeSH file...
-				# Associates the mesh term (MH) with the newly added tree number
-				treenums[data['MN'][-1]] = data['MH']
+		return self[key]
 
-				# Create a list of each previous node in the tree (ancestors)
-				# e.g A01.111.236 --> [A01, A01.111, A01.111.236]
-				data['nodes'].extend(( # Lines longer than 80 chars are of the devil 
-					[ts[:i] for i in xrange(len(ts)) if ts.find('.', i) == i]))
-				data['nodes'].append(ts)
+	def __setattr__(self, key, val):
 
-			elif s[:3] == 'UI ': # Unique identifier
-				data['UI'] = s.split(' = ')[1]
+		self[key] = val
+
+	def __walkTree(self, path):
+		"""
+		Given a path of nodes, the function walks the tree while creating empty
+		nodes that are referenced in the path list.
+
+		args:
+			list, a node path--each element further in the list is found
+				  further in the tree
+
+		ret:
+			Tree, the last node added
+		"""
+
+		t = self
+		allpath = ''
+
+		for i, p in enumerate(path):
+
+			t = t[p]
+			t['path'] = '.'.join(map(str, path)[:i+1])
+
+		return t
+
+	def addNode(self, path):
+		"""
+		Given a path of nodes, the function adds each node along the path to
+		the tree.
+
+		args:
+			list, a node path--each element further in the list is found
+				  further in the tree
+		"""
+
+		self.__walkTree(path)
+
+	def addValue(self, path, key, val):
+		"""
+		Adds a key/value pair to the node referenced in the given path list.
+		Note, the key should not have any periods ('.') since these are used
+		internally by the tree's path variable.
+
+		args:
+			list, a node path--the key/value pair is added to the final node
+			key, any key type that can be used in a dict
+			val, any value type that can be used in a dict
+
+		"""
+
+		self.__walkTree(path)[key] = val
+
+	def getNode(self, path):
+		"""
+		Returns the node found at the given path.
+
+		args:
+			list, a node path
+
+		ret:
+			Tree, final node in a path
+		"""
+
+		return self.__walkTree(path)
+
+	def getValue(self, path, key):
+		"""
+		Returns the value portion of a key/value pair at a specific node.
+
+		args:
+			list, a node path
+			key, get the value of this key
+
+		ret:
+			val, some value
+		"""
+
+		return self.__walkTree(path)[key]
+
+	def getKeys(self, path):
+		"""
+		Returns all the keys a particular node has.
+
+		args:
+			list, a node path
+
+		ret:
+			list, list of keys
+		"""
+
+		return self.__walkTree(path).keys()
+
+	def getChildren(self, path):
+		"""
+		Returns all the child paths for a given node.
+
+		args:
+			list, a node path
+
+		ret:
+			list, list of path strings
+		"""
+
+		childs = []
+		tree = self.__walkTree(path)
+
+		for k, n in tree.items():
+			if type(n) == Tree:
+				childs.extend(self.__getChildren(n))
+				childs.append(n.path)
+
+		return sorted(childs)
+
+	def __getChildren(self, tree):
+
+		childs = []
+
+		for k, n in tree.items():
+			if type(n) == Tree:
+				childs.extend(self.__getChildren(n))
+				childs.append(n.path)
+
+		return childs
+
+def tree():
+	return Tree(tree)
+
+#def tree():
+#	"""
+#	Constructs an empty tree. The tree is a series of nested dicts.
+#
+#	ret:
+#		dict, empty tree
+#	"""
+#
+#	return dd(tree)
+#
+#def add
+
+def buildMeshTrees(terms):
+	"""
+	Builds each of the mesh trees (A - Z) from node IDs. 
+
+	args:
+		dict, term data generated from parseMeshData 
+
+	ret:
+	"""	
+
+	nodes = []
+
+	## Separate terms that have multiple node IDs
+	for term, v in terms.items():
+		if not v['MN']:
+			continue
+
+		for nid in v['MN']:
+			nodes.append((term, nid))
+
+	nodes = sorted(nodes, key=lambda n: n[1][:1])
+	grps = [[]]
+
+	## Group by MeSH tree letter (e.g. A, B, etc...)
+	for n in range(len(nodes)):
+		if n > 0 and nodes[n][1][:1] != nodes[n - 1][1][:1]:
+			grps.append([])
+
+		grps[-1].append(nodes[n])
+	
+	#for grp in grps:
+	# Generate the MeSH tree (sorta) while concurrently generating closures for
+	# each term. I guess this could also be made by dl'ing the actual
+	# MeSH trees in ASCII format... 
+	for t in terms.keys():
+		mtree[t] = {'children' : set(), 'parents' : set(), 
+					'ancestors' : set(), 'node' : set()}
+
+		# Store the node
+		mtree[t]['node'].update(terms[t]['MN'])
+
+		for mn in terms[t]['MN']:
+			node_map[mn] = t
+
+		# Retrieves all the parents for each tree number. Parents are just the
+		# tree number minus tha last node (three numbers)
+		pars = [s.rsplit('.', 1)[0] for s in terms[t]['MN']]
+
+		# The tree (and closures) are made using terms and not the actual 
+		# tree numbers
+		for node in terms[t]['nodes']:
+			mtree[t]['ancestors'].add(treenums[node]) # Add each ancestor node
+			# added 8/3/2014, remove the term itself from the ancestors list;
+			# I don't think a term is its own ancestor and this fucks up 
+			# gene2mesh creation
+			mtree[t]['ancestors'].discard(t)
+
+			# If it's a parent, add it to the parents set
+			if node in pars:
+				mtree[t]['parents'].add(treenums[node])
+
+	# Then, add all the children for each term
+	for t in mtree.keys():
+		for p in mtree[t]['parents']:
+			mtree[p]['children'].add(t)
+
+if __name__ == '__main__':
+
+	#dat = parseMeshData(loadMeshData_NEW('/home/csi/r/reynolds/gw_mesh/data/mesh2014.bin'))
+	#tree = buildMeshTrees(dat)
+	mtree = tree()
+
+	#mtree.term.shit = 'lol'
+	#mtree.term.uid = '1111'
+	mtree.addNode([1, 2, 3])
+	mtree.addNode([1, 2, 4])
+	mtree.addNode([1, 2, 5])
+
+	print mtree.getChildren([1,2])
+	print mtree.getChildren([1,2,3])
+	print mtree.getChildren([1])
+
+	#print mtree.getNode([1]).path
+	#print mtree.getNode([1,2]).path
+	#print mtree.getNode([1,2,4]).path
+	#print mtree.getNode([1,2,5]).path
+	#mtree.addNode([00, 01, 11])
+	#mtree.addValue([1,2], 'key', 'val')
+
+	#print mtree.getValue([1,2], 'key')
+	#print mtree.term.shit
+	#print mtree.term.uid
+	#print mtree
 
 		# Each MeSH term stored in a dict where key = term and val = relevant data
-		terms[data['MH']] = data
 ## loadMeshData
 #
 ## Loads all the MeSH data from the ASCII format, generating trees and closures
