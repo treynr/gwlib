@@ -1,12 +1,13 @@
 #!/usr/bin/python
 
-## file:    mesh.py
-## desc:    MeSH function library for retrieving MeSH and pubmed information
-##          from NCBI. Uses the NCBI e-util URLs. 
-## vers:    0.1.0
-## auth:    TR
+## file:	mesh.py
+## desc:	MeSH function library for retrieving MeSH and pubmed information
+##			from NCBI. Uses the NCBI e-util URLs. 
+## vers:	0.1.0
+## auth:	TR
 # 
 
+from itertools import groupby
 import util as utl
 
 ## getArticleInfo
@@ -21,22 +22,22 @@ import util as utl
 ## ret, string of the publication info in whatever horrible format NCBI uses
 #
 def getArticleInfo(id):
-    import urllib as ul # For NCBI e-utils crap
+	import urllib as ul # For NCBI e-utils crap
 
-    # NCBI efetch util url, no xml because it's pig disgusting
-    url = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?'
-           'tool=geneweaver_gene2mesh&email=timothy_reynolds@baylor.edu'
-           '&db=pubmed&rettype=medline&retmode=text&id=')
+	# NCBI efetch util url, no xml because it's pig disgusting
+	url = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?'
+		   'tool=geneweaver_gene2mesh&email=timothy_reynolds@baylor.edu'
+		   '&db=pubmed&rettype=medline&retmode=text&id=')
 
-    if id is None:
-        return None
-    else:
-        for i in id:
-            # Just in case the uid is an int for some reason
-            url += str(id) + ','
+	if id is None:
+		return None
+	else:
+		for i in id:
+			# Just in case the uid is an int for some reason
+			url += str(id) + ','
 
-    # Return the article information
-    return ul.urlopen(url).read()
+	# Return the article information
+	return ul.urlopen(url).read()
 
 ## isolateTerms
 #
@@ -46,45 +47,45 @@ def getArticleInfo(id):
 ## collects the MeSH terms (under the MH identifier) for each.
 #
 ## arg, dat, string of the publication info in whatever horrible format NCBI 
-##           uses
+##			 uses
 ## ret, pubmed2mesh dict, keys are pubmed IDs and values are lists of terms
 ## ret, set of all MeSH terms
 #
 def isolateTerms(dat):
-    dat = dat.split('\n')   # split into lines
-    p2m = {}                # dict, pubmed2mesh
-    pub = []                # temporary pubmed ID
-    all = []                # set of all MesH terms
+	dat = dat.split('\n')	# split into lines
+	p2m = {}				# dict, pubmed2mesh
+	pub = []				# temporary pubmed ID
+	all = []				# set of all MesH terms
 
-    for ln in dat:
-        if ln[:4] == 'PMID':
-            pub = ln.split('-')[1].strip()  # PMID-12345
-            p2m[pub] = []
+	for ln in dat:
+		if ln[:4] == 'PMID':
+			pub = ln.split('-')[1].strip()	# PMID-12345
+			p2m[pub] = []
 
-        elif ln[:3] == 'MH ':
-            mh = ln.split('-')[1].strip()   # MH - some term
-            # some MHs have / which indicates a sub-heading, I think, and some
-            # also have *, I have no idea what the hell those signify
-            mh = mh.split('/')[0].strip('*').strip(' ')
-            p2m[pub].append(mh)
-            all.extend(mh)
-        
-    return (p2m, set(mh))
+		elif ln[:3] == 'MH ':
+			mh = ln.split('-')[1].strip()	# MH - some term
+			# some MHs have / which indicates a sub-heading, I think, and some
+			# also have *, I have no idea what the hell those signify
+			mh = mh.split('/')[0].strip('*').strip(' ')
+			p2m[pub].append(mh)
+			all.extend(mh)
+		
+	return (p2m, set(mh))
 
 def getArticleTerms(pids):
-    import time
-    # was initially reading 500 articles at a time, but the jerk software at 
-    # NCBI kept closing the connection
-    pids = utl.chunkList(pids, 300) 
-    info = ''
+	import time
+	# was initially reading 500 articles at a time, but the jerk software at 
+	# NCBI kept closing the connection
+	pids = utl.chunkList(pids, 300) 
+	info = ''
 
-    for p in pids:
-        info = getArticleInfo(p)
-        # NCBI requires you only perform three requests a second
-        time.sleep(0.3)         
+	for p in pids:
+		info = getArticleInfo(p)
+		# NCBI requires you only perform three requests a second
+		time.sleep(0.3)			
 
-    return isolateTerms(info)
-    
+	return isolateTerms(info)
+	
 ## readG2p
 #
 ## Opens and reads in the gene2pubmed data file. The information is stored in
@@ -94,18 +95,18 @@ def getArticleTerms(pids):
 ## ret, dict of genes --> pubmed IDs
 #
 def readG2p(fp):
-    g2p = {}
+	g2p = {}
 
-    with open(fp, 'r') as fh:
-        # Reads each line in the file and splits gene and pubmed IDs
-        for l in fh:
-            gp = l.strip().split('\t')
+	with open(fp, 'r') as fh:
+		# Reads each line in the file and splits gene and pubmed IDs
+		for l in fh:
+			gp = l.strip().split('\t')
 
-            # Store in the dict, key = gene id and val = pubmed id list
-            g2p.setdefault(gp[0], set())
-            g2p[gp[0]].add(gp[1])
+			# Store in the dict, key = gene id and val = pubmed id list
+			g2p.setdefault(gp[0], set())
+			g2p[gp[0]].add(gp[1])
 
-    return g2p
+	return g2p
 
 ## readP2m
 #
@@ -117,24 +118,24 @@ def readG2p(fp):
 ## ret, dict of pubmed IDs --> MeSH terms
 #
 def readP2m(fp):
-    p2m = {}    # pubmed2mesh associations
-    all = set() # set of all MeSH terms
+	p2m = {}	# pubmed2mesh associations
+	all = set() # set of all MeSH terms
 
-    # Reads each line in the file and splits the pubmed IDs and MeSH terms
-    with open(fp, 'r') as fh:
-        for l in fh:
-            # m[0] = pubmed ID, everything else = MeSH terms
-            m = l.strip().split('|')
+	# Reads each line in the file and splits the pubmed IDs and MeSH terms
+	with open(fp, 'r') as fh:
+		for l in fh:
+			# m[0] = pubmed ID, everything else = MeSH terms
+			m = l.strip().split('|')
 
-            # Some null terms were getting into the lists and fucking things up
-            if '' in m:
-                m.remove('')
-            # Store pubmed ID + term associations in a dict
-            p2m[m[0]] = m[1:]
-            # Store all MeSH terms
-            all.update(m[1:])
+			# Some null terms were getting into the lists and fucking things up
+			if '' in m:
+				m.remove('')
+			# Store pubmed ID + term associations in a dict
+			p2m[m[0]] = m[1:]
+			# Store all MeSH terms
+			all.update(m[1:])
 
-    return (p2m, all)
+	return (p2m, all)
 
 ## makeP2m
 #
@@ -144,9 +145,9 @@ def readP2m(fp):
 ## arg, p2m, pubmed2mesh dict generated from the function getArticleTerms
 #
 def saveP2m(fp, p2m):
-    with open(fp, 'w') as f:
-        for k, v in p2m.items():
-            print >> f, (str(k) + '|' + '|'.join(v))
+	with open(fp, 'w') as f:
+		for k, v in p2m.items():
+			print >> f, (str(k) + '|' + '|'.join(v))
 
 ## saveG2m
 #
@@ -159,52 +160,52 @@ def saveP2m(fp, p2m):
 ## arg, wts, weight for the gene-mesh associations
 #
 def saveG2m(fp, g2m, wts=None, tab=False, gnames=None):
-    with open(fp, 'w') as f:
-        for k, v in g2m.items():
-            if len(v) <= 1:
-                continue
-            if tab:
-                # This was added for Charles' mesh2gene data and can now
-                # probably be deleted, the gnames argument above can also
-                # be deleted
-                print >> f, (str(k) + '\t' + '\t'.join(map(lambda x: gnames[x], filter(lambda x: gnames.has_key(x), v))))
-            else:
-                print >> f, (str(k) + '|' + '|'.join(v))
+	with open(fp, 'w') as f:
+		for k, v in g2m.items():
+			if len(v) <= 1:
+				continue
+			if tab:
+				# This was added for Charles' mesh2gene data and can now
+				# probably be deleted, the gnames argument above can also
+				# be deleted
+				print >> f, (str(k) + '\t' + '\t'.join(map(lambda x: gnames[x], filter(lambda x: gnames.has_key(x), v))))
+			else:
+				print >> f, (str(k) + '|' + '|'.join(v))
 
-    if wts:
-        with open(fp + '.wts', 'w') as f:
-            for gene in wts.keys(): # Dict of dicts
-                for term in wts[gene].keys():
-                    print >> f, (str(gene) + '|' + str(term) + '|' + 
-                                str(wts[gene][term]))
+	if wts:
+		with open(fp + '.wts', 'w') as f:
+			for gene in wts.keys(): # Dict of dicts
+				for term in wts[gene].keys():
+					print >> f, (str(gene) + '|' + str(term) + '|' + 
+								str(wts[gene][term]))
 
 def readG2m(fp):
-    import os
+	import os
 
-    g2m = {}    # gene2mesh / mesh2gene dict
-    wts = None  # weights
+	g2m = {}	# gene2mesh / mesh2gene dict
+	wts = None	# weights
 
-    # Reads each line in the file and splits the pubmed IDs and MeSH terms
-    with open(fp, 'r') as fh:
-        for l in fh:
-            # m[0] = gene, everything else = MeSH terms (opposite for m2g)
-            m = l.strip().split('|')
-            g2m[m[0]] = m[1:]#map(int, m[1:])
+	# Reads each line in the file and splits the pubmed IDs and MeSH terms
+	with open(fp, 'r') as fh:
+		for l in fh:
+			# m[0] = gene, everything else = MeSH terms (opposite for m2g)
+			m = l.strip().split('|')
+			g2m[m[0]] = m[1:]#map(int, m[1:])
 
-    # A weights file should probably maybe more than likely exist...?
-    if os.path.exists(fp + '.wts'):
-        with open(fp + '.wts', 'r') as fh:
-            wts = {}
-            for l in fh:
-                # m[0] = gene, m[1] = term, m[2] = weight
-                m = l.strip().split('|')
-                if wts.has_key(m[0]):
-                    wts[m[0]][m[1]] = m[2]
-                else:
-                    wts[m[0]] = {}
-                    wts[m[0]][m[1]] = m[2]
+	# A weights file should probably maybe more than likely exist...?
+	if os.path.exists(fp + '.wts'):
+		with open(fp + '.wts', 'r') as fh:
+			wts = {}
+			for l in fh:
+				# m[0] = gene, m[1] = term, m[2] = weight
+				m = l.strip().split('|')
+				if wts.has_key(m[0]):
+					wts[m[0]][m[1]] = m[2]
+				else:
+					wts[m[0]] = {}
+					wts[m[0]][m[1]] = m[2]
 
-    return (g2m, wts)
+	return (g2m, wts)
 
 ## makeG2m
 #
@@ -221,82 +222,163 @@ def readG2m(fp):
 ## arg, p2m, pubmed2mesh dict
 ## arg, tree, MeSH tree data
 ## arg, m2g, OPTIONAL argument, if true the function makes a 
-##           mesh2gene dict instead of gene2mesh
+##			 mesh2gene dict instead of gene2mesh
 ## ret, gene2mesh dict, keys are terms, values are all genes associated with 
-##      that term (used to be the other way around, but it's easier to insert 
-##      data into the DB this way)
+##		that term (used to be the other way around, but it's easier to insert 
+##		data into the DB this way)
 #
 def makeG2m(g2p, p2m, tree, make_m2g=True, weight=False, closure=False):
-    from collections import defaultdict
-    if (not g2p) or (not p2m): 
-        return None
+	from collections import defaultdict
+	if (not g2p) or (not p2m): 
+		return None
 
-    # dict of gene -> dicts, second dict is mesh term -> int (a count)
-    g2m_count = defaultdict(lambda: defaultdict(int))
-    g2m = defaultdict(set)
-    m2g = defaultdict(set)  # mesh --> gene set
-    # Traverse the gene2pubmed dict. As a reminder, g = a particular gene and
-    # p = [set of pubmed IDs]
-    for gene, pubs in g2p.items():
-        for p in pubs:
-            for m in p2m[p]:
-                g2m_count[gene][m] += 1 # gene -> mesh count
+	# dict of gene -> dicts, second dict is mesh term -> int (a count)
+	g2m_count = defaultdict(lambda: defaultdict(int))
+	g2m = defaultdict(set)
+	m2g = defaultdict(set)	# mesh --> gene set
+	# Traverse the gene2pubmed dict. As a reminder, g = a particular gene and
+	# p = [set of pubmed IDs]
+	for gene, pubs in g2p.items():
+		for p in pubs:
+			for m in p2m[p]:
+				g2m_count[gene][m] += 1 # gene -> mesh count
 
-    # Checks the counts for gene -> mesh associations, anything less than two
-    # is discarded. Creates a g2m mapping
-    for gene, mdict in g2m_count.items():
-        for mesh, count in mdict.items():
-            if count > 1:
-                if g2m_count[gene][mesh] > 1:
-                    # add the MeSH to this gene
-                    g2m[gene].add(mesh)
-                    # add the term to all ancestor nodes (closure)
-                    for anc in tree[mesh]['ancestors']:
-                        if anc not in g2m[gene]:
-                            g2m[gene].add(anc)
-                            # alter the count too since we calc weights later on
-                            g2m_count[gene][anc] += 1
+	# Checks the counts for gene -> mesh associations, anything less than two
+	# is discarded. Creates a g2m mapping
+	for gene, mdict in g2m_count.items():
+		for mesh, count in mdict.items():
+			if count > 1:
+				if g2m_count[gene][mesh] > 1:
+					# add the MeSH to this gene
+					g2m[gene].add(mesh)
+					# add the term to all ancestor nodes (closure)
+					for anc in tree[mesh]['ancestors']:
+						if anc not in g2m[gene]:
+							g2m[gene].add(anc)
+							# alter the count too since we calc weights later on
+							g2m_count[gene][anc] += 1
 
-    # Create weights which will later be added to the geneset values. The 
-    # weight is simply normalized percent publications the term-gene 
-    # association is found in.
-    if weight:
-        wmin = 9999.0
-        wmax = 0.0
-        publen = len(p2m.keys())
-        for gene in g2m_count.keys():
-            for term in g2m_count[gene].keys():
-                if g2m_count[gene][term] > 1:
-                    w = float(g2m_count[gene][term]) / float(publen)
-                    g2m_count[gene][term] = w
+	# Create weights which will later be added to the geneset values. The 
+	# weight is simply normalized percent publications the term-gene 
+	# association is found in.
+	if weight:
+		wmin = 9999.0
+		wmax = 0.0
+		publen = len(p2m.keys())
+		for gene in g2m_count.keys():
+			for term in g2m_count[gene].keys():
+				if g2m_count[gene][term] > 1:
+					w = float(g2m_count[gene][term]) / float(publen)
+					g2m_count[gene][term] = w
 
-                    if w < wmin: 
-                        wmin = w
-                    if w > wmax:
-                        wmax = w
+					if w < wmin: 
+						wmin = w
+					if w > wmax:
+						wmax = w
 
-        # Normalization
-        for gene in g2m_count.keys():
-            for term in g2m_count[gene].keys():
-                g2m_count[gene][term] = (g2m_count[gene][term] - wmin) / float(wmax - wmin)
+		# Normalization
+		for gene in g2m_count.keys():
+			for term in g2m_count[gene].keys():
+				g2m_count[gene][term] = (g2m_count[gene][term] - wmin) / float(wmax - wmin)
 
-    if not make_m2g:
-        if weight:
-            return (g2m, g2m_count)
-        else:
-            return g2m
+	if not make_m2g:
+		if weight:
+			return (g2m, g2m_count)
+		else:
+			return g2m
 
-    # Convert the gene2mesh dict to mesh2gene--makes it easier to add 
-    # everything to the DB
-    for gene, meshes in g2m.items():
-        for mesh in meshes:
-            m2g[mesh].add(gene)
+	# Convert the gene2mesh dict to mesh2gene--makes it easier to add 
+	# everything to the DB
+	for gene, meshes in g2m.items():
+		for mesh in meshes:
+			m2g[mesh].add(gene)
 
-    if weight:
-        return (m2g, g2m_count)
-    else:
-        return m2g
+	if weight:
+		return (m2g, g2m_count)
+	else:
+		return m2g
 
+def loadMeshData_NEW(fp):
+	with open(fp, 'r') as fh:
+		lines = [l.strip() for l in fh]
+
+	return lines
+
+def parseMeshData(lines):
+	## Returns indices for each location of *NEWRECORD in the lines list
+	inds = [i for i, j in enumerate(lines) if j == '*NEWRECORD']
+
+	## Slices the list of lines into individual records using the indices
+	## of each *NEWRECORD string, and then appends the last record to the list
+	## Fuck, this is some ugly python
+	recs = [lines[inds[i]:inds[i + 1] - 1] for i in range(len(inds) - 1)]
+	recs.append(lines[inds[-1]:])
+	
+	## Dict where key = term and the values are another dict (keys in parens): 
+	## MeSH heading (MH), description (MS), ID (UI), tree node ID (MN)
+	terms = {} 
+	treenums = {} # Dict. where key = tree number and val = MeSH term
+	mtree = {} # Dict. of MeSH tree structure and closure, each key is a term
+
+	import re
+	# Iterate over all the records, extracting only the necessary information and
+	# storing that in a dict
+	for r in recs:
+		data = {'MN' : list(), 'MS' : '', 'nodes' : list()}
+
+		for s in r:
+			## MH: MeSH Heading, i.e. the MeSH term
+			## MS: Scope note, a description of the term
+			## UI: unique ID
+			if s[:3] == 'MH' or
+			   s[:3] == 'MS' or
+			   s[:3] == 'UI':
+				   data[s[:3]] = s.split(' = ')[1]
+
+			## Tree number, the ID of this term's node in the MeSH tree. There
+			## may be more than one, and the ID includes the terms ancestors
+			elif s[:3] == 'MN':
+				ts = s.split(' = ')[1]
+
+				data['MN'].append(ts)
+				# Should be safe as MH always comes before MN in the MeSH file...
+				# Associates the mesh term (MH) with the newly added tree number
+				#treenums[data['MN'][-1]] = data['MH']
+
+				## Generate all ancestral nodes
+				## e.g A01.111.236 --> [A01, A01.111, A01.111.236]
+				ts = ts.split('.')
+				ts = map(lambda i: '.'.join(ancs[:i]), range(1, 1 + len(ancs)))
+
+				data['nodes'].extend(ts)
+
+			if s[:3] == 'MH ': # MeSH Heading 
+				data['MH'] = s.split(' = ')[1]
+
+			elif s[:3] == 'MS ': # Scope note, basically a description
+				data['MS'] = s.split(' = ')[1]
+
+			elif s[:3] == 'UI ': # Unique ID
+				data['UI'] = s.split(' = ')[1]
+
+			elif s[:3] == 'MN ': # MeSH tree number, there may be more than one
+				ts = s.split(' = ')[1]
+				data['MN'].append(ts)
+				# Should be safe as MH always comes before MN in the MeSH file...
+				# Associates the mesh term (MH) with the newly added tree number
+				treenums[data['MN'][-1]] = data['MH']
+
+				# Create a list of each previous node in the tree (ancestors)
+				# e.g A01.111.236 --> [A01, A01.111, A01.111.236]
+				data['nodes'].extend(( # Lines longer than 80 chars are of the devil 
+					[ts[:i] for i in xrange(len(ts)) if ts.find('.', i) == i]))
+				data['nodes'].append(ts)
+
+			elif s[:3] == 'UI ': # Unique identifier
+				data['UI'] = s.split(' = ')[1]
+
+		# Each MeSH term stored in a dict where key = term and val = relevant data
+		terms[data['MH']] = data
 ## loadMeshData
 #
 ## Loads all the MeSH data from the ASCII format, generating trees and closures
@@ -317,98 +399,98 @@ def makeG2m(g2p, p2m, tree, make_m2g=True, weight=False, closure=False):
 #
 
 def loadMeshData(fp, nmap=False):
-    with open(fp, 'r') as fh:
-        # Remove \r\n and get a list of the stripped lines
-        lines = [l.strip() for l in fh]
+	with open(fp, 'r') as fh:
+		# Remove \r\n and get a list of the stripped lines
+		lines = [l.strip() for l in fh]
 
-    # Returns indices for each location of *NEWRECORD in the lines list
-    inds = [i for i, j in enumerate(lines) if j == '*NEWRECORD']
+	# Returns indices for each location of *NEWRECORD in the lines list
+	inds = [i for i, j in enumerate(lines) if j == '*NEWRECORD']
 
-    # Slices the list of lines into individual records using the indices (inds)
-    # of each *NEWRECORD string, and then appends the last record to the list
-    # Fuck, this is some ugly python
-    recs = [lines[inds[i]:inds[i + 1] - 1] for i in range(len(inds) - 1)]
-    recs.append(lines[inds[-1]:])
+	# Slices the list of lines into individual records using the indices (inds)
+	# of each *NEWRECORD string, and then appends the last record to the list
+	# Fuck, this is some ugly python
+	recs = [lines[inds[i]:inds[i + 1] - 1] for i in range(len(inds) - 1)]
+	recs.append(lines[inds[-1]:])
 
-    terms = {} # Dict. where key = term and val = data from MeSH dump
-    treenums = {} # Dict. where key = tree number and val = MeSH term
-    mtree = {} # Dict. of MeSH tree structure and closure, each key is a term
+	terms = {} # Dict. where key = term and val = data from MeSH dump
+	treenums = {} # Dict. where key = tree number and val = MeSH term
+	mtree = {} # Dict. of MeSH tree structure and closure, each key is a term
 
-    import re
-    # Iterate over all the records, extracting only the necessary information and
-    # storing that in a dict
-    for r in recs:
-        data = {'MN' : list(), 'MS' : '', 'nodes' : list()}
+	import re
+	# Iterate over all the records, extracting only the necessary information and
+	# storing that in a dict
+	for r in recs:
+		data = {'MN' : list(), 'MS' : '', 'nodes' : list()}
 
-        # for each descriptor in the record, store relevant information
-        for s in r:
-            if s[:3] == 'MH ': # MeSH Heading 
-                data['MH'] = s.split(' = ')[1]
+		# for each descriptor in the record, store relevant information
+		for s in r:
+			if s[:3] == 'MH ': # MeSH Heading 
+				data['MH'] = s.split(' = ')[1]
 
-            elif s[:3] == 'MS ': # Scope note, basically a description
-                data['MS'] = s.split(' = ')[1]
+			elif s[:3] == 'MS ': # Scope note, basically a description
+				data['MS'] = s.split(' = ')[1]
 
-            elif s[:3] == 'UI ': # Unique ID
-                data['UI'] = s.split(' = ')[1]
+			elif s[:3] == 'UI ': # Unique ID
+				data['UI'] = s.split(' = ')[1]
 
-            elif s[:3] == 'MN ': # MeSH tree number, there may be more than one
-                ts = s.split(' = ')[1]
-                data['MN'].append(ts)
-                # Should be safe as MH always comes before MN in the MeSH file...
-                # Associates the mesh term (MH) with the newly added tree number
-                treenums[data['MN'][-1]] = data['MH']
+			elif s[:3] == 'MN ': # MeSH tree number, there may be more than one
+				ts = s.split(' = ')[1]
+				data['MN'].append(ts)
+				# Should be safe as MH always comes before MN in the MeSH file...
+				# Associates the mesh term (MH) with the newly added tree number
+				treenums[data['MN'][-1]] = data['MH']
 
-                # Create a list of each previous node in the tree (ancestors)
-                # e.g A01.111.236 --> [A01, A01.111, A01.111.236]
-                data['nodes'].extend(( # Lines longer than 80 chars are of the devil 
-                    [ts[:i] for i in xrange(len(ts)) if ts.find('.', i) == i]))
-                data['nodes'].append(ts)
+				# Create a list of each previous node in the tree (ancestors)
+				# e.g A01.111.236 --> [A01, A01.111, A01.111.236]
+				data['nodes'].extend(( # Lines longer than 80 chars are of the devil 
+					[ts[:i] for i in xrange(len(ts)) if ts.find('.', i) == i]))
+				data['nodes'].append(ts)
 
-            elif s[:3] == 'UI ': # Unique identifier
-                data['UI'] = s.split(' = ')[1]
+			elif s[:3] == 'UI ': # Unique identifier
+				data['UI'] = s.split(' = ')[1]
 
-        # Each MeSH term stored in a dict where key = term and val = relevant data
-        terms[data['MH']] = data
+		# Each MeSH term stored in a dict where key = term and val = relevant data
+		terms[data['MH']] = data
 
-    # Maps MeSH tree node numbers (e.g A01.141) to terms
-    node_map = {}
-    # Generate the MeSH tree (sorta) while concurrently generating closures for
-    # each term. I guess this could also be made by dl'ing the actual
-    # MeSH trees in ASCII format... 
-    for t in terms.keys():
-        mtree[t] = {'children' : set(), 'parents' : set(), 
-                    'ancestors' : set(), 'node' : set()}
+	# Maps MeSH tree node numbers (e.g A01.141) to terms
+	node_map = {}
+	# Generate the MeSH tree (sorta) while concurrently generating closures for
+	# each term. I guess this could also be made by dl'ing the actual
+	# MeSH trees in ASCII format... 
+	for t in terms.keys():
+		mtree[t] = {'children' : set(), 'parents' : set(), 
+					'ancestors' : set(), 'node' : set()}
 
-        # Store the node
-        mtree[t]['node'].update(terms[t]['MN'])
+		# Store the node
+		mtree[t]['node'].update(terms[t]['MN'])
 
-        for mn in terms[t]['MN']:
-            node_map[mn] = t
+		for mn in terms[t]['MN']:
+			node_map[mn] = t
 
-        # Retrieves all the parents for each tree number. Parents are just the
-        # tree number minus tha last node (three numbers)
-        pars = [s.rsplit('.', 1)[0] for s in terms[t]['MN']]
+		# Retrieves all the parents for each tree number. Parents are just the
+		# tree number minus tha last node (three numbers)
+		pars = [s.rsplit('.', 1)[0] for s in terms[t]['MN']]
 
-        # The tree (and closures) are made using terms and not the actual 
-        # tree numbers
-        for node in terms[t]['nodes']:
-            mtree[t]['ancestors'].add(treenums[node]) # Add each ancestor node
-            # added 8/3/2014, remove the term itself from the ancestors list;
-            # I don't think a term is its own ancestor and this fucks up 
-            # gene2mesh creation
-            mtree[t]['ancestors'].discard(t)
+		# The tree (and closures) are made using terms and not the actual 
+		# tree numbers
+		for node in terms[t]['nodes']:
+			mtree[t]['ancestors'].add(treenums[node]) # Add each ancestor node
+			# added 8/3/2014, remove the term itself from the ancestors list;
+			# I don't think a term is its own ancestor and this fucks up 
+			# gene2mesh creation
+			mtree[t]['ancestors'].discard(t)
 
-            # If it's a parent, add it to the parents set
-            if node in pars:
-                mtree[t]['parents'].add(treenums[node])
+			# If it's a parent, add it to the parents set
+			if node in pars:
+				mtree[t]['parents'].add(treenums[node])
 
-    # Then, add all the children for each term
-    for t in mtree.keys():
-        for p in mtree[t]['parents']:
-            mtree[p]['children'].add(t)
+	# Then, add all the children for each term
+	for t in mtree.keys():
+		for p in mtree[t]['parents']:
+			mtree[p]['children'].add(t)
 
-    if nmap:
-        return (terms, mtree, node_map)
+	if nmap:
+		return (terms, mtree, node_map)
 
-    return (terms, mtree)
+	return (terms, mtree)
 

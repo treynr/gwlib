@@ -160,10 +160,10 @@ if __name__ == "__main__":
 	log = Log()
 
 	log.info("log.py -- Let's do some logging!")
-	log.info("")
+	log.info('')
 	log.debug('DEBUG\t| For debugging and developer messages')
 	log.info('INFO\t| For general user messages')
-	log.warn('WARN\t| Things went wrong and you should probably know about it')
+	log.warn('WARNING\t| Things went wrong and you should probably know about it')
 	log.error('ERROR\t| OH SHIT')
 
 
