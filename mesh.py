@@ -299,7 +299,7 @@ def makeG2m(g2p, p2m, tree, make_m2g=True, weight=False, closure=False):
 	else:
 		return m2g
 
-def loadMeshData_NEW(fp):
+def loadMeshData(fp):
 	with open(fp, 'r') as fh:
 		lines = [l.strip() for l in fh]
 
@@ -545,41 +545,6 @@ def buildMeshTrees(terms):
 	return (mtree, term2node)
 
 
-	# Generate the MeSH tree (sorta) while concurrently generating closures for
-	# each term. I guess this could also be made by dl'ing the actual
-	# MeSH trees in ASCII format... 
-	for t in terms.keys():
-		mtree[t] = {'children' : set(), 'parents' : set(), 
-					'ancestors' : set(), 'node' : set()}
-
-		# Store the node
-		mtree[t]['node'].update(terms[t]['MN'])
-
-		for mn in terms[t]['MN']:
-			node_map[mn] = t
-
-		# Retrieves all the parents for each tree number. Parents are just the
-		# tree number minus tha last node (three numbers)
-		pars = [s.rsplit('.', 1)[0] for s in terms[t]['MN']]
-
-		# The tree (and closures) are made using terms and not the actual 
-		# tree numbers
-		for node in terms[t]['nodes']:
-			mtree[t]['ancestors'].add(treenums[node]) # Add each ancestor node
-			# added 8/3/2014, remove the term itself from the ancestors list;
-			# I don't think a term is its own ancestor and this fucks up 
-			# gene2mesh creation
-			mtree[t]['ancestors'].discard(t)
-
-			# If it's a parent, add it to the parents set
-			if node in pars:
-				mtree[t]['parents'].add(treenums[node])
-
-	# Then, add all the children for each term
-	for t in mtree.keys():
-		for p in mtree[t]['parents']:
-			mtree[p]['children'].add(t)
-
 if __name__ == '__main__':
 
 	dat = parseMeshData(loadMeshData_NEW('/home/csi/r/reynolds/gw_mesh/data/mesh2014.bin'))
@@ -629,7 +594,7 @@ if __name__ == '__main__':
 ## ret, dict of term closures including ancestor, parent, and child terms
 #
 
-def loadMeshData(fp, nmap=False):
+def loadMeshData_DEPRECATED(fp, nmap=False):
 	with open(fp, 'r') as fh:
 		# Remove \r\n and get a list of the stripped lines
 		lines = [l.strip() for l in fh]
