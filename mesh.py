@@ -450,9 +450,10 @@ class Tree(dd):
 
 		return self.__walkTree(path).keys()
 
-	def getChildren(self, path):
+	def getChildren(self, path=None):
 		"""
-		Returns all the child paths for a given node.
+		Returns all the child paths for a given node. If no path is specified,
+		returns all children of the root node.
 
 		args:
 			list, a node path
@@ -462,7 +463,12 @@ class Tree(dd):
 		"""
 
 		childs = []
-		tree = self.__walkTree(path)
+
+		if not path:
+			tree = self
+
+		else:
+			tree = self.__walkTree(path)
 
 		for k, n in tree.items():
 			if type(n) == Tree:
@@ -485,26 +491,16 @@ class Tree(dd):
 def tree():
 	return Tree(tree)
 
-#def tree():
-#	"""
-#	Constructs an empty tree. The tree is a series of nested dicts.
-#
-#	ret:
-#		dict, empty tree
-#	"""
-#
-#	return dd(tree)
-#
-#def add
-
 def buildMeshTrees(terms):
 	"""
-	Builds each of the mesh trees (A - Z) from node IDs. 
+	Builds each of the mesh trees (A - N, V, & Z) from node IDs, returning the
+	root of the tree. Each node in the tree contains it's path and MeSH term.
 
 	args:
-		dict, term data generated from parseMeshData 
+		dict, term data generated from parseMeshData()
 
 	ret:
+		Tree, root of the newly build MeSH tree
 	"""	
 
 	nodes = []
@@ -520,14 +516,35 @@ def buildMeshTrees(terms):
 	nodes = sorted(nodes, key=lambda n: n[1][:1])
 	grps = [[]]
 
-	## Group by MeSH tree letter (e.g. A, B, etc...)
+	## Group by MeSH tree letter (e.g. A, B, etc...) so tree building occurs
+	## one subtree at a time
 	for n in range(len(nodes)):
 		if n > 0 and nodes[n][1][:1] != nodes[n - 1][1][:1]:
 			grps.append([])
 
 		grps[-1].append(nodes[n])
 	
-	#for grp in grps:
+
+	mtree = tree()
+	term2node = dd(list)
+
+	## This actually builds each subtree
+	for grp in grps:
+		subtree = tree()
+
+		for node in grp:
+			path = node[1].split('.')
+			term2node[node[0]].append(node[1])
+			
+			subtree.addNode(path)
+			subtree.addValue(path, 'term', node[0])
+
+		letter = grp[0][1][:1]
+		mtree[letter] = subtree
+
+	return (mtree, term2node)
+
+
 	# Generate the MeSH tree (sorta) while concurrently generating closures for
 	# each term. I guess this could also be made by dl'ing the actual
 	# MeSH trees in ASCII format... 
@@ -565,19 +582,20 @@ def buildMeshTrees(terms):
 
 if __name__ == '__main__':
 
-	#dat = parseMeshData(loadMeshData_NEW('/home/csi/r/reynolds/gw_mesh/data/mesh2014.bin'))
-	#tree = buildMeshTrees(dat)
-	mtree = tree()
+	dat = parseMeshData(loadMeshData_NEW('/home/csi/r/reynolds/gw_mesh/data/mesh2014.bin'))
+	tree, term2node = buildMeshTrees(dat)
+
+	#mtree = tree()
 
 	#mtree.term.shit = 'lol'
 	#mtree.term.uid = '1111'
-	mtree.addNode([1, 2, 3])
-	mtree.addNode([1, 2, 4])
-	mtree.addNode([1, 2, 5])
+	#mtree.addNode([1, 2, 3])
+	#mtree.addNode([1, 2, 4])
+	#mtree.addNode([1, 2, 5])
 
-	print mtree.getChildren([1,2])
-	print mtree.getChildren([1,2,3])
-	print mtree.getChildren([1])
+	#print mtree.getChildren([1,2])
+	#print mtree.getChildren([1,2,3])
+	#print mtree.getChildren([1])
 
 	#print mtree.getNode([1]).path
 	#print mtree.getNode([1,2]).path
