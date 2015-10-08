@@ -7,7 +7,12 @@ mesh.py contains functions for parsing the MeSH tree (will be removed in a
 future update).
 util.py contains miscellaneous functions frequently used in GW python scripts.
 
-[0.2.1] 2015.09.27
+[0.3.0] 2015.10.07
+	[+] Added actual tree data structure to model MeSH hierarchy
+	[+] Added MeSH flat file to tree parsing functions
+	[*] Deprecated loadMeshData() and replaced with a new implementation
+
+[0.2.0] 2015.09.27
 	[+] Added logging module
 
 [0.1.1] 2015.09.14
