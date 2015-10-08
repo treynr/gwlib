@@ -524,7 +524,6 @@ def buildMeshTrees(terms):
 
 		grps[-1].append(nodes[n])
 	
-
 	mtree = tree()
 	term2node = dd(list)
 
@@ -534,6 +533,7 @@ def buildMeshTrees(terms):
 
 		for node in grp:
 			path = node[1].split('.')
+
 			term2node[node[0]].append(node[1])
 			
 			subtree.addNode(path)
@@ -547,7 +547,7 @@ def buildMeshTrees(terms):
 
 if __name__ == '__main__':
 
-	dat = parseMeshData(loadMeshData_NEW('/home/csi/r/reynolds/gw_mesh/data/mesh2014.bin'))
+	dat = parseMeshData(loadMeshData('/home/csi/r/reynolds/gw_mesh/data/mesh2014.bin'))
 	tree, term2node = buildMeshTrees(dat)
 
 	#mtree = tree()
