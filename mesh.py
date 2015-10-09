@@ -350,6 +350,29 @@ def parseMeshData(lines):
 	
 	return terms
 
+def addRootPath(path):
+	"""
+	Helper function that checks if the root letter in a MeSH tree path exists.
+	If it doesn't exist, the letter is prepended to the path list.
+
+	args:
+		list, node path list
+
+	ret:
+		list, node path list with the root letter of the tree added
+	"""
+
+	if not path:
+		return path
+
+	if len(path[0]) == 1 and path[0].isalpha():
+		return path
+
+	letter = path[0][:1]
+
+	return [letter] + path
+
+
 class Tree(dd):
 
 	def __getattr__(self, key):
@@ -367,7 +390,8 @@ class Tree(dd):
 
 		args:
 			list, a node path--each element further in the list is found
-				  further in the tree
+						 further in the tree. If the arg is a string, it is
+						 split at '.' characters to produce a node path list.
 
 		ret:
 			Tree, the last node added
@@ -550,6 +574,7 @@ if __name__ == '__main__':
 	dat = parseMeshData(loadMeshData('/home/csi/r/reynolds/gw_mesh/data/mesh2014.bin'))
 	tree, term2node = buildMeshTrees(dat)
 
+	print addRootPath(['F01', '222', '333'])
 	#mtree = tree()
 
 	#mtree.term.shit = 'lol'

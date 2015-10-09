@@ -93,7 +93,7 @@ class Log(object):
 	##
 	def __writeStd(self, color, s):
 		
-		if not self.fh or (self.fh and self.both):
+		if self.on and not self.fh or (self.fh and self.both):
 			print '%s%s%s' % (color, s, self.color.normal)
 
 	#### debug

@@ -14,7 +14,7 @@ import random
 ## Attempt local db connection; only time this really ever fails is when the
 ## postgres server isn't running.
 try:
-	conn = psycopg2.connect(("dbname='geneweaver' user='odeadmin' "
+	conn = psycopg2.connect(("host='crick' dbname='geneweaver' user='odeadmin' "
 							 "password='odeadmin'"))
 except:
 	print "[!] Oh noes, failed to connect to the db"
@@ -470,6 +470,27 @@ def getMeshIds():
 
 	# Strip out the tuples, only returning a list
 	return map(lambda x: x[0], res)
+
+def getMeshSetsByName(names):
+
+	if type(names) == list:
+		names = tuple(names)
+
+	query = '''SELECT gs_abbreviation, gs_id
+			   FROM production.geneset
+			   WHERE gs_status NOT ILIKE 'de%%' AND
+			   		 gs_name LIKE '[MeSH] %%' AND
+					 gs_abbreviation IN %s'''
+
+	g_cur.execute(query, [names])
+
+	res = g_cur.fetchall()
+	d = {}
+
+	for tup in res:
+		d[tup[0]] = tup[1]
+			   		 
+	return d
 
 #### getMeshSetsOld
 ##
