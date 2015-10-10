@@ -261,6 +261,32 @@ def getGenesetsByTier(tiers=None, size=1000):
 	# Strip out the tuples, only returning a list
 	return map(lambda x: x[0], res)
 
+def getGenesetsByAttribute(atid=1, size=1000):
+	"""
+	Returns all gs_ids that are tagged with the given attribution and under the
+	specified size. Calling the function with no arguments will return all
+	genesets that have no attribution and have < 1000 members.
+
+	args:
+		integer, attribution ID
+		integer, size limit (default: 1000)
+
+	return:
+		[integer], list of IDs for all genesets that meet the above criteria
+	"""
+
+	query = '''SELECT gs_id 
+			   FROM production.geneset 
+			   WHERE gs_count < %s AND 
+			   		 gs_attribution = %s;'''
+
+	g_cur.execute(query, [size, atid])
+
+	res = g_cur.fetchall()
+
+	# Strip out the tuples, only returning a list
+	return map(lambda x: x[0], res)
+
 #### getGenesetGeneIds
 ##
 #### Returns the contents (ode_gene_ids) of a given list of genesets.
