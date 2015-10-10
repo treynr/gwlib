@@ -45,7 +45,7 @@ class Colors(object):
 
 #### Log
 ##
-#### Basic class for logging text to a file and/or std out.
+#### Basic class for logging text to a file and/or stdout.
 ##
 class Log(object):
 
@@ -86,14 +86,18 @@ class Log(object):
 
 	#### __writeStd
 	##
-	#### Internal function for writing text to a std out.
+	#### Internal function for writing text to a stdout.
 	##
 	#### arg: string, color escape sequence from a Colors object
 	#### arg: string, text to ouput
 	##
 	def __writeStd(self, color, s):
+
+		## Errors are always printed!
+		if color == self.color.ltred:
+			print '%s%s%s' % (color, s, self.color.normal)
 		
-		if self.on and not self.fh or (self.fh and self.both):
+		elif self.on and not self.fh or (self.fh and self.both):
 			print '%s%s%s' % (color, s, self.color.normal)
 
 	#### debug
@@ -131,7 +135,8 @@ class Log(object):
 
 	#### error
 	##
-	#### Log output at the ERROR level.
+	#### Log output at the ERROR level. This is the only ouput that is active
+	#### even when logging is turned off (dude, error messages are important).
 	##
 	#### arg: string, text to output
 	##
