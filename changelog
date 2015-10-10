@@ -7,6 +7,9 @@ mesh.py contains functions for parsing the MeSH tree (will be removed in a
 future update).
 util.py contains miscellaneous functions frequently used in GW python scripts.
 
+[0.3.1] 2015.10.09
+	[+] Added function for retrieving genesets by attribution
+
 [0.3.0] 2015.10.07
 	[+] Added actual tree data structure to model MeSH hierarchy
 	[+] Added MeSH flat file to tree parsing functions
