@@ -249,10 +249,14 @@ def getGenesetValues(gsids):
 def getGenesetsByTier(tiers=None, size=1000):
 	if not tiers:
 		tiers = [1, 2, 3, 4, 5]
+	if type(tiers) == list:
+		tiers = tuple(tiers)
 
 	query = '''SELECT gs_id 
 			   FROM production.geneset 
-			   WHERE gs_count < %s AND cur_id IN %s;'''
+			   WHERE gs_status NOT LIKE 'de%%' AND
+			   		 gs_count < %s AND 
+					 cur_id IN %s;'''
 
 	g_cur.execute(query, [size, tiers])
 
@@ -260,6 +264,26 @@ def getGenesetsByTier(tiers=None, size=1000):
 
 	# Strip out the tuples, only returning a list
 	return map(lambda x: x[0], res)
+
+def getGenesetSizes(gsids):
+	if type(gsids) == list:
+		gsids = tuple(gsids)
+
+	query = '''SELECT gs_id, gs_count
+			   FROM production.geneset
+			   WHERE gs_id IN %s;'''
+
+	g_cur.execute(query, [gsids])
+
+	## Returns a list of tuples [(gs_id, gs_count)]
+	res = g_cur.fetchall()
+	d = {}
+
+	## We return a dict of gs_id --> gs_count
+	for tup in res:
+		d[tup[0]] = tup[1]
+
+	return d
 
 def getGenesetsByAttribute(atid=1, size=1000):
 	"""
