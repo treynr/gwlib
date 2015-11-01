@@ -11,6 +11,156 @@ from collections import defaultdict as dd
 from itertools import groupby
 import util as utl
 
+class Tree(dd):
+	"""
+	Generic tree structure used to represent the MeSH hierarchy. Each node can
+	have an arbitrary number of children. Leaf nodes are represented by some
+	value other than a dict, while the structure (and subtrees) are series of
+	nested dicts. 
+	Nodes can be accessed as a dict would (e.g. tree['A01']) or using '.' 
+	(e.g. tree.A01).
+	"""
+
+	def __getattr__(self, key):
+
+		return self[key]
+
+	def __setattr__(self, key, val):
+
+		self[key] = val
+
+	def __walkTree(self, path):
+		"""
+		Given a path of nodes, the function walks the tree while creating empty
+		nodes that are referenced in the path list.
+
+		args:
+			list, a node path--each element further in the list is found
+						 further in the tree. If the arg is a string, it is
+						 split at '.' characters to produce a node path list.
+
+		ret:
+			Tree, the last node added
+		"""
+
+		t = self
+		allpath = ''
+
+		for i, p in enumerate(path):
+
+			t = t[p]
+			t['path'] = '.'.join(map(str, path)[:i+1])
+
+		return t
+
+	def addNode(self, path):
+		"""
+		Given a path of nodes, the function adds each node along the path to
+		the tree.
+
+		args:
+			list, a node path--each element further in the list is found
+				  further in the tree
+		"""
+
+		self.__walkTree(path)
+
+	def addValue(self, path, key, val):
+		"""
+		Adds a key/value pair to the node referenced in the given path list.
+		Note, the key should not have any periods ('.') since these are used
+		internally by the tree's path variable.
+
+		args:
+			list, a node path--the key/value pair is added to the final node
+			key, any key type that can be used in a dict
+			val, any value type that can be used in a dict
+
+		"""
+
+		self.__walkTree(path)[key] = val
+
+	def getNode(self, path):
+		"""
+		Returns the node found at the given path.
+
+		args:
+			list, a node path
+
+		ret:
+			Tree, final node in a path
+		"""
+
+		return self.__walkTree(path)
+
+	def getValue(self, path, key):
+		"""
+		Returns the value portion of a key/value pair at a specific node.
+
+		args:
+			list, a node path
+			key, get the value of this key
+
+		ret:
+			val, some value
+		"""
+
+		return self.__walkTree(path)[key]
+
+	def getKeys(self, path):
+		"""
+		Returns all the keys a particular node has.
+
+		args:
+			list, a node path
+
+		ret:
+			list, list of keys
+		"""
+
+		return self.__walkTree(path).keys()
+
+	def getChildren(self, path=None):
+		"""
+		Returns all the child paths for a given node. If no path is specified,
+		returns all children of the root node.
+
+		args:
+			list, a node path
+
+		ret:
+			list, list of path strings
+		"""
+
+		childs = []
+
+		if not path:
+			tree = self
+
+		else:
+			tree = self.__walkTree(path)
+
+		for k, n in tree.items():
+			if type(n) == Tree:
+				childs.extend(self.__getChildren(n))
+				childs.append(n.path)
+
+		return sorted(childs)
+
+	def __getChildren(self, tree):
+
+		childs = []
+
+		for k, n in tree.items():
+			if type(n) == Tree:
+				childs.extend(self.__getChildren(n))
+				childs.append(n.path)
+
+		return childs
+
+def tree():
+	return Tree(tree)
+
 ## getArticleInfo
 #
 ## Retrieves publication info (including MeSH terms) for a given PubMed 
@@ -372,148 +522,6 @@ def addRootPath(path):
 
 	return [letter] + path
 
-
-class Tree(dd):
-
-	def __getattr__(self, key):
-
-		return self[key]
-
-	def __setattr__(self, key, val):
-
-		self[key] = val
-
-	def __walkTree(self, path):
-		"""
-		Given a path of nodes, the function walks the tree while creating empty
-		nodes that are referenced in the path list.
-
-		args:
-			list, a node path--each element further in the list is found
-						 further in the tree. If the arg is a string, it is
-						 split at '.' characters to produce a node path list.
-
-		ret:
-			Tree, the last node added
-		"""
-
-		t = self
-		allpath = ''
-
-		for i, p in enumerate(path):
-
-			t = t[p]
-			t['path'] = '.'.join(map(str, path)[:i+1])
-
-		return t
-
-	def addNode(self, path):
-		"""
-		Given a path of nodes, the function adds each node along the path to
-		the tree.
-
-		args:
-			list, a node path--each element further in the list is found
-				  further in the tree
-		"""
-
-		self.__walkTree(path)
-
-	def addValue(self, path, key, val):
-		"""
-		Adds a key/value pair to the node referenced in the given path list.
-		Note, the key should not have any periods ('.') since these are used
-		internally by the tree's path variable.
-
-		args:
-			list, a node path--the key/value pair is added to the final node
-			key, any key type that can be used in a dict
-			val, any value type that can be used in a dict
-
-		"""
-
-		self.__walkTree(path)[key] = val
-
-	def getNode(self, path):
-		"""
-		Returns the node found at the given path.
-
-		args:
-			list, a node path
-
-		ret:
-			Tree, final node in a path
-		"""
-
-		return self.__walkTree(path)
-
-	def getValue(self, path, key):
-		"""
-		Returns the value portion of a key/value pair at a specific node.
-
-		args:
-			list, a node path
-			key, get the value of this key
-
-		ret:
-			val, some value
-		"""
-
-		return self.__walkTree(path)[key]
-
-	def getKeys(self, path):
-		"""
-		Returns all the keys a particular node has.
-
-		args:
-			list, a node path
-
-		ret:
-			list, list of keys
-		"""
-
-		return self.__walkTree(path).keys()
-
-	def getChildren(self, path=None):
-		"""
-		Returns all the child paths for a given node. If no path is specified,
-		returns all children of the root node.
-
-		args:
-			list, a node path
-
-		ret:
-			list, list of path strings
-		"""
-
-		childs = []
-
-		if not path:
-			tree = self
-
-		else:
-			tree = self.__walkTree(path)
-
-		for k, n in tree.items():
-			if type(n) == Tree:
-				childs.extend(self.__getChildren(n))
-				childs.append(n.path)
-
-		return sorted(childs)
-
-	def __getChildren(self, tree):
-
-		childs = []
-
-		for k, n in tree.items():
-			if type(n) == Tree:
-				childs.extend(self.__getChildren(n))
-				childs.append(n.path)
-
-		return childs
-
-def tree():
-	return Tree(tree)
 
 def buildMeshTrees(terms):
 	"""
