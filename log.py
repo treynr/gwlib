@@ -60,6 +60,7 @@ class Log(object):
 		self.both = both
 		self.file = file
 		self.on = on
+		self.prefix = ''
 
 		if file:
 			self.fh = open(file, 'w')
@@ -94,7 +95,9 @@ class Log(object):
 	def __writeStd(self, color, s):
 		
 		if not self.fh or (self.fh and self.both):
-			print '%s%s%s' % (color, s, self.color.normal)
+			out = self.prefix + ('%s%s%s' % (color, s, self.color.normal))
+			print out
+			#print '%s%s%s' % (color, s, self.color.normal)
 
 	#### debug
 	##
@@ -155,6 +158,10 @@ class Log(object):
 	def turnOff(self):
 
 		self.on = False
+
+	def setPrefix(self, p):
+
+		self.prefix = p
 
 if __name__ == "__main__":
 	log = Log()

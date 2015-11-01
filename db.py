@@ -1626,10 +1626,10 @@ def getHomologyIds(ids, asdict=False):
 	for tup in res:
 		hmap[tup[0]] = tup[1]
 
-	# if there weren't any hom_ids for an ode_gene_id, map it to itself
+	# if there weren't any hom_ids for an ode_gene_id, map it to none
 	for i in ids:
 		if not hmap.has_key(i):
-			hmap[i] = i
+			hmap[i] = None
 
 	return hmap
 
