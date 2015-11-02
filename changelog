@@ -7,7 +7,7 @@ mesh.py contains functions for parsing the MeSH tree (will be removed in a
 future update).
 util.py contains miscellaneous functions frequently used in GW python scripts.
 
-[0.4.0] 2015.10.09
+[0.4.0] 2015.11.02
 	[+] Added MeSH tree data structure
 	[+] Added makeMesh2Gene function to generate gene-mesh mappings 
 	[*] Deprecated makeG2m (replaced by makeMesh2Gene)
