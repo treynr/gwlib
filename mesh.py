@@ -145,7 +145,8 @@ class Tree(dd):
 				childs.extend(self.__getChildren(n))
 				childs.append(n.path)
 
-		return sorted(childs)
+		#return sorted(childs)
+		return childs
 
 	def __getChildren(self, tree):
 
@@ -160,6 +161,51 @@ class Tree(dd):
 
 def tree():
 	return Tree(tree)
+
+def normalizeMeshPath(path):
+	"""
+	Converts a MeSH node ID into a path list. The only important consideration
+	is to prefix a path with the root letter (e.g. A, B, etc.). The paths
+	don't normally have the extra prefix; we add it to access the tree
+	properly.
+
+	e.g. A15.145.229 is turned into ['A', 'A15', '145', '229'].
+
+	:arg string:
+	:ret list:
+	"""
+
+	if type(path) != str:
+		return []
+
+	path = path.strip().split('.')
+
+	## Indicates the first node has more than three letters e.g. A01 and
+	## is therefore not a root letter
+	if len(path[0]) > 1:
+		return [path[0][0]] + path
+
+	else:
+		return path
+
+def normalizeMeshPaths(paths):
+
+	return map(normalizeMeshPath, paths)
+
+def makeMeshPath(path):
+	"""
+	Converts a MeSH node ID into a path list.
+	e.g. A15.145.229 is turned into ['A', 'A15', '145', '229'].
+
+	:arg string:
+	:ret list:
+	"""
+	if type(path) != str:
+		return []
+
+	path = path.strip().split('.')
+
+	return [path[0][0]] + path
 
 ## getArticleInfo
 #
@@ -358,6 +404,104 @@ def readG2m(fp):
 
 	return (g2m, wts)
 
+def flatten(outlst):
+    return [a for inlst in outlst for a in inlst]
+
+def makeMesh2Gene(g2p, p2m, mtree, term2node):
+	if not g2p or not p2m or not mtree:
+		return {}
+
+	g2m_count = dd(lambda: dd(int))
+	m2g_count = dd(lambda: dd(int))
+	g2m = dd(set)
+	m2g = dd(set)
+
+	## Generates a count of gene -> MeSH associations by cross mapping
+	## gene2pubmed and pubmed2mesh associations.
+	#for gene, pubids in g2p.items():
+	#	for p in pubidss:
+	#		for m in p2m[p]:
+	#			g2m_count[gene][m] += 1
+	## MeSH -> gene association counts
+	for gene, pubids in g2p.items():
+		for p in pubids:
+			for m in p2m[p]:
+				m2g_count[m][gene] += 1
+				g2m_count[gene][m] += 1
+
+	for term, genes in m2g_count.items():
+		for gene, count in genes.items():
+			## Only associations referenced in >= 2 publications are add to
+			## minimize artifacts
+			if count > 1:
+				m2g[term].add(gene)
+		## We must take transitive closure into account when building our
+		## associations, genes from subsequent child nodes are added
+		## to the current term
+		for node in term2node[term]:
+			node = normalizeMeshPath(node)
+			## This will return ALL children, children of children, etc
+			childs = mtree.getChildren(node)
+			childs = map(normalizeMeshPath, childs)
+			## Converts node IDs to actual MeSH terms
+			childs = map(lambda c: mtree.getValue(c, 'term'), childs)
+			## Now we can get all genes for each child MeSH term
+			closure = map(lambda c: m2g_count[c].items(), childs)
+			## The items() call above will actually return a list of
+			## key, value pairs. So we have to remove the inner lists
+			closure = flatten(closure)
+			## Some terms aren't associated with any genes
+			closure = filter(lambda c: c, closure)
+			closure = filter(lambda tup: tup[1] > 1, closure)
+			closure = map(lambda tup: tup[0], closure)
+
+			m2g[term].update(set(closure))
+
+				## Must take transitive closure into account when building our
+				## associations, genes from subsequent child nodes are added
+				## to the current term
+				#for node in term2node[term]:
+				#	node = normalizeMeshPath(node) #makeMeshPath(node)
+				#	## This will return ALL children, children of children, etc
+				#	childs = mtree.getChildren(node)
+				#	#print 'node:'
+				#	#print node
+				#	#print 'childs: '
+				#	#print childs
+				#	#childs = map(lambda c: c.split('.'), childs)
+				#	childs = map(normalizeMeshPath, childs) #map(lambda c: c.split('.'), childs)
+				#	#childs = map(lambda c: tree[makeMeshPath(c)].term, childs)
+				#	## Converts node IDs to actual MeSH terms
+				#	childs = map(lambda c: mtree.getValue(c, 'term'), childs)
+				#	#print 'childs: '
+				#	#print childs
+				#	#childs = map(lambda c: mtree.getValue(makeMeshPath(c), 'term'), childs)
+				#	#childs = map(lambda c: tree.getNode(makeMeshPath(c)).term, childs)
+				#	## Now we can get all genes for each child MeSH term
+				#	#closure = map((lambda c: g for g, cnt in m2g_count[c].items() if cnt > 1), childs)
+				#	closure = map(lambda c: m2g_count[c].items(), childs)
+				#	## The items() call above will actually return a list of
+				#	## key, value pairs. So we have to remove the inner lists
+				#	closure = flatten(closure)
+				#	## Some terms aren't associated with any genes
+				#	closure = filter(lambda c: c, closure)
+				#	closure = filter(lambda tup: tup[1] > 1, closure)
+				#	closure = map(lambda tup: tup[0], closure)
+				#	#print closure
+				#	#exit()
+
+				#	m2g[term].update(set(closure))
+
+	
+	return m2g
+				
+	#for gene, terms in g2m_count.items():
+	#	for term, count in terms.items():
+	#		## Only associations referenced in >= 2 publications are add to
+	#		## minimize artifacts
+	#		if count > 1:
+	#			m2g[term].add(gene)
+	#			## Must take closure into account, 
 ## makeG2m
 #
 ## Creates the gene -> MeSH term mapping and returns the result as a dict. 
