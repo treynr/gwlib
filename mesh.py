@@ -159,6 +159,51 @@ class Tree(dd):
 
 		return childs
 
+class MeshTree(Tree):
+
+	def __init__(self):
+		Tree.__init__(self)
+
+	def convertPath(self, path):
+		"""
+		Converts a MeSH node ID into a path list. The only important
+		consideration is to prefix a path with the root letter (e.g. A, B, 
+		etc.). The paths don't normally have the extra prefix; we add it so 
+		we can access the tree properly.
+
+		e.g. A15.145.229 is turned into ['A', 'A15', '145', '229'].
+
+		:arg string:
+		:ret list:
+		"""
+
+		if type(path) != str:
+			return []
+
+		path = path.strip().split('.')
+
+		## Indicates the first node has more than three letters e.g. A01 and
+		## is therefore not a root letter
+		if len(path[0]) > 1:
+			return [path[0][0]] + path
+
+		else:
+			return path
+
+	def getChildren(self, path):
+		"""
+		Returns all the children (in the form of MeSH Tree IDs) for the given
+		node. 
+
+		:arg string: MeSH tree node ID
+		:ret list: list of children
+		"""
+
+		path = self.convertPath(path)
+
+		return super(MeshTree, self).getChildren(path)
+
+
 def tree():
 	return Tree(tree)
 
@@ -166,7 +211,7 @@ def normalizeMeshPath(path):
 	"""
 	Converts a MeSH node ID into a path list. The only important consideration
 	is to prefix a path with the root letter (e.g. A, B, etc.). The paths
-	don't normally have the extra prefix; we add it to access the tree
+	don't normally have the extra prefix; we add it so we can access the tree
 	properly.
 
 	e.g. A15.145.229 is turned into ['A', 'A15', '145', '229'].
