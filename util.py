@@ -115,3 +115,33 @@ def getToday():
 
 	return year + '.' + month + '.' + day
 
+def parseGenericFile(fp, cols=1, delim='\t'):
+	"""
+	Parses a file that uses the generic format I use for most projects. The
+	text format:
+		# denotes comments
+		blank lines are skipped
+		data is organized into columns
+		each column is tab separated
+	"""
+	data = []
+
+	with open(fp, 'r') as fl:
+		for ln in fl:
+			ln = ln.strip()
+
+			if ln[:1] == '#':
+				continue
+			elif ln == '':
+				continue
+
+			ln = ln.split(delim)
+
+			if cols == 1:
+				ln = ln[0]
+
+			data.append(ln)
+	
+	return data
+
+
