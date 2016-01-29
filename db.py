@@ -378,7 +378,34 @@ def getGenesetDescriptions(gsids):
 
 	res = g_cur.fetchall()
 
-	## We return a dict, k: gs_id; v: gs_name
+	for tup in res:
+			d[tup[0]] = tup[1]
+
+	return d
+
+def getGenesetAbstracts(gsids):
+	"""
+	Returns all abstracts for the given gs_ids. Genesets without publication
+	info are mapped to empty strings.
+
+	:arg list: list of gs_ids
+	:ret dict: mapping of gs_id -> abstracts
+	"""
+
+	if type(gsids) == list:
+		gsids = tuple(gsids)
+
+	query = '''SELECT gs_id, pub_abstract 
+			   FROM production.geneset AS g 
+			   JOIN production.publication AS p 
+			   ON (g.pub_id = p.pub_id) 
+			   WHERE gs_id IN %s;'''
+	d = {}
+
+	g_cur.execute(query, [gsids])
+
+	res = g_cur.fetchall()
+
 	for tup in res:
 			d[tup[0]] = tup[1]
 
