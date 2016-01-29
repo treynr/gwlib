@@ -358,6 +358,32 @@ def getGenesetNames(gsids):
 
 	return d
 
+def getGenesetDescriptions(gsids):
+	"""
+	Returns all gs_descriptions for the given gs_ids.
+
+	:arg list: list of gs_ids
+	:ret dict: mapping of gs_id -> gs_description
+	"""
+
+	if type(gsids) == list:
+		gsids = tuple(gsids)
+
+	query = '''SELECT gs_id, gs_description 
+			   FROM production.geneset
+			   WHERE gs_id IN %s;'''
+	d = {}
+
+	g_cur.execute(query, [gsids])
+
+	res = g_cur.fetchall()
+
+	## We return a dict, k: gs_id; v: gs_name
+	for tup in res:
+			d[tup[0]] = tup[1]
+
+	return d
+
 #### getGenesetAbbreviations
 ##
 #### Returns all gs_abbreviations for the given gs_ids. The results are

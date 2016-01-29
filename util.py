@@ -115,7 +115,7 @@ def getToday():
 
 	return year + '.' + month + '.' + day
 
-def parseGenericFile(fp, cols=1, delim='\t'):
+def parseGenericFile(fp, delim='\t'):
 	"""
 	Parses a file that uses the generic format I use for most projects. The
 	text format:
@@ -136,9 +136,6 @@ def parseGenericFile(fp, cols=1, delim='\t'):
 				continue
 
 			ln = ln.split(delim)
-
-			if cols == 1:
-				ln = ln[0]
 
 			data.append(ln)
 	
