@@ -268,6 +268,38 @@ def getGenesetsByTier(tiers=None, size=1000):
 	# Strip out the tuples, only returning a list
 	return map(lambda x: x[0], res)
 
+#### getGenesetsByAttribution
+##
+#### Returns all gs_ids in the given tier(s) and that are smaller than a
+#### certain size. Calling the function with no arguments will return all
+#### genesets in all tiers that have less than 1000 members.
+##
+#### arg: [integer], list of tiers to use when querying genesets
+#### arg: integer, size limit (default: 1000)
+#### ret, list of IDs for all gene sets that meet the above criteria
+##
+def getGenesetsByAttribution(atid):
+	"""
+	Returns all gs_ids associated with a particular attribution (e.g. DRG, GO,
+	MeSH, etc). Does not retrieve sets from private data (Tier IV).
+
+	:arg int: the attribution ID
+	:ret list: list of gs_ids
+	"""
+
+	query = '''SELECT gs_id 
+			   FROM production.geneset 
+			   WHERE gs_status NOT LIKE 'de%%' AND 
+			   		 gs_attribution = %s AND
+			   		 cur_id != 5;'''
+
+	g_cur.execute(query, [atid])
+
+	res = g_cur.fetchall()
+
+	# Strip out the tuples, only returning a list
+	return map(lambda x: x[0], res)
+
 #### getGenesetGeneIds
 ##
 #### Returns the contents (ode_gene_ids) of a given list of genesets.
@@ -379,7 +411,7 @@ def getGenesetDescriptions(gsids):
 	res = g_cur.fetchall()
 
 	for tup in res:
-			d[tup[0]] = tup[1]
+		d[tup[0]] = tup[1]
 
 	return d
 
@@ -407,7 +439,14 @@ def getGenesetAbstracts(gsids):
 	res = g_cur.fetchall()
 
 	for tup in res:
+		if not tup[1]:
+			d[tup[0]] = ''
+
+		else:
 			d[tup[0]] = tup[1]
+
+	for missing in (set(list(gsids)) - set(d.keys())):
+		d[missing] = ''
 
 	return d
 
