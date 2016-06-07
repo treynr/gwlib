@@ -15,8 +15,6 @@ import random
 
 ## Config is in the same folder as the rest of the GW library
 CONFIG_PATH = 'gwlib.cfg'
-## The global ConfigParser object
-PARSER = None
 
     ## CONFIGURATION ##
     ###################
@@ -32,15 +30,20 @@ def create_config():
         print >> fl, '#'
         print >> fl, ''
         print >> fl, '[db]'
-        print >> fl, 'host='
-        print >> fl, 'database='
-        print >> fl, 'user='
-        print >> fl, 'password='
+        print >> fl, 'host = 127.0.0.1'
+        print >> fl, 'database = dbname'
+        print >> fl, 'port = 5432'
+        print >> fl, 'user = someguy'
+        print >> fl, 'password = somepassword'
         print >> fl, ''
 
 def load_config():
     """
-    Attempts to load the lib config. If it doesn't exist, one is created.
+    Attempts to load the lib config. If it doesn't exist, one is created. Makes
+    no attempt to check if the config is correct since any errors will prevent
+    the application from loading.
+
+    :ret object: the parsed config as a ConfigParser object
     """
 
     if not os.path.exists(CONFIG_PATH):
@@ -70,25 +73,50 @@ def get(section, option):
 
     return PARSER.get(section, option)
 
-#class DB(object):
-#
-#    def __init__(self):
+def get_db_option(option):
+    """
+    Retrieves an option value under the [db] section.
 
+    :ret str: the value associated with the given option under [db]
+    """
 
-## Attempt local db connection; only time this really ever fails is when the
-## postgres server isn't running.
+    return get('db', option)
+
+## Only time this really ever fails is when the config is bad or the postgres
+## server isn't running.
 try:
-    #conn = psycopg2.connect(("host='crick' dbname='geneweaver' user='odeadmin' "
-    #                                                     "password='odeadmin'"))
-except:
-        print "[!] Oh noes, failed to connect to the db"
-        exit()
+    parser = load_config()
+    ##
+    host = get('db', 'host')
+    database = get('db', 'database')
+    user = get('db', 'user')
+    password = get('db', 'password')
+    port = get('db', 'port')
+    ##
+    constr = "host='%s' dbname='%s' user='%s' password='%s' port='%s'" 
+    constr = constr % (host, database, user, password, port)
+    conn = psycopg2.connect(constr)
+
+except Exception as e:
+    print '[!] Oh noes, failed to connect to the db'
+    print 'The exception:'
+    print e
+    exit()
 
 ## Globals are bad, mmkay?
 g_cur = conn.cursor()
 
-###############################################################################
-################################### Queries ###################################
+    ## SELECTS ##
+    #############
+
+    ## INSERTS ##
+    #############
+
+    ## UPDATES ##
+    #############
+
+    ## DELETES ##
+    #############
 
 #### findAncientMeshSets (DEPRECATED)
 ##
