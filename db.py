@@ -73,25 +73,16 @@ def get(section, option):
 
     return PARSER.get(section, option)
 
-def get_db_option(option):
-    """
-    Retrieves an option value under the [db] section.
-
-    :ret str: the value associated with the given option under [db]
-    """
-
-    return get('db', option)
-
 ## Only time this really ever fails is when the config is bad or the postgres
 ## server isn't running.
 try:
     parser = load_config()
     ##
-    host = get('db', 'host')
-    database = get('db', 'database')
-    user = get('db', 'user')
-    password = get('db', 'password')
-    port = get('db', 'port')
+    host = parser.get('db', 'host')
+    database = parser.get('db', 'database')
+    user = parser.get('db', 'user')
+    password = parser.get('db', 'password')
+    port = parser.get('db', 'port')
     ##
     constr = "host='%s' dbname='%s' user='%s' password='%s' port='%s'" 
     constr = constr % (host, database, user, password, port)
@@ -101,13 +92,171 @@ except Exception as e:
     print '[!] Oh noes, failed to connect to the db'
     print 'The exception:'
     print e
+
     exit()
 
-## Globals are bad, mmkay?
-g_cur = conn.cursor()
+## This file attempts to follow psycopg best practices, outlined in its FAQ: 
+## http://initd.org/psycopg/docs/faq.html
+## A few notable designs:
+#
+## New cursors are generated for every query to minimize caching and client
+## side memory usage. Using cursors in a with statement should automatically
+## call their destructors.
+#
+## commit() is called after every SELECT statement to avoid littering the
+## postgres server with "idle in transaction" sessions. INSERTS/DELETES/UPDATES
+## require the importing script to call commit() manually as to prevent loading
+## the database with shit.
+#
 
-    ## SELECTS ##
-    #############
+        ## HELPERS ##
+        #############
+
+def asciify(s):
+    """
+    Takes a string, which could be unicode or a regular ASCII string and
+    forcibly converts it to ASCII. Any conversion errors are ignored during the
+    process. If the given argument isn't a string, the function does nothing.
+
+    :type s: str
+    :arg s: string being converted to ASCII
+    """
+
+    return s.encode('ascii', 'ignore') if isinstance(s, basestring) else s
+
+def dictify(cursor):
+    """
+    Converts each row returned by the cursor into a list of dicts, where  
+    each key is a column name and each value is whatever is returned by the
+    query.
+
+    :type cursor: object
+    :arg cursor: the psycopg cursor
+
+    :ret list: dicts containing the results of the SQL query
+    """
+    pass
+
+def listify(cursor):
+    pass
+
+def associate(cursor):
+    """
+    Creates a simple mapping from all the rows returned by the cursor. The
+    first tuple member serves as the key and the rest are the values. Unlike
+    dictify, this does not use column names and generates a single dict from
+    all returned rows. Be careful since duplicates are overwritten.
+
+    :type cursor: object
+    :arg cursor: the psycopg cursor
+
+    :ret dict: mapping of tuple element #1 to the rest
+    """
+
+    d = {}
+
+    for row in cursor:
+        ## Prevents unicode type errors from cropping up later. Convert to
+        ## ascii, ignore any conversion errors.
+        row = map(lambda s: asciify(s), row)
+
+        ## 1:1
+        if len(row) == 2:
+            d[row[0]] = row[1]
+
+        ## 1:many
+        else:
+            d[row[0]] = list(row[1:])
+
+    return d
+
+
+        ## SELECTS ##
+        #############
+
+def get_species():
+    """
+    Returns a species name and ID mapping for all the species currently 
+    supported by GW.
+
+    :ret dict: mapping of sp_names to sp_ids
+    """
+
+    with conn.cursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  sp_name, sp_id
+            FROM    odestatic.species;
+            '''
+        )
+
+        return associate(cursor)
+
+def get_gene_ids(refs, sp_id=None):
+    """
+    Given a set of external reference IDs, this returns a mapping of 
+    ode_ref_ids to ode_gene_ids. An optional species id list can be provided to
+    limit gene results by species.
+
+    Reference IDs are always strings (even if they're numeric) and should be
+    properly capitalized. If duplicate references exist in the DB (unlikely)
+    then they are overwritten in the return dict. The returned ode_gene_ids are
+    longs.
+
+    :type refs: list/tuple
+    :arg refs: external DB reference IDs
+
+    :ret dict: mapping of ode_ref_ids to ode_gene_ids
+    """
+
+    if type(refs) == list:
+        refs = tuple(refs)
+
+    with conn.cursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  ode_ref_id, ode_gene_id
+            FROM    extsrc.gene
+            WHERE   ode_ref_id IN %s;
+            ''', 
+                (refs,)
+        )
+
+        return associate(cursor)
+
+def get_gene_ids_species(refs, sp_id):
+    """
+    Exactly like get_gene_ids() above but allows for a species ID to be given
+    and the results limited by species.
+
+    :type refs: list/tuple
+    :arg refs: external DB reference IDs
+
+    :type sp_id: int
+    :arg sp_id: GW species ID
+
+    :ret dict: mapping of ode_ref_ids to ode_gene_ids
+    """
+
+    if type(refs) == list:
+        refs = tuple(refs)
+
+    with conn.cursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  ode_ref_id, ode_gene_id
+            FROM    extsrc.gene
+            WHERE   sp_id = %s AND 
+                    ode_ref_id IN %s;
+            ''', 
+                (sp_id, refs)
+        )
+
+        return associate(cursor)
+
 
     ## INSERTS ##
     #############
@@ -139,28 +288,6 @@ def findAncientMeshSets():
 ##
 def deleteGeneset(gs_id):
     updateGenesetStatus(gs_id, 'deleted')
-
-#### getSpecies
-##
-#### Returns all species in the DB as a mapping, sp_name -> sp_id.
-##
-#### ret: dict, mapping of species names to their internal IDs
-##
-def getSpecies():
-        query = '''SELECT sp_name, sp_id
-                           FROM odestatic.species;'''
-
-        g_cur.execute(query)
-
-        ## Returns a list of tuples [(sp_name, sp_id)]
-        res = g_cur.fetchall()
-        d = {}
-
-        ## We return a dict of sp_name --> sp_id
-        for tup in res:
-                d[tup[0]] = tup[1]
-
-        return d
 
 ## There's a subtle difference between getGeneIds and the "sensitive" version
 ## below it. getGeneIds requires gene symbols to exactly match their
@@ -1788,22 +1915,27 @@ def getHomologyIds(ids, asdict=False):
 def commitChanges():
         conn.commit()
 
-#if __name__ == '__main__':
+if __name__ == '__main__':
 
-        #print findMeshSet('Thromboplastin')
-        #print findMeshSet('Hypothalamus, Posterior')
-        #print findMeshSet('Encephalitis')
-        #updateMeshSet('Thromboplastin', 0)
+    ## Simple tests
+    ## Selections
+    print get_species()
+    print get_gene_ids(['Daxx', 'Mobp', 'Ccr4'])
+    print get_gene_ids_species(['Daxx', 'Mobp', 'Ccr4'], 1)
+    #print findMeshSet('Thromboplastin')
+    #print findMeshSet('Hypothalamus, Posterior')
+    #print findMeshSet('Encephalitis')
+    #updateMeshSet('Thromboplastin', 0)
 
-        #gsid = createGeneset(2, 2, 1, 0.5, 0, 'Test MeSH Set Test', 'mesh set testing', 'mesh set testing')
-        #createGenesetValue(gsid[0], 53023, 1.0, 'JAK3', 't')
-        #print gsid
-        #commitChanges()
-        #print len(queryGenes((14921, 14923)))
-        #print queryGenes((14921, 14923))
-        #terms = queryJaccards(31361, [2,3])
-        #print terms[0][0]
-        #print queryGenesetSize(31361)
+    #gsid = createGeneset(2, 2, 1, 0.5, 0, 'Test MeSH Set Test', 'mesh set testing', 'mesh set testing')
+    #createGenesetValue(gsid[0], 53023, 1.0, 'JAK3', 't')
+    #print gsid
+    #commitChanges()
+    #print len(queryGenes((14921, 14923)))
+    #print queryGenes((14921, 14923))
+    #terms = queryJaccards(31361, [2,3])
+    #print terms[0][0]
+    #print queryGenesetSize(31361)
 
-        #print len(set(terms))
+    #print len(set(terms))
 
