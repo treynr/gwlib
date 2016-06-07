@@ -138,7 +138,10 @@ def dictify(cursor):
     pass
 
 def listify(cursor):
-    pass
+    """
+    """
+
+    return map(lambda t: t[0], cursor.fetchall())
 
 def associate(cursor):
     """
@@ -226,7 +229,7 @@ def get_gene_ids(refs, sp_id=None):
 
         return associate(cursor)
 
-def get_gene_ids_species(refs, sp_id):
+def get_gene_ids_by_species(refs, sp_id):
     """
     Exactly like get_gene_ids() above but allows for a species ID to be given
     and the results limited by species.
@@ -256,6 +259,37 @@ def get_gene_ids_species(refs, sp_id):
         )
 
         return associate(cursor)
+
+def get_genesets_by_tier(size=5000, tiers=[1,2,3,4,5]):
+    """
+    Returns a list of normal (i.e. their status is not deleted or deprecated) 
+    geneset IDs that belong in a particular tier or set of tiers. Also allows
+    the user to retrieve genesets under a particular size.
+
+    :type size: int
+    :arg size: geneset size (gs_count) to use as a filter
+
+    :type tiers: list
+    :arg tiers: tiers to retrieve genesets from
+    """
+
+    if type(tiers) == list:
+        tiers = tuple(tiers)
+
+    with conn.cursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  gs_id
+            FROM    production.geneset
+            WHERE   gs_status NOT LIKE 'de%%' AND
+                    cur_id IN %s AND
+                    gs_count = %s;
+            ''', 
+                (tiers, size)
+        )
+
+        return listify(cursor)
 
 
     ## INSERTS ##
@@ -1921,7 +1955,8 @@ if __name__ == '__main__':
     ## Selections
     print get_species()
     print get_gene_ids(['Daxx', 'Mobp', 'Ccr4'])
-    print get_gene_ids_species(['Daxx', 'Mobp', 'Ccr4'], 1)
+    print get_gene_ids_by_species(['Daxx', 'Mobp', 'Ccr4'], 1)
+    print get_genesets_by_tier(tiers=[3], size=10)
     #print findMeshSet('Thromboplastin')
     #print findMeshSet('Hypothalamus, Posterior')
     #print findMeshSet('Encephalitis')
