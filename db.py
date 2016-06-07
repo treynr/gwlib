@@ -35,6 +35,7 @@ def create_config():
         print >> fl, 'port = 5432'
         print >> fl, 'user = someguy'
         print >> fl, 'password = somepassword'
+        print >> fl, 'autocommit = false'
         print >> fl, ''
 
 def load_config():
@@ -74,7 +75,7 @@ def get(section, option):
     return PARSER.get(section, option)
 
 ## Only time this really ever fails is when the config is bad or the postgres
-## server isn't running.
+## server isn't running. Executed on import.
 try:
     parser = load_config()
     ##
@@ -88,12 +89,41 @@ try:
     constr = constr % (host, database, user, password, port)
     conn = psycopg2.connect(constr)
 
+    #conn.autocommit(parser.get('db', 'autocommit') == 'true')
+    #conn.autocommit(parser.getboolean('db', 'autocommit'))
+
 except Exception as e:
     print '[!] Oh noes, failed to connect to the db'
     print 'The exception:'
     print e
 
     exit()
+
+        ## CLASSES ##
+        #############
+
+class PooledCursor(object):
+    """
+    Modeled after the PooledCursor object in GeneWeaver's source code.
+    Encapsulates psycopg2 connections and cursors so they can be used with
+    python features that are unsupported in older versions of psycopg2.
+    """
+
+    def __init__(self, conn=conn):
+        self.connection = conn
+        self.cursor = None
+
+    def __enter__(self):
+        self.cursor = self.connection.cursor()
+
+        return self.cursor
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.cursor:
+            self.cursor.close()
+
+            self.cursor = None
+
 
 ## This file attempts to follow psycopg best practices, outlined in its FAQ: 
 ## http://initd.org/psycopg/docs/faq.html
@@ -103,10 +133,8 @@ except Exception as e:
 ## side memory usage. Using cursors in a with statement should automatically
 ## call their destructors.
 #
-## commit() is called after every SELECT statement to avoid littering the
-## postgres server with "idle in transaction" sessions. INSERTS/DELETES/UPDATES
-## require the importing script to call commit() manually as to prevent loading
-## the database with shit.
+## The config can set connections to autocommit mode in order to avoid
+## littering the postgres server with "idle in transaction" sessions.
 #
 
         ## HELPERS ##
@@ -135,13 +163,40 @@ def dictify(cursor):
 
     :ret list: dicts containing the results of the SQL query
     """
-    pass
+
+    dlist = []
+    
+    for row in cursor:
+        ## Prevents unicode type errors from cropping up later. Convert to
+        ## ascii, ignore any conversion errors.
+        row = map(lambda s: asciify(s), row)
+        d = {}
+
+        for i, col in enumerate(cursor.description):
+            d[col[0]] = row[i]
+
+        dlist.append(d)
+
+    return dlist
 
 def listify(cursor):
     """
     """
 
     return map(lambda t: t[0], cursor.fetchall())
+
+def tuplify(thing):
+    """
+    """
+
+    if type(thing) == list:
+        return tuple(thing)
+
+    elif type(thing) == tuple:
+        return thing
+
+    else:
+        return (thing,)
 
 def associate(cursor):
     """
@@ -159,8 +214,6 @@ def associate(cursor):
     d = {}
 
     for row in cursor:
-        ## Prevents unicode type errors from cropping up later. Convert to
-        ## ascii, ignore any conversion errors.
         row = map(lambda s: asciify(s), row)
 
         ## 1:1
@@ -173,6 +226,11 @@ def associate(cursor):
 
     return d
 
+def commit():
+    """
+    Commits the transaction.
+    """
+    conn.commit()
 
         ## SELECTS ##
         #############
@@ -185,7 +243,8 @@ def get_species():
     :ret dict: mapping of sp_names to sp_ids
     """
 
-    with conn.cursor() as cursor:
+    #with conn.cursor() as cursor:
+    with PooledCursor() as cursor:
 
         cursor.execute(
             '''
@@ -216,7 +275,8 @@ def get_gene_ids(refs, sp_id=None):
     if type(refs) == list:
         refs = tuple(refs)
 
-    with conn.cursor() as cursor:
+    #with conn.cursor() as cursor:
+    with PooledCursor() as cursor:
 
         cursor.execute(
             '''
@@ -246,7 +306,8 @@ def get_gene_ids_by_species(refs, sp_id):
     if type(refs) == list:
         refs = tuple(refs)
 
-    with conn.cursor() as cursor:
+    #with conn.cursor() as cursor:
+    with PooledCursor() as cursor:
 
         cursor.execute(
             '''
@@ -276,7 +337,7 @@ def get_genesets_by_tier(size=5000, tiers=[1,2,3,4,5]):
     if type(tiers) == list:
         tiers = tuple(tiers)
 
-    with conn.cursor() as cursor:
+    with PooledCursor() as cursor:
 
         cursor.execute(
             '''
@@ -291,6 +352,31 @@ def get_genesets_by_tier(size=5000, tiers=[1,2,3,4,5]):
 
         return listify(cursor)
 
+def get_geneset_values(gs_ids):
+    """
+    Returns all the geneset_values from the given list of genesets.
+
+    :type gs_ids: list
+    :arg gs_ids: geneset IDs
+
+    :ret list: geneset_value objects containing column names as keys
+    """
+
+    if type(gs_ids) == list:
+            gs_ids = tuple(gs_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  gs_id, ode_gene_id, gsv_value
+            FROM    extsrc.geneset_value
+            WHERE   gs_id IN %s;
+            ''', 
+                (gs_ids,)
+        )
+
+        return dictify(cursor)
 
     ## INSERTS ##
     #############
@@ -391,86 +477,6 @@ def getGeneIdsSensitive(refs, pref=True):
 
         ## Map symbols that weren't found to None
         for nf in (set(refs) - set(found)):
-                res.append((nf, None))
-
-        ## We return a dict of ode_ref_id --> ode_gene_ids
-        for tup in res:
-                d[tup[0]] = tup[1]
-
-        return d
-
-#### getGeneIdsBySpecies
-##
-#### Given a list of external references for genes (ode_ref_ids), this 
-#### function returns a symbol mapping, ode_ref_id --> ode_gene_ids, but
-#### only for a single species. If the symbol doesn't exist in the DB or 
-#### can't be found, it is mapped to None. humans = 2
-##
-#### arg: [string], list of external gene refs
-#### arg: integer, GW species ID
-#### ret: dict, ode_ref_id -> ode_gene_id mapping
-##
-def getGeneIdsBySpecies(syms, spec, pref=True):
-        if type(syms) == list:
-                syms = tuple(syms)
-
-        query = '''SELECT DISTINCT ode_ref_id, ode_gene_id 
-                           FROM extsrc.gene
-                           WHERE sp_id = %s AND '''
-        if pref:
-                query += 'ode_pref = true AND ode_ref_id IN %s;'
-        else:
-                query += 'ode_ref_id IN %s;'
-
-        g_cur.execute(query, [spec, syms])
-
-        ## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
-        res = g_cur.fetchall()
-        d = {}
-
-        found = map(lambda x: x[0], res)
-
-        ## Map symbols that weren't found to None
-        for nf in (set(syms) - set(found)):
-                res.append((nf, None))
-
-        ## We return a dict of ode_ref_id --> ode_gene_ids
-        for tup in res:
-                d[tup[0]] = tup[1]
-
-        return d
-
-#### getGeneIdsBySpecies2 (sql query changes)
-##
-#### Given a list of external references for genes (ode_ref_ids), this 
-#### function returns a symbol mapping, ode_ref_id --> ode_gene_ids, but
-#### only for a single species. If the symbol doesn't exist in the DB or 
-#### can't be found, it is mapped to None. humans = 2
-##
-#### arg: [string], list of external gene refs
-#### arg: integer, GW species ID
-#### ret: dict, ode_ref_id -> ode_gene_id mapping
-##
-def getGeneIdsBySpecies2(syms, spec, pref=True):
-        query = '''SELECT DISTINCT ode_ref_id, ode_gene_id 
-                           FROM extsrc.gene
-                           WHERE sp_id = %s AND ode_ref_id LIKE ANY (%s);'''
-
-        #if pref:
-        #       query += 'ode_pref = true AND ode_ref_id IN %s;'
-        #else:
-        #       query += 'ode_ref_id IN %s;'
-
-        g_cur.execute(query, [spec, [syms]])
-
-        ## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
-        res = g_cur.fetchall()
-        d = {}
-
-        found = map(lambda x: x[0], res)
-
-        ## Map symbols that weren't found to None
-        for nf in (set(syms) - set(found)):
                 res.append((nf, None))
 
         ## We return a dict of ode_ref_id --> ode_gene_ids
@@ -1957,6 +1963,7 @@ if __name__ == '__main__':
     print get_gene_ids(['Daxx', 'Mobp', 'Ccr4'])
     print get_gene_ids_by_species(['Daxx', 'Mobp', 'Ccr4'], 1)
     print get_genesets_by_tier(tiers=[3], size=10)
+    print get_geneset_values([720])
     #print findMeshSet('Thromboplastin')
     #print findMeshSet('Hypothalamus, Posterior')
     #print findMeshSet('Encephalitis')
