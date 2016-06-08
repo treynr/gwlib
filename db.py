@@ -543,6 +543,38 @@ def get_gene_homologs(gene_ids):
 
         return associate(cursor)
 
+def get_publication(pmid):
+    """
+    Returns the GW publication ID associated with the gived PubMed ID.
+
+    :type pmid: int
+    :arg pmid: a PubMed ID
+
+    :ret int: a GW pub_id, or 0 if one doesn't exist
+    """
+
+    with PooledCursor() as cursor:
+
+        ## Ordered in case there exists more than one for the same publication.
+        ## The lowest pub_id should be used and the others eventually deleted.
+        cursor.execute(
+            '''
+            SELECT      pub_id
+            FROM        production.publication
+            WHERE       pub_pubmed = %s;
+            ORDER BY    pub_id DESC;
+            ''',
+                (pmid,)
+        )
+
+        result = cursor.fetchone()
+
+        if result:
+            return result[0]
+
+        else:
+            return 0
+
     ## INSERTS ##
     #############
 
@@ -700,6 +732,94 @@ def insert_gene(gene_id, ref_id, gdb_id, sp_id, pref='f'):
         )
 
         return cursor.fetchone()[0]
+
+def insert_publication(pub):
+    """
+    Inserts a new publication into the database. If a publication with the same
+    PMID already exists, that pub_id is returned instead.
+
+    :type pub: dict
+    :arg pub: a object whose fields match all columns in the publication table
+
+    :ret int: a GW publication ID (pub_id)
+    """
+
+    if 'pub_pubmed' not in pub:
+        pub['pub_pubmed'] = None
+
+    else:
+        pub_id = get_publication(pub['pub_pubmed'])
+
+        if pub_id != 0:
+            return pub_id
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO publication
+
+                (pub_id, pub_authors, pub_title, pub_abstract, pub_journal,
+                pub_volume, pub_pages, pub_month, pub_year, pub_pubmed)
+
+            VALUES
+                
+                (%(pub_id)s, %(pub_authors)s, %(pub_title)s, %(pub_abstract)s, 
+                %(pub_journal)s, %(pub_volume)s, %(pub_pages)s, %(pub_month)s, 
+                %(pub_year)s, %(pub_pubmed))
+
+            RETURNING pub_id;
+            ''', 
+                pub
+        )
+
+        return cursor.fetchone()[0]
+
+def insert_file(size, contents, comments):
+    """
+    Inserts a new file into the database. 
+
+    :type size: int
+    :arg size: file size in bytes
+
+    :type contents: str
+    :arg contents: contents of the file which _MUST_ be in the format:
+        gene\tvalue\n
+
+    :type comments: str
+    :arg comments: misc. comments about this file
+
+    :ret int: a GW file ID (file_id)
+    """
+
+    if 'pub_pubmed' not in pub:
+        pub['pub_pubmed'] = None
+
+    else:
+        pub_id = get_publication(pub['pub_pubmed'])
+
+        if pub_id != 0:
+            return pub_id
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO file
+
+                (file_size, file_contents, file_comments, file_created)
+
+            VALUES
+                
+                (%s, %s, %s, NOW())
+
+            RETURNING file_id;
+            ''', 
+                (size, contents, comments)
+        )
+
+        return cursor.fetchone()[0]
+
 
     ## UPDATES ##
     #############
