@@ -8,7 +8,6 @@
 #
 
 import ConfigParser
-import datetime as dt
 import os
 import psycopg2
 import random
@@ -16,8 +15,8 @@ import random
 ## Config is in the same folder as the rest of the GW library
 CONFIG_PATH = 'gwlib.cfg'
 
-    ## CONFIGURATION ##
-    ###################
+        ## CONFIGURATION ##
+        ###################
 
 def create_config():
     """
@@ -94,8 +93,7 @@ try:
     constr = constr % (host, database, user, password, port)
     conn = psycopg2.connect(constr)
 
-    #conn.autocommit(parser.get('db', 'autocommit') == 'true')
-    #conn.autocommit(parser.getboolean('db', 'autocommit'))
+    conn.autocommit = parser.getboolean('db', 'autocommit')
 
 except Exception as e:
     print '[!] Oh noes, failed to connect to the db'
@@ -498,7 +496,7 @@ def get_genesets_by_attribute(at_id, size=5000):
             SELECT  gs_id
             FROM    production.geneset
             WHERE   gs_status NOT LIKE 'de%%' AND
-                    at_id = %s AND
+                    gs_attribution = %s AND
                     gs_count < %s;
             ''', 
                 (at_id, size)
@@ -637,8 +635,8 @@ def get_geneset_size(gs_ids):
 
         return associate(cursor)
 
-    ## INSERTS ##
-    #############
+        ## INSERTS ##
+        #############
 
 def insert_geneset(gs):
     """
@@ -651,8 +649,8 @@ def insert_geneset(gs):
     """
 
     ## The following fields should not be null but aren't checked by the DB
-    if ('cur_id' not in gs) or 
-       ('gs_description' not in gs) or
+    if ('cur_id' not in gs) or\
+       ('gs_description' not in gs) or\
        ('sp_id' not in gs):
         return 0
 
@@ -883,8 +881,8 @@ def insert_file(size, contents, comments):
         return cursor.fetchone()[0]
 
 
-    ## UPDATES ##
-    #############
+        ## UPDATES ##
+        #############
 
 def update_geneset_status(gs_id, status):
     """
@@ -907,320 +905,32 @@ def update_geneset_status(gs_id, status):
 
         return cursor.rowcount
 
+def commit():
+    """
+    Commit any DB changes. Must be called if the connection is not set to
+    autocommit.
+    """
+
+    conn.commit()
+
 
     ## DELETES ##
     #############
 
-
-#### getAttributionId
-##
-#### Given an attribution abbreviation, this function retrieves the attribution
-#### ID (at_id) for that abbreviation.
-##
-#### arg: string, abbr, the attribution abbreviation to search for
-#### ret: int, at_id for the given abbrev. returns 0 if nothing is found
-##
-def getAttributionId(abbr):
-        query = '''SELECT at_id
-                           FROM odestatic.attribution
-                           WHERE at_abbrev ilike %s;'''
-
-        g_cur.execute(query, [abbr])
-
-        res = g_cur.fetchall()
-
-        if not res:
-                return 0
-        else:
-                return res[0][0]
-
-#### makeRandomFilename
-##
-#### Generates a random filename for the file_uri column in the file table.
-#### The string returned is 'GW_' + date + '_' + a random six letter
-#### alphanumeric string.
-##
-def makeRandomFilename():
-        lets = 'abcdefghijklmnopqrstuvwxyz1234567890'
-        rstr = ''
-        now = dt.datetime.now()
-
-        for i in range(6):
-                rstr += random.choice(lets)
-
-        return ('GW_' + str(now.year) + '-' + str(now.month) + '-' +
-                        str(now.day) + '_' + rstr)
-
-#### makeGeneset
-##
-#### Given a shitload of arguments, this function returns a dictionary
-#### representation of a single geneset. Each key is a different column
-#### found in the geneset table. Not all columns are represented.
-#### Just a note: grp should (usually) be '-1'.
-##
-##
-def makeGeneset(name, abbr, desc, spec, pub, grp, ttype, thresh, gtype, vals,
-                                usr=0, cur_id=5, file_id=0, at_id=0):
-        gs = {}
-
-        gs['gs_name'] = name
-        gs['gs_abbreviation'] = abbr
-        gs['gs_description'] = desc
-        gs['sp_id'] = int(spec)
-        gs['gs_groups'] = grp
-        gs['pub_id'] = pub      # The pubmed article still needs to retrieved
-        gs['gs_threshold_type'] = int(ttype)
-        gs['gs_threshold'] = thresh
-        gs['gs_gene_id_type'] = int(gtype)
-        gs['usr_id'] = int(usr)
-        gs['values'] = vals # Not a column in the geneset table; processed later
-        gs['file_id'] = file_id
-        gs['gs_attribution'] = at_id
-
-        ## Other fields we can fill out
-        gs['gs_count'] = len(vals)
-        gs['cur_id'] = cur_id                   # auto private tier?
-
-        return gs
-
-#### updateGenesetCount
-##
-#### Updates gs_count for a given gs_id.
-##
-def updateGenesetCount(gs_id, count):
-        query = 'UPDATE production.geneset SET gs_count = %s WHERE gs_id = %s;'
-
-        g_cur.execute(query, [count, gs_id])
-
-#### updateGenesetStatus
-##
-#### Updates gs_count for a given gs_id.
-##
-def updateGenesetStatus(gs_id, status):
-        query = 'UPDATE production.geneset SET gs_status = %s WHERE gs_id = %s;'
-
-        g_cur.execute(query, [status, gs_id])
-
-#### deprecateGeneset
-##
-#### Marks a geneset for deprecation. Since nothing is ever deleted, it's
-#### simply marked as such.
-##
-def deprecateGeneset(gs_id):
-        updateGenesetStatus(gs_id, 'deprecated')
-
-#### deleteGenesetValues
-##
-#### Removes all geneset_values for a given gs_id.
-##
-def deleteGenesetValues(gs_id):
-        if not gs_id:
-                return
-
-        query = 'DELETE FROM extsrc.geneset_value WHERE gs_id = %s;'
-
-        g_cur.execute(query, [gs_id])
-
-
-## query_ontol_ids
-#
-## Returns all ontology IDs (ont_id) associated with a particular gene set ID
-#
-## arg0, a gene set ID (int)
-## ret, list of all ontology IDs associated with the given gene set
-#
-def query_ontol_ids(id):
-        if (id is None) or (id == 0):
-                return []
-
-        query = "SELECT ont_id FROM extsrc.geneset_ontology WHERE gs_id=%s;"
-        g_cur.execute(query, [id])
-
-        res = g_cur.fetchall();
-        # Iterates over the list and moves the gs_id from the tuple to a new list
-        return map(lambda x: x[0], res)
-
-## findblahblah...
-#
-## Given an ontology term, returns all the genesets annotated to that term.
-#
-def findGenesetsWithOntology(ont, tiers=[3,4,5]):
-        if not ont:
-                return []
-
-        # Limit to MeSH 
-        #query = ('SELECT ego.gs_id, ego.ont_id, eo.ont_name FROM '
-        #                 'extsrc.geneset_ontology AS ego JOIN extsrc.ontology AS eo ON '
-        #                 'ego.ont_id=eo.ont_id WHERE eo.ont_name=\'%s\' AND eo.ontdb_id=4 '
-        #                 ';')
-        #query = ('SELECT ego.gs_id, ego.ont_id, eo.ont_name FROM '
-        query = ('SELECT ego.gs_id, pg.gs_name FROM '
-                         'extsrc.geneset_ontology AS ego JOIN extsrc.ontology AS eo ON '
-                         'ego.ont_id=eo.ont_id JOIN production.geneset AS pg ON '
-                         #'pg.gs_id=ego.gs_id WHERE eo.ont_name=%s ' #AND eo.ontdb_id=4 '
-                         'pg.gs_id=ego.gs_id WHERE eo.ont_name IN %s ' #AND eo.ontdb_id=4 '
-                         'AND pg.gs_count < 1000 AND pg.cur_id=ANY(%s);')
-
-        g_cur.execute(query, [ont, tiers])
-
-        res = g_cur.fetchall();
-
-        return res
-        #return map(lambda x: x[0], res)
-
-def genericOntologySearch(ont, name=False):
-        #query = ('SELECT ont_name, ont_description FROM extsrc.ontology WHERE '
-        #                 'ont_description LIKE %%%s%%;')
-        if name:
-                query = ('SELECT ont_name, ont_description FROM extsrc.ontology WHERE '
-                                 'ont_name ILIKE \'%%\'||%s||\'%%\';')
-        else:
-                query = ('SELECT ont_name, ont_description FROM extsrc.ontology WHERE '
-                                 'ont_description ILIKE \'%%\'||%s||\'%%\';')
-
-        g_cur.execute(query, [ont])
-
-        return g_cur.fetchall();
-
-## Given a tuple of gs_ids, returns the species for each as a (gs_id, sp_id)
-## tuple.
-def queryGenesetSpecies(ids):
-        query = 'SELECT gs_id, sp_id FROM production.geneset WHERE gs_id IN %s;'
-
-        g_cur.execute(query, [ids])
-
-        return g_cur.fetchall()
-
-def queryGenesetNames(ids):
-        if type(ids) == str or type(ids) == int or type(ids) == long:
-                ids = [long(ids)]
-        if type(ids) == list:
-                ids = tuple(ids)
-
-        query = 'SELECT gs_id, gs_name FROM production.geneset WHERE gs_id IN %s;'
-
-        g_cur.execute(query, [ids])
-
-        return g_cur.fetchall()
-
-## query_ontols
-#
-## Returns all the ontologies associated with a particular gene set.
-## maybe edit this function to return different crap later?
-## TODO: limit by ontology types (e.g. GO or MeSH)
-#
-## arg0, a gene set ID (int)
-## ret, list of tuples containing the ont_id and ont_name
-#
-def queryOntologies(id, ont=None):
-        if (id is None) or (id == 0):
-                return []
-
-        onts = {1:'GO', 2:'MP', 3:'MA', 5:'EDAM', 4:'MeSH', 
-                        'GO':1, 'MP':2, 'MA':3, 'EDAM':5, 'MeSH':4}
-        query = ("SELECT eo.ont_id, eo.ont_name FROM extsrc.ontology eo JOIN "
-                         "extsrc.geneset_ontology ego ON eo.ont_id=ego.ont_id JOIN "
-                         "production.geneset pg ON pg.gs_id=ego.gs_id WHERE pg.gs_id=%s")
-
-        # If the ontology type isn't found in the above dict...
-        if (ont is not None) and (ont not in onts):
-                ont = None
-        # Check if the ontology type is a number, if not, convert (using dict)
-        if (ont is not None) and (not isinstance(ont, int)):
-                ont = onts[ont]
-        # If we want to limit by ontology types
-        if ont is not None:
-                query += " AND eo.ontdb_id=%s;"
-                g_cur.execute(query, [id, ont])
-        else:
-                query += ";"
-                g_cur.execute(query, [id])
-
-        return g_cur.fetchall()
-
-## Same function as above but is passed a list of IDs to query
-def queryOntologiesList(ids, ont=None):
-        if (ids is None):
-                return []
-
-        onts = {1:'GO', 2:'MP', 3:'MA', 5:'EDAM', 4:'MeSH', 
-                        'GO':1, 'MP':2, 'MA':3, 'EDAM':5, 'MeSH':4}
-        query = ("SELECT eo.ont_id, eo.ont_name FROM extsrc.ontology eo JOIN "
-                         "extsrc.geneset_ontology ego ON eo.ont_id=ego.ont_id JOIN "
-                         "production.geneset pg ON pg.gs_id=ego.gs_id WHERE (")
-
-        # If the ontology type isn't found in the above dict...
-        if (ont is not None) and (ont not in onts):
-                ont = None
-        # Check if the ontology type is a number, if not, convert (using dict)
-        if (ont is not None) and (not isinstance(ont, int)):
-                ont = onts[ont]
-
-        # Add the list of gene IDs
-        for i in range(len(ids)):
-                if i != (len(ids) - 1):
-                        query += 'pg.gs_id=%s OR '
-                else:
-                        query += 'pg.gs_id=%s)'
-
-
-        # If we want to limit by ontology types
-        if ont is not None:
-                query += " AND eo.ontdb_id=%s;"
-                ids.append(ont)
-                g_cur.execute(query, ids)#[ids, ont])
-        else:
-                query += ";"
-                g_cur.execute(query, [ids])
-
-        return g_cur.fetchall()
-
-def query_ontol_type(id):
-        if (id is None) or (id == 0):
-                return None
-
-        query = ("SELECT eo.ontdb_id FROM extsrc.ontology eo WHERE eo.ont_id=%s")
-
-        g_cur.execute(query, [id])
-
-        return g_cur.fetchall()
-
-
-#def updateMeshSet
-## commitChanges
-#
-## Makes any changes to the database permanent. Needed after database 
-## alterations (e.g. INSERT, DELETE, etc.).
-#
-def commitChanges():
-        conn.commit()
 
 if __name__ == '__main__':
 
     ## Simple tests
     ## Selections
     print get_species()
+    print get_attributions()
     print get_gene_ids(['Daxx', 'Mobp', 'Ccr4'])
     print get_gene_ids_by_species(['Daxx', 'Mobp', 'Ccr4'], 1)
     print get_gene_refs([83882, 85988])
     print get_gene_refs_by_type([83882, 85988], 7)
     print get_preferred_gene_refs([83882, 85988])
     print get_genesets_by_tier(tiers=[3], size=10)
+    print get_genesets_by_attribute(11, size=2)
     print get_geneset_values([720])
-    #print findMeshSet('Thromboplastin')
-    #print findMeshSet('Hypothalamus, Posterior')
-    #print findMeshSet('Encephalitis')
-    #updateMeshSet('Thromboplastin', 0)
-
-    #gsid = createGeneset(2, 2, 1, 0.5, 0, 'Test MeSH Set Test', 'mesh set testing', 'mesh set testing')
-    #createGenesetValue(gsid[0], 53023, 1.0, 'JAK3', 't')
-    #print gsid
-    #commitChanges()
-    #print len(queryGenes((14921, 14923)))
-    #print queryGenes((14921, 14923))
-    #terms = queryJaccards(31361, [2,3])
-    #print terms[0][0]
-    #print queryGenesetSize(31361)
-
-    #print len(set(terms))
+    print get_gene_homologs([135283, 135642])
 
