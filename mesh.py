@@ -34,13 +34,10 @@ class Tree(dd):
 		Given a path of nodes, the function walks the tree while creating empty
 		nodes that are referenced in the path list.
 
-		args:
-			list, a node path--each element further in the list is found
-						 further in the tree. If the arg is a string, it is
-						 split at '.' characters to produce a node path list.
+        :type path: list
+        :type path: elements indicating a path in the tree
 
-		ret:
-			Tree, the last node added
+        :ret Tree: tree containing the newly added path
 		"""
 
 		t = self
@@ -145,7 +142,6 @@ class Tree(dd):
 				childs.extend(self.__getChildren(n))
 				childs.append(n.path)
 
-		#return sorted(childs)
 		return childs
 
 	def __getChildren(self, tree):
