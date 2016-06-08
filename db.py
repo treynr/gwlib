@@ -248,13 +248,30 @@ def get_species():
     :ret dict: mapping of sp_names to sp_ids
     """
 
-    #with conn.cursor() as cursor:
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
             SELECT  sp_name, sp_id
             FROM    odestatic.species;
+            '''
+        )
+
+        return associate(cursor)
+
+def get_attributions():
+    """
+    Returns all the attributions (at_id and at_abbrev) found in the DB.
+
+    :ret dict: mapping of abbreviations to IDs
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  at_abbrev, at_id
+            FROM    odestatic.attribution;
             '''
         )
 
@@ -280,7 +297,6 @@ def get_gene_ids(refs, sp_id=None):
     if type(refs) == list:
         refs = tuple(refs)
 
-    #with conn.cursor() as cursor:
     with PooledCursor() as cursor:
 
         cursor.execute(
@@ -311,7 +327,6 @@ def get_gene_ids_by_species(refs, sp_id):
     if type(refs) == list:
         refs = tuple(refs)
 
-    #with conn.cursor() as cursor:
     with PooledCursor() as cursor:
 
         cursor.execute(
@@ -562,7 +577,7 @@ def get_publication(pmid):
             SELECT      pub_id
             FROM        production.publication
             WHERE       pub_pubmed = %s;
-            ORDER BY    pub_id DESC;
+            ORDER BY    pub_id ASC
             ''',
                 (pmid,)
         )
@@ -574,6 +589,53 @@ def get_publication(pmid):
 
         else:
             return 0
+
+def get_geneset_metadata(gs_ids):
+    """
+    Returns names, descriptions, and abbreviations for each geneset in the
+    provided list.
+
+    :type gs_ids: list
+    :arg gs_ids: geneset IDs
+
+    :ret list: dicts with column names as keys
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  gs_id, gs_name, gs_description, gs_abbreviation
+            FROM    production.geneset
+            WHERE   gs_id IN %s;
+            ''',
+                (gs_ids,)
+        )
+
+        return dictify(cursor)
+
+def get_geneset_size(gs_ids):
+    """
+    Returns geneset sizes for the given genesets.
+
+    :type gs_ids: list
+    :arg gs_ids: geneset IDs
+
+    :ret list: mapping of gs_id to size (gs_count)
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  gs_id, gs_count
+            FROM    production.geneset
+            WHERE   gs_id IN %s;
+            ''',
+                (gs_ids,)
+        )
+
+        return associate(cursor)
 
     ## INSERTS ##
     #############
@@ -824,282 +886,31 @@ def insert_file(size, contents, comments):
     ## UPDATES ##
     #############
 
+def update_geneset_status(gs_id, status):
+    """
+    Update the status of a geneset. The only statuses currently used are
+    'normal', 'deleted', and 'deprecated'.
+
+    :ret int: the number of rows affected by the update
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            UPDATE  production.geneset
+            SET     gs_status = %s
+            WHERE   gs_id = %s;
+            ''', 
+                (status, gs_id)
+        )
+
+        return cursor.rowcount
+
+
     ## DELETES ##
     #############
 
-#### findAncientMeshSets (DEPRECATED)
-##
-#### Returns the gs_ids of MeSH genesets from the time before gene2mesh.
-##
-def findAncientMeshSets():
-    query = ("SELECT gs_id FROM production.geneset WHERE cur_id IS NULL AND "
-              "gs_name NOT ILIKE '%%in ctd%%' AND gs_name ILIKE '%%mesh%%';")
-
-    g_cur.execute(query)
-
-    res = g_cur.fetchall()
-
-    return map(lambda x: x[0], res)
-
-#### deleteGeneset
-##
-#### Marks a geneset as deleted. Since nothing is ever deleted, it's
-#### simply marked as such.
-##
-def deleteGeneset(gs_id):
-    updateGenesetStatus(gs_id, 'deleted')
-
-## There's a subtle difference between getGeneIds and the "sensitive" version
-## below it. getGeneIds requires gene symbols to exactly match their
-## counterparts in the DB. The SQL query considers the genes BRCA1 and Brca1 as
-## different. The sensitive version, doesn't require proper capitalization BUT
-## this comes at the expense of run time. The SQL query takes for-fucking-ever
-## and should only be used in certain cases.
-
-def getGenesetSizes(gsids):
-        if type(gsids) == list:
-                gsids = tuple(gsids)
-
-        query = '''SELECT gs_id, gs_count
-                           FROM production.geneset
-                           WHERE gs_id IN %s;'''
-
-        g_cur.execute(query, [gsids])
-
-        ## Returns a list of tuples [(gs_id, gs_count)]
-        res = g_cur.fetchall()
-        d = {}
-
-        ## We return a dict of gs_id --> gs_count
-        for tup in res:
-                d[tup[0]] = tup[1]
-
-        return d
-
-
-
-#### getGenesetNames
-##
-#### Returns all gs_names for the given gs_ids. The results are returned
-#### as a mapping of gs_ids -> gs_name.
-##
-#### arg: [integer],  list of gs_ids
-#### ret: dict, mapping of gs_ids (int) to a gs_name (string)
-##
-def getGenesetNames(gsids):
-        if type(gsids) == list:
-                gsids = tuple(gsids)
-
-        query = '''SELECT gs_id, gs_name 
-                           FROM production.geneset
-                           WHERE gs_id IN %s;'''
-        d = {}
-
-        g_cur.execute(query, [gsids])
-
-        res = g_cur.fetchall()
-
-        ## We return a dict, k: gs_id; v: gs_name
-        for tup in res:
-                        d[tup[0]] = tup[1]
-
-        return d
-
-#### getGenesetAbbreviations
-##
-#### Returns all gs_abbreviations for the given gs_ids. The results are
-#### returned as a mapping of gs_ids -> gs_abbreviation.
-##
-#### arg: [integer],  list of gs_ids
-#### ret: dict, mapping of gs_ids (int) to a gs_name (string)
-##
-def getGenesetAbbreviations(gsids):
-        if not gsids:
-                return {}
-        if type(gsids) == list:
-                gsids = tuple(gsids)
-
-        query = '''SELECT gs_id, gs_abbreviation 
-                           FROM production.geneset
-                           WHERE gs_id IN %s;'''
-        d = {}
-
-        g_cur.execute(query, [gsids])
-
-        res = g_cur.fetchall()
-
-        ## We return a dict, k: gs_id; v: gs_name
-        for tup in res:
-                        d[tup[0]] = tup[1]
-
-        return d
-
-#### getGeneType
-##
-#### Returns the gdb_id for the given short name.
-##
-#### arg: string, gdb_shortname to use for retrieving the gdb_id
-#### ret: integer, gdb_id for SNP type. None if it doesn't exist in the DB
-##
-def getGeneType(short):
-        query = '''SELECT gdb_id
-                           FROM odestatic.genedb
-                           WHERE gdb_shortname LIKE %s;'''
-
-        g_cur.execute(query, [short])
-
-        res = g_cur.fetchone()
-
-        if not res:
-                return None
-        else:
-                return res[0]
-
-#### getSnpGenes
-##
-#### Returns a mapping of all rolled up SNPs in the DB. 
-##
-#### arg: [int], gdb_id for the SNP gene type
-#### ret: dict, mapping of SNP ID (ode_ref_id) -> ode_gene_id
-##
-def getSnpGenes(gdbid):
-        query = '''SELECT ode_ref_id, ode_gene_id
-                           FROM extsrc.gene
-                           WHERE gdb_id = %s;''' 
-        
-        g_cur.execute(query, [gdbid])
-
-        ## Returns a list of tuples [(ode_ref_id, ode_gene_id)]
-        res = g_cur.fetchall()
-        d = {}
-
-        for tup in res:
-                d[tup[0]] = tup[1]
-
-        return d
-
-#### getMeshIdsOld
-##
-#### Returns a list of gs_ids for all MeSH sets generated by gene2mesh. 
-##
-#### This uses the old MeSH geneset format for searching. The MeSH genesets
-#### created by an older version of gene2mesh uses 'MeSH Set (...' as the
-#### gs_name. 
-#### This function is deprecated and will be removed from future versions.
-##
-#### arg, int list of gs_ids
-#### ret, dict mapping gs_ids (int) to list of ode_gene_ids ([int])
-##
-def getMeshIdsOld():
-
-        query = ("SELECT gs_id FROM production.geneset WHERE "
-                         "gs_status NOT LIKE 'de%%' AND "
-                         "gs_name ilike 'mesh set (%%';")
-        d = {}
-
-        g_cur.execute(query, [])
-
-        res = g_cur.fetchall()
-
-        # Strip out the tuples, only returning a list
-        return map(lambda x: x[0], res)
-
-#### getMeshIds
-##
-#### Returns a list of gs_ids for all current, non-deprecated MeSH sets 
-#### generated by gene2mesh. 
-##
-#### ret: [integer], list of gs_ids corresponding to MeSH sets 
-##
-def getMeshIds():
-
-        query = ("SELECT gs_id FROM production.geneset WHERE "
-                         "gs_status NOT LIKE 'de%%' AND "
-                         "gs_name like '[MeSH] %%:%%';")
-        d = {}
-
-        g_cur.execute(query, [])
-
-        res = g_cur.fetchall()
-
-        # Strip out the tuples, only returning a list
-        return map(lambda x: x[0], res)
-
-def getMeshSetsByName(names):
-
-        if type(names) == list:
-                names = tuple(names)
-
-        query = '''SELECT gs_abbreviation, gs_id
-                           FROM production.geneset
-                           WHERE gs_status NOT ILIKE 'de%%' AND
-                                         gs_name LIKE '[MeSH] %%' AND
-                                         gs_abbreviation IN %s'''
-
-        g_cur.execute(query, [names])
-
-        res = g_cur.fetchall()
-        d = {}
-
-        for tup in res:
-                d[tup[0]] = tup[1]
-                                         
-        return d
-
-#### getMeshSetsOld
-##
-#### Returns all current MeSH genesets. Result is returned as a dict, gs_ids ->
-#### [ode_gene_id]. 
-##
-#### Older version, see getMeshIdsOld comments above. Deprecated and will be
-#### removed in a future release.
-##
-#### ret, dict mapping gs_ids (int) to list of ode_gene_ids ([int])
-##
-def getMeshSetsOld():
-        return getGenesetGeneIds(getMeshIdsOld())
-
-#### getMeshSets
-##
-#### Returns the contents (ode_gene_ids) of all current, non-deprecated MeSH genesets. 
-##
-#### ret: dict, mapping gs_ids (int) to list of ode_gene_ids ([int])
-##
-def getMeshSets():
-        return getGenesetGeneIds(getMeshIds())
-
-#### getMeshSetNames
-##
-#### Returns all current, non-deprecated MeSH terms. The latest version of
-#### gene2mesh puts the MeSH term (by itself) as the gs_abbreviation. The term
-#### can also be found in the gs_name and gs_description, but it would have to
-#### be parsed out.
-##
-#### ret: dict, mapping gs_ids (int) to MeSH term (string)
-##
-def getMeshSetNames():
-        return getGenesetAbbreviations(getMeshIds())
-
-#### getMeshSetNamesOld
-##
-#### Returns all current MeSH geneset naames (terms). Result is returned as a 
-#### dict, gs_ids -> names. The names are the MeSH terms themselves.
-##
-#### Old, deprecated and removed in a future release.
-##
-#### ret, dict mapping gs_ids (int) to list of ode_gene_ids ([int])
-##
-def getMeshSetNamesOld():
-        return getGenesetNames(getMeshIds())
-
-#### parseMeshTerm
-##
-#### Given a mesh geneset name, parses out the mesh term.
-##
-def parseMeshTerm(s):
-        import re
-
-        return re.match('MeSH Set \("(.+)"')[1]
 
 #### getAttributionId
 ##
@@ -1171,88 +982,6 @@ def makeGeneset(name, abbr, desc, spec, pub, grp, ttype, thresh, gtype, vals,
         gs['cur_id'] = cur_id                   # auto private tier?
 
         return gs
-
-#### insertFile
-##
-#### Inserts a new row into the file table. Most of the columns for the file
-#### table are required as arguments.
-##
-def insertFileIntoDb(size, uri, contents, comments):
-        query = '''INSERT INTO production.file 
-                           (file_size, file_uri, file_contents, file_comments, 
-                           file_created, file_changes)
-                           VALUES (%s, %s, %s, %s, NOW(), \'\') 
-                           RETURNING file_id;'''
-        vals = [size, uri, contents, comments]
-
-        g_cur.execute('set search_path = extsrc,production,odestatic;')
-        g_cur.execute(query, vals)
-
-        ## Returns a list of tuples [(file_id)]
-        res = g_cur.fetchall()
-
-        return res[0][0]
-
-## score type 5
-def insertFile(gsv):
-        contents = ''
-
-        for t in gsv:
-                contents += (str(t[0]) + '\t' + str(t[1]) + '\n')
-
-        return insertFileIntoDb(len(gsv), makeRandomFilename(), contents, '')
-
-
-#### insertGeneset
-##
-#### Given a dict whose keys refer to columns of the geneset table,
-#### this function inserts a new geneset into the db. 
-#### Don't forget to commit changes after calling this function.
-##
-def insertGeneset(gd):
-        query = ('INSERT INTO geneset (file_id, usr_id, cur_id, sp_id, '
-                         'gs_threshold_type, gs_threshold, gs_created, gs_updated, '
-                         'gs_status, gs_count, gs_uri, gs_gene_id_type, gs_name, '
-                         'gs_abbreviation, gs_description, gs_attribution, gs_groups, '
-                         'pub_id) '
-                         'VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW(), \'normal\', '
-                         '%s, \'\', %s, %s, %s, %s, %s, %s, %s) RETURNING gs_id;')
-
-        vals = [gd['file_id'], gd['usr_id'], gd['cur_id'], gd['sp_id'], 
-                        gd['gs_threshold_type'], gd['gs_threshold'], gd['gs_count'], 
-                        gd['gs_gene_id_type'], gd['gs_name'], gd['gs_abbreviation'],
-                        gd['gs_description'], gd['gs_attribution'], gd['gs_groups'], 
-                        gd['pub_id']]
-
-        g_cur.execute('set search_path = extsrc,production,odestatic;')
-        g_cur.execute(query, vals)
-
-        ## Returns a list of tuples [(gs_id)]
-        res = g_cur.fetchall()
-
-        return res[0][0]
-
-#### insertGenesetValue
-##
-#### Inserts a new row into the geneset_value table using the given gs_id. 
-##
-def insertGenesetValue(gs_id, gene_id, value, name, thresh):
-        query = '''INSERT INTO extsrc.geneset_value 
-                           (gs_id, ode_gene_id, gsv_value, gsv_hits, gsv_source_list, 
-                           gsv_value_list, gsv_in_threshold, gsv_date) 
-                           VALUES (%s, %s, %s, 0, %s, ARRAY[0], %s, NOW());'''
-        vals = [gs_id, gene_id, value, [name], thresh]
-
-        g_cur.execute(query, vals)
-
-def insertGene(gene_id, ref_id, gdb_id, sp_id, pref='f'):
-        query = '''INSERT INTO extsrc.gene
-                           (ode_gene_id, ode_ref_id, gdb_id, sp_id, ode_pref, ode_date)
-                           VALUES
-                           (%s, %s, %s, %s, %s, NOW());'''
-        vals = [gene_id, ref_id, gdb_id, sp_id, pref]
-
-        g_cur.execute(query, vals)
 
 #### updateGenesetCount
 ##
