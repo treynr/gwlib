@@ -3,7 +3,7 @@
 ## file:    db.py
 ## desc:    Contains all the important functions for accessing and querying the
 ##          GeneWeaver DB.
-## vers:    0.1.0
+## vers:    0.4.0
 ## auth:    TR
 #
 
@@ -137,7 +137,9 @@ class PooledCursor(object):
 ## call their destructors.
 #
 ## The config can set connections to autocommit mode in order to avoid
-## littering the postgres server with "idle in transaction" sessions.
+## littering the postgres server with "idle in transaction" sessions. Commit()
+## should be called after every statement (including SELECTs) but this is
+## doesn't work well for dry runs and testing.
 #
 
         ## HELPERS ##
@@ -184,12 +186,25 @@ def dictify(cursor):
 
 def listify(cursor):
     """
+    Converts each cursor row into a list. Only the first tuple member is saved
+    to the list.
+
+    :type cursor: object
+    :arg cursor: the psycopg cursor
+
+    :ret list: the results of the SQL query
     """
 
     return map(lambda t: t[0], cursor.fetchall())
 
 def tuplify(thing):
     """
+    Converts a list or scalor value into a tuple.
+
+    :type thing: something
+    :arg thing: the thing being converted
+
+    :ret list: tupled value
     """
 
     if type(thing) == list:
@@ -233,6 +248,7 @@ def commit():
     """
     Commits the transaction.
     """
+
     conn.commit()
 
         ## SELECTS ##
