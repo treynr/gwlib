@@ -1,0 +1,77 @@
+GENEWEAVER LIB README
+
+ABOUT
+
+	Small library for accessing and altering the GeneWeaver database. Also
+	includes two additional modules for logging and miscellaneous utility
+	functions.
+
+REQUIREMENTS
+	
+	python 2.7
+
+INSTALLATION
+
+	Clone the repo and import any necessary modules. 
+
+CONFIGURATION
+
+	The database module requires a configuration file and will automatically 
+	create one for you if one does not already exist. The config file must be
+	filled out with the proper DB connection information. Below is the list of
+	key-value pairs and their types each config should have.
+
+	host
+		STRING
+		The domain name or IP of a running Postgres server.
+
+	database
+		STRING
+		The name of a database to connect to.
+
+	port
+		INTEGER
+		Postgres server port. The default is 5432.
+
+	user
+		STRING
+		The user to connect as.
+
+	password
+		STRING
+		Password for the given database and user. 
+
+	autocommit
+		BOOLEAN
+		If true, the DB module will commit after every statement is executed
+		(including SELECT statements). This prevents the server from
+		accumulating "idle in transaction" sessions, but isn't recommended for
+		script testing and dry runs.
+
+	usr_id
+		INTEGER
+		The GW usr_id to use when performing insertions that require a user ID. 
+	
+SYNOPSIS
+
+	To use the database module:
+
+		from gwlib import db
+
+		db.some_function()
+
+	To use the logging module:
+
+		## Log is a class within the log module
+		from gwlib import Log
+
+		logger = Log()
+
+		logger.warn('Something bad happened')
+
+	To use the utility module:
+
+		from gwlib import util
+
+		util.some_function()
+

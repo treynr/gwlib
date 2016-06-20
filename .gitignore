@@ -1,9 +1,12 @@
-
-## .gitignore for gw lib repo
+## Ignore the following shit:
 #
 
-# Ignore those stupid compiled python files
+## super secret stuffs
+*.cfg
+
+## stupid compiled python files
 *.pyc
-# Ignore vim swp files
-*.swp
+
+## vim swp files
 *.sw*
+
