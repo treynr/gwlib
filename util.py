@@ -20,11 +20,11 @@ def chunk_list(l, n):
     :ret list: chunks
     """
 
-	if n == 0:
-		n = len(l)
+    if n == 0:
+        n = len(l)
 
-	for i in xrange(0, len(l), n):
-		yield l[i:i+n]
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
 
 def flatten(outlist):
     """
@@ -53,11 +53,11 @@ def export_json(fp, data, dtag=''):
     :arg dtag: An optional tag prepended to the exported data
     """
 
-	with open(fp, 'w') as fl:
-		if dtag == '':
-			print >> fl, json.dumps(data)
-		else:
-			print >> fl, json.dumps([dtag, data])
+    with open(fp, 'w') as fl:
+        if dtag == '':
+            print >> fl, json.dumps(data)
+        else:
+            print >> fl, json.dumps([dtag, data])
 
 def get_today():
     """
@@ -66,16 +66,16 @@ def get_today():
     :ret str: the date
     """
 
-	now = dt.datetime.now()
-	year = str(now.year)
-	month = str(now.month)
-	day = str(now.day)
+    now = dt.datetime.now()
+    year = str(now.year)
+    month = str(now.month)
+    day = str(now.day)
 
-	if len(month) == 1:
-		month = '0' + month
+    if len(month) == 1:
+        month = '0' + month
 
-	if len(day) == 1:
-		day = '0' + day
+    if len(day) == 1:
+        day = '0' + day
 
-	return year + '.' + month + '.' + day
+    return year + '.' + month + '.' + day
 

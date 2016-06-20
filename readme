@@ -1,0 +1,35 @@
+GENEWEAVER LIB README
+
+ABOUT
+
+	Small library for accessing and altering the GeneWeaver database. Also
+	includes two additional modules for logging and miscellaneous utility
+	functions.
+
+REQUIREMENTS
+	
+	python 2.7
+
+INSTALLATION
+
+	Clone the repo
+		$ pip install networkx
+	
+SYNOPSIS
+
+	obo-parser.py [OPTIONS] <obo-file> <output-file>
+
+OPTIONS
+
+	-a <FILE>
+		
+		use the given annotation file to annotate ontology terms
+
+	-p
+		
+		propagate annotations across the DAG
+
+	--verbose
+
+		clutter your screen with program output
+
