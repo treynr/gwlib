@@ -3,7 +3,6 @@
 ## file:    db.py
 ## desc:    Contains all the important functions for accessing and querying the
 ##          GeneWeaver DB.
-## vers:    0.4.0
 ## auth:    TR
 #
 

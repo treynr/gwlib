@@ -1,10 +1,9 @@
 #!/usr/bin/python
 
-#### file:  log.py
-#### desc:  Simple output logging class.
-#### vers:  0.1.0
-#### auth:  TR
-##
+## file:    log.py
+## desc:    Simple output logging class.
+## auth:    TR
+#
 
 import sys
 

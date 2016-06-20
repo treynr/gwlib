@@ -2,7 +2,6 @@
 
 ## file:    util.py
 ## desc:    A bunch of misc. utility functions.
-## vers:    0.4.0
 ## auth:    TR
 # 
 

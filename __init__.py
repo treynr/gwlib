@@ -1,8 +1,7 @@
 #!/usr/bin/env python2
 
-## file:    db.py
-## desc:    Contains all the important functions for accessing and querying the
-##          GeneWeaver DB.
+## file:    __init__.py
+## desc:    Module initialization and db connection stuff. 
 ## vers:    0.4.0
 ## auth:    TR
 #
@@ -96,7 +95,6 @@ try:
     db.conn = db.psycopg2.connect(constr)
 
     db.conn.autocommit = parser.getboolean('db', 'autocommit')
-
 
 except Exception as e:
     print '[!] Oh noes, failed to connect to the db'

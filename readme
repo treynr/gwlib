@@ -12,24 +12,32 @@ REQUIREMENTS
 
 INSTALLATION
 
-	Clone the repo
-		$ pip install networkx
+	Clone the repo and import any necessary modules. The database module will
+	automatically create a configuration file for you if one does not already
+	exist. The config file must be filled out with the proper DB connection
+	information.
+
 	
 SYNOPSIS
 
-	obo-parser.py [OPTIONS] <obo-file> <output-file>
+	To use the database module:
 
-OPTIONS
+		from gwlib import db
 
-	-a <FILE>
-		
-		use the given annotation file to annotate ontology terms
+		db.some_function()
 
-	-p
-		
-		propagate annotations across the DAG
+	To use the logging module:
 
-	--verbose
+		## Log is a class within the log module
+		from gwlib import Log
 
-		clutter your screen with program output
+		logger = Log()
+
+		logger.warn('Something bad happened')
+
+	To use the utility module:
+
+		from gwlib import util
+
+		util.some_function()
 
