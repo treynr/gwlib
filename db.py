@@ -475,30 +475,6 @@ def get_gene_homologs(gene_ids):
     if type(gene_ids) == list:
         gene_ids = tuple(gene_ids)
 
-<<<<<<< HEAD
-#### This query takes awhile. Like awhile. You've been warned.
-def getSetsWithoutJaccards():
-	queryl = '''SELECT gs_id
-			    FROM production.geneset
-			    WHERE gs_status NOT LIKE 'de%%' AND
-			   		  gs_id NOT IN (SELECT DISTINCT gs_id_left
-					  	FROM extsrc.geneset_jaccard);'''
-	queryr = '''SELECT gs_id
-			    FROM production.geneset
-			    WHERE gs_status NOT LIKE 'de%%' AND
-			   		  gs_id NOT IN (SELECT DISTINCT gs_id_right
-					  	FROM extsrc.geneset_jaccard);'''
-
-	g_cur.execute(queryl)
-
-	left = map(lambda x: x[0], g_cur.fetchall())
-
-	g_cur.execute(queryr)
-
-	right = map(lambda x: x[0], g_cur.fetchall())
-
-	return list(set(left) | set(right))
-=======
     with PooledCursor() as cursor:
 
         cursor.execute(
@@ -511,7 +487,6 @@ def getSetsWithoutJaccards():
         )
 
         return associate(cursor)
->>>>>>> development
 
 def get_publication(pmid):
     """
@@ -626,15 +601,8 @@ def insert_geneset(gs):
         gs['gs_threshold_type'] = 3
         gs['gs_threshold'] = 1
 
-<<<<<<< HEAD
-	# if there weren't any hom_ids for an ode_gene_id, map it to none
-	for i in ids:
-		if not hmap.has_key(i):
-			hmap[i] = None
-=======
     if ('gs_groups' not in gs):
         gs['gs_groups'] = 0
->>>>>>> development
 
     with PooledCursor() as cursor:
 
