@@ -50,12 +50,30 @@ class Log(object):
     WARN = 'warning'
     ERROR = 'error'
 
-    def __init__(self, both=False, file='', on=True):
+    def __init__(self, both=False, file='', on=True, prefix=''):
+        """
+        Initialize a logging object.
+
+        :type both: bool
+        :arg both: if true logs to both stdout and a file
+
+        :type file: str
+        :arg file: filepath to a log file
+
+        :type on: bool
+        :arg on: if true logging is turned on, prints to stdout and/or a file
+
+        :type prefix: str
+        :arg prefix: prefix the given string to the beginning of all output. A
+                     special string can be given, 'level', and the log level 
+                     will be added to output strings
+        """
 
         self.color = Colors()
         self.both = both
         self.file = file
         self.on = on
+        self.prefix = prefix
 
         if file:
             self.fh = open(file, 'w')
@@ -67,6 +85,20 @@ class Log(object):
         
         if self.fh:
             self.fh.close()
+
+    def __to_color(self, level):
+        """
+        Converts a log level into a color.
+        """
+
+        lookup = {
+            self.DEBUG: self.color.ltwhite,
+            self.INFO: self.color.ltgreen,
+            self.WARN: self.color.ltyellow,
+            self.ERROR: self.color.ltred
+        }
+
+        return lookup.get(level)
 
     def __write_file(self, level, s):
         """
@@ -80,9 +112,17 @@ class Log(object):
         """
 
         if self.on and self.fh:
-            print >> self.fh, '<%s> %s' % (level, s)
+            if self.prefix:
+                if self.prefix == 'level':
+                    print >> self.fh, '<%s> %s' % (level, s)
 
-    def __write_std(self, color, s):
+                else:
+                    print >> self.fh, '%s %s' % (self.prefix, s)
+
+            else:
+                print >> self.fh, '<%s> %s' % (level, s)
+
+    def __write_std(self, level, color, s):
         """
         Internal function for writing text to stdout.
 
