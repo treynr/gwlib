@@ -45,10 +45,10 @@ class Log(object):
     Basic class for logging to to a file and/or stdout.
     """
 
-    DEBUG = 'debug'
-    INFO = 'info'
-    WARN = 'warning'
-    ERROR = 'error'
+    DEBUG = 'DEBUG'
+    INFO = 'INFO'
+    WARN = 'WARNING'
+    ERROR = 'ERROR'
 
     def __init__(self, both=False, file='', on=True, prefix=''):
         """
@@ -122,7 +122,7 @@ class Log(object):
             else:
                 print >> self.fh, '<%s> %s' % (level, s)
 
-    def __write_std(self, level, color, s):
+    def __write_std(self, level, s):
         """
         Internal function for writing text to stdout.
 
@@ -133,12 +133,25 @@ class Log(object):
         :arg s: text being logged
         """
 
+        color = self.__to_color(level)
+        norm_color = self.color.normal
+
+        if self.prefix:
+            if self.prefix == 'level':
+                pstr = '%s<%s> %s%s' % (color, level, s, norm_color)
+
+            else:
+                pstr = '%s%s %s%s' % (color, self.prefix, s, norm_color)
+
+        else:
+            pstr = '%s%s%s' % (color, s, self.color.normal)
+
         ## Errors are always printed!
-        if color == self.color.ltred:
-            print '%s%s%s' % (color, s, self.color.normal)
+        if level == self.ERROR:
+            print pstr
         
         elif self.on and not self.fh or (self.fh and self.both):
-            print '%s%s%s' % (color, s, self.color.normal)
+            print pstr
 
     def debug(self, s):
         """
@@ -149,7 +162,7 @@ class Log(object):
         """
 
         self.__write_file(self.DEBUG, s)
-        self.__write_std(self.color.ltwhite, s)
+        self.__write_std(self.DEBUG, s)
 
     def info(self, s):
         """
@@ -160,7 +173,7 @@ class Log(object):
         """
 
         self.__write_file(self.INFO, s)
-        self.__write_std(self.color.ltgreen, s)
+        self.__write_std(self.INFO, s)
 
     def warn(self, s):
         """
@@ -171,7 +184,7 @@ class Log(object):
         """
 
         self.__write_file(self.WARN, s)
-        self.__write_std(self.color.ltyellow, s)
+        self.__write_std(self.WARN, s)
 
     def error(self, s):
         """
@@ -183,21 +196,25 @@ class Log(object):
         """
 
         self.__write_file(self.ERROR, s)
-        self.__write_std(self.color.ltred, s)
+        self.__write_std(self.ERROR, s)
 
-    def turn_on(self):
+    def turn_on(self, on=True):
         """
-        Turns logging on.
-        """
-
-        self.on = True
-
-    def turn_off(self):
-        """
-        Turns logging off.
+        Turns logging on or off based on the provided boolean.
         """
 
-        self.on = False
+        if type(on) != bool:
+            self.on = True
+
+        else:
+            self.on = on
+
+    def set_prefix(self, prefix=''):
+        """
+        Sets an output prefix.
+        """
+
+        self.prefix = prefix
 
 if __name__ == "__main__":
     log = Log()
@@ -209,5 +226,10 @@ if __name__ == "__main__":
     log.warn('WARNING\t| Things went wrong and you should probably know about it')
     log.error('ERROR\t| OH SHIT')
 
+    log.info('')
+    log.set_prefix('<+>')
+    log.info('User defined prefix')
+    log.set_prefix('level')
+    log.info('Log level prefix')
 
 
