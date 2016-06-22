@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 ## file:    batch.py
-## desc:    Rewrite of the PHP batch geneset upload function.
+## desc:    Batch file reader and writer.
 ## vers:    0.2.1
 ## auth:    Baker
 ##          TR
@@ -34,18 +34,6 @@ import db
 
         ## UTILITY ##
         #############
-
-def readBatchFile(fp):
-    """
-    Reads the file at the given filepath and returns all the lines that
-    comprise the file.
-
-    :arg string: filepath to read
-    :ret list: a list of strings--each line in the file
-    """
-
-    with open(fp, 'r') as fl:
-        return fl.readlines()
 
 def make_digrams(s):
     """
@@ -94,6 +82,9 @@ def calculate_str_similarity(s1, s2):
 
     return (2 * len(intersect)) / float(len(sd1) + len(sd2))
 
+        ## PARSERS ##
+        #############
+
 def parseScoreType(s):
     """
     Attempts to parse out the score type and any threshold value
@@ -139,7 +130,7 @@ def parseScoreType(s):
         stype = '1'
 
         if m:
-            thresh = m.group(1)  # parenthesized group
+            thresh = m.group(1)
         else:
             error = 'No threshold specified for P-Value data. Using p < 0.05.'
 
@@ -148,7 +139,7 @@ def parseScoreType(s):
         stype = '2'
 
         if m:
-            thresh = m.group(1)  # parenthesized group
+            thresh = m.group(1)
         else:
             error = 'No threshold specified for Q-Value data. Using q < 0.05.'
 
@@ -160,7 +151,7 @@ def parseScoreType(s):
         stype = '4'
 
         if m:
-            thresh = m.group(1) + ',' + m.group(2)  # parenthesized group
+            thresh = m.group(1) + ',' + m.group(2)
         else:
             thresh = '-0.75,0.75'
             error = ('No thresholds specified for Correlation data.'
@@ -172,7 +163,7 @@ def parseScoreType(s):
         stype = '5'
 
         if m:
-            thresh = m.group(1) + ',' + m.group(2)  # parenthesized group
+            thresh = m.group(1) + ',' + m.group(2)
         else:
             thresh = '0,1'
             error = ('No thresholds specified for Effect data.'
@@ -240,11 +231,7 @@ def getPubmedInfo(pmid):
 
     return (pinfo, '')
 
-
-#### parseBatchFile
-##
-##
-def parse_batch_file(lns):
+def parse_batch_syntax(lns):
     """
     Parses a batch file according to the format listed on
     http://geneweaver.org/index.php?action=manage&cmd=batchgeneset
@@ -309,8 +296,8 @@ def parse_batch_file(lns):
             ## If we have, that means we can save the geneset, clear out any
             ## REQUIRED fields before we do more parsing, and start over
             if gsvals:
-                gs = makeGeneset(name, abbr, desc, spec, pub, group, stype,
-                                 thresh, gene, gsvals, usr, cur)
+                gs = util.make_geneset(name, abbr, desc, spec, pub, group,
+                                       stype, thresh, gene, gsvals, usr, cur)
                 ## Start a new dataset
                 abbr = ''
                 desc = ''
@@ -326,8 +313,8 @@ def parse_batch_file(lns):
             ## If we have, that means we can save the geneset, clear out any
             ## REQUIRED fields before we do more parsing, and start over
             if gsvals:
-                gs = makeGeneset(name, abbr, desc, spec, pub, group, stype,
-                                 thresh, gene, gsvals, usr, cur)
+                gs = util.make_geneset(name, abbr, desc, spec, pub, group,
+                                       stype, thresh, gene, gsvals, usr, cur)
                 ## Start a new dataset
                 abbr = ''
                 desc = ''
@@ -343,8 +330,8 @@ def parse_batch_file(lns):
             ## If we have, that means we can save the geneset, clear out any
             ## REQUIRED fields before we do more parsing, and start over
             if gsvals:
-                gs = makeGeneset(name, abbr, desc, spec, pub, group, stype,
-                                 thresh, gene, gsvals, usr, cur)
+                gs = util.make_geneset(name, abbr, desc, spec, pub, group,
+                                       stype, thresh, gene, gsvals, usr, cur)
                 ## Start a new dataset
                 abbr = ''
                 desc = ''
@@ -380,13 +367,13 @@ def parse_batch_file(lns):
         elif lns[i][:1] == '@':
             spec = lns[i][1:].strip()
 
-            if spec.lower() not in specs.keys():
+            if spec.lower() not in species.keys():
                 err = 'LINE %s: %s is an invalid species' % (i + 1, spec)
                 errors.append(err)
 
             else:
                 ## spec is now an integer (sp_id)
-                spec = specs[spec.lower()]
+                spec = species[spec.lower()]
 
         ## Lines beginning with '%' are gene ID types (REQUIRED)
         elif lns[i][:1] == '%':
@@ -427,27 +414,22 @@ def parse_batch_file(lns):
             ## have negative (-) integer ID types.
             else:
 
-                if gene.lower() not in types.keys():
+                if gene.lower() not in gene_types.keys():
                     err = 'LINE %s: %s is an invalid gene type' % (i + 1, gene)
                     errors.append(err)
 
                 else:
                     ## gene is now an integer (gdb_id)
-                    gene = types[gene.lower()]
-                    ## Negate, see comment tagged important above
+                    gene = gene_types[gene.lower()]
                     gene = -gene
 
         ## Lines beginning with 'P ' are PubMed IDs (OPTIONAL)
-        #elif (ln[:2].lower() == 'p ') and (len(ln.split('\t')) == 1):
         elif (lns[i][:2].lower() == 'p ') and (len(lns[i].split('\t')) == 1):
-            #pub = eatWhiteSpace(ln[1:])
-            pub = eatWhiteSpace(lns[i][1:])
+            pub = lns[i][1:].strip()
 
         ## Lines beginning with 'A' are groups, default is private (OPTIONAL)
-        #elif ln[:2].lower() == 'a ' and (len(ln.split('\t')) == 1):
         elif lns[i][:2].lower() == 'a ' and (len(lns[i].split('\t')) == 1):
-            #group = eatWhiteSpace(ln[1:])
-            group = eatWhiteSpace(lns[i][1:])
+            group = lns[i][1:].strip()
 
             ## If the user gives something other than private/public,
             ## automatically make it private
@@ -467,23 +449,17 @@ def parse_batch_file(lns):
 
         ## If the lines are tab separated, we assume it's the gene data that
         ## will become apart of the geneset_values
-        #elif len(ln.split('\t')) == 2:
         elif len(lns[i].split('\t')) == 2:
 
             ## First we check to see if all the required data was specified
             if ((not abbr) or (not name) or (not desc) or (not stype) or
-                    (not spec) or (not gene)):
-                #cerr = ('Critical error! Looks like one of the required '
-                #        'fields is missing.')
-                #break
+                (not spec) or (not gene)):
+
                 err = 'One or more of the required fields are missing.'
                 ## Otherwise this string will get appended a bajillion times
                 if err not in errors:
                     errors.append(err)
-                #pass
 
-
-            #ln = ln.split()
             else:
                 lns[i] = lns[i].split()
 
@@ -496,74 +472,48 @@ def parse_batch_file(lns):
                 else:
                     gsvals.append((lns[i][0], lns[i][1]))
 
-            #if len(ln) < 2:
-            #    cerr = ("Critical error! Looks like there isn't a value "
-            #            "associated with the gene %s. Or maybe you forgot to "
-            #            "use tabs." % ln[0])
-            #    break
-
-            #gsvals.append((ln[0], ln[1]))
 
         ## Lines beginning with '#' are comments
-        #elif ln[:1] == '#':
         elif lns[i][:1] == '#':
             continue
 
         ## Skip blank lines
-        #elif ln[:1] == '':
         elif lns[i][:1] == '':
             continue
 
         ## Who knows what the fuck this line is, just skip it
         else:
-            #ncerr.append('BAD LINE: ' + ln)
             err = 'LINE %s: Skipping unknown identifiers' % (i + 1)
             warns.append(err)
 
     ## awwww shit, we're finally finished! Check for critical errors and
-    ## if there were none, make the final geneset and return
-    #if cerr:
-    #    return ([], ncerr, cerr)
+    ## if there were none, make the final parsed geneset and return
     if errors:
         return ([], warns, errors)
 
     else:
-        gs = makeGeneset(name, abbr, desc, spec, pub, group, stype,
-                         thresh, gene, gsvals, usr, cur)
+        gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype,
+                               thresh, gene, gsvals, usr, cur)
         genesets.append(gs)
 
-        #return (genesets, ncerr, [])
         return (genesets, warns, errors)
-
-
-#### makeRandomFilename
-##
-#### Generates a random filename for the file_uri column in the file table. The
-#### PHP version of this function (getRandomFilename) combines the user's
-#### email, the string '_ODE_', the current date, and a random number. Since
-#### this script is offline right now, I'm just using 'GW_' + date + '_' + a
-#### random six letter alphanumeric string. Looking at the file_uri contents
-#### currently in the db though, there seems to be a ton of variation in the
-#### naming schemes.
-##
-def makeRandomFilename():
-    lets = 'abcdefghijklmnopqrstuvwxyz1234567890'
-    rstr = ''
-    now = datetime.datetime.now()
-
-    for i in range(6):
-        rstr += random.choice('abcdefghijklmnopqrstuvwxyz1234567890')
-
-    return ('GW_' + str(now.year) + '-' + str(now.month) + '-' +
-            str(now.day) + '_' + rstr)
-
 
 #### buFile
 ##
 #### Parses geneset content into the proper format and inserts it into the file
 #### table. The proper format is gene\tvalue\n .
 ##
-def buFile(genes):
+def create_geneset_file(genes):
+    """
+    Parses the geneset_values into the proper format for storage in the file
+    table and inserts the result.
+
+    :type genes: list
+    :arg genes: geneset_value tuples (gene, value)
+
+    :ret int: file_id of the newly inserted file
+    """
+
     conts = ''
     ## Geneset values should be a list of tuples (symbol, pval)
     for tup in genes:
@@ -572,31 +522,34 @@ def buFile(genes):
     return db.insertFile(len(conts), makeRandomFilename(), conts, '')
 
 
-#### buGenesetValues
-##
-#### Batch upload geneset values.
-##
-def buGenesetValues(gs):
+def create_geneset_values(gs):
+    """
+    Maps the given reference IDs to ode_gene_ids and inserts them into the
+    geneset_value table.
+
+    :type gs: dict
+    :arg gs: geneset dict
+    """
+
     ## Geneset values should be a list of tuples (symbol, pval)
     ## First we attempt to map them to the internal ode_gene_ids
     symbols = filter(lambda x: not not x, gs['values'])
     symbols = map(lambda x: x[0], symbols)
 
-    ## Negative numbers indicate normal genetypes (found in genedb) while
+    ## Negative numbers indicate normal gene types (found in genedb) while
     ## positive numbers indicate expression platforms and more work :(
     if gs['gs_gene_id_type'] < 0:
-        sym2ode = db.getOdeGeneIds(gs['sp_id'], symbols)
+        sym2ode = db.get_gene_ids_by_species(gs['sp_id'], symbols)
 
     else:
-        sym2probe = db.getPlatformProbes(gs['gs_gene_id_type'], symbols)
-        prbids = []
+        sym2probe = db.get_platform_probes(gs['gs_gene_id_type'], symbols)
+        prb_ids = []
 
         for sym in symbols:
-            prbids.append(sym2probe[sym])
+            prb_ids.append(sym2probe[sym])
 
-        prbids = list(set(prbids))
-        prb2odes = db.getProbe2Gene(prbids)
-
+        prb_ids = list(set(prb_ids))
+        prb2odes = db.get_probe2gene(prbids)
 
     # non-critical errors we will inform the user about
     noncrit = []
@@ -604,12 +557,10 @@ def buGenesetValues(gs):
     dups = dd(str)
     total = 0
 
-    for tup in gs['values']:
+    for sym, value in gs['values']:
 
         ## Platform handling
         if gs['gs_gene_id_type'] > 0:
-            sym = tup[0]
-            value = tup[1]
             prbid = sym2probe[sym]
             odes = prb2odes[prbid]
 
@@ -631,9 +582,8 @@ def buGenesetValues(gs):
                     noncrit.append(err)
                     continue
 
-                db.insertGenesetValue(gs['gs_id'], ode, value, sym,
-                                      'true')
-                                      #gs['gs_threshold'])
+                db.insert_geneset_value(gs['gs_id'], ode, value, sym,
+                                        value <= gs['gs_threshold'])
 
                 total += 1
 
@@ -658,23 +608,22 @@ def buGenesetValues(gs):
             continue
 
         ## Remember to lower that shit, forgot earlier :(
-        db.insertGenesetValue(gs['gs_id'], sym2ode[tup[0].lower()], tup[1],
-                              tup[0], gs['gs_threshold'])
+        db.insert_geneset_value(gs['gs_id'], sym2ode[tup[0].lower()], value,
+                                sym, value < gs['gs_threshold'])
 
         total += 1
 
     return (total, noncrit)
 
 
-#### buGenesets
-##
-#### Batch upload genesets. Requires the filepath to the batch upload file.
-#### Takes two additional (optional) parameters, a usr_id and cur_id, which
-#### are provided as command line arguments. This allows the person running
-#### the script to change usr_ids and cur_ids, which are currently set to 0
-#### and 5 (private) respectively, for this "offline" version of the script.
-##
-def buGenesets(fp, usr_id=0, cur_id=5):
+def parse_batch_file(fp):
+    """
+    Parses a batch file to completion.
+
+    :type fp: str
+    :arg fp: filepath to a batch file
+    """
+
     noncrits = []  # non-critical errors we will inform the user about
     added = []  # list of gs_ids successfully added to the db
 
@@ -683,50 +632,48 @@ def buGenesets(fp, usr_id=0, cur_id=5):
 
     ## A critical error has occurred
     if b[2]:
-        print b[2]
-        print ''
-        exit()
+        return b
 
     else:
         genesets = b[0]
         noncrits = b[1]
 
+    ## Geneset post-processing: PubMed retrieval, gene -> ode_gene_id mapping,
+    ## and file table insertion
     for gs in genesets:
         ## If a PMID was provided, we get the info from NCBI
         if gs['pub_id']:
             pub = getPubmedInfo(gs['pub_id'])
             gs['pub_id'] = pub[0]
 
-            ## Non-crit pubmed retrieval errors
-            if pub[1]:
-                noncrits.append(pub[1])
+            if not pub[0]:
+                gs['pub_id'] = None
 
-            ## New row in the publication table
-            if gs['pub_id']:
-                gs['pub_id'] = db.insertPublication(gs['pub_id'])
             else:
-                gs['pub_id'] = None  # empty pub
+                gs['pub_id'] = db.insertPublication(gs['pub_id'])
+
+                ## Non-critical pubmed retrieval errors
+                if pub[1]:
+                    noncrits.append(pub[1])
 
         else:
             gs['pub_id'] = None  # empty pub
 
         ## Insert the data into the file table
-        gs['file_id'] = buFile(gs['values'])
+        gs['file_id'] = create_geneset_file(gs['values'])
         ## Insert new genesets and geneset_values
-        gs['gs_id'] = db.insertGeneset(gs)
-        gsverr = buGenesetValues(gs)
+        gs['gs_id'] = db.insert_geneset(gs)
+        gsverr = create_geneset_values(gs)
 
         ## Update gs_count if some geneset_values were found to be invalid
         if gsverr[0] != len(gs['values']):
-            db.updateGenesetCount(gs['gs_id'], gsverr[0])
+            db.update_geneset_count(gs['gs_id'], gsverr[0])
 
         added.append(gs['gs_id'])
 
         ## Non-critical errors discovered during geneset_value creation
         if gsverr[1]:
             noncrits.extend(gsverr[1])
-
-    db.commit()
 
     return (added, noncrits)
 

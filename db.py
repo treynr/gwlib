@@ -878,15 +878,6 @@ def insert_file(size, contents, comments):
     :ret int: a GW file ID (file_id)
     """
 
-    if 'pub_pubmed' not in pub:
-        pub['pub_pubmed'] = None
-
-    else:
-        pub_id = get_publication(pub['pub_pubmed'])
-
-        if pub_id != 0:
-            return pub_id
-
     with PooledCursor() as cursor:
 
         cursor.execute(
@@ -927,6 +918,26 @@ def update_geneset_status(gs_id, status):
             WHERE   gs_id = %s;
             ''', 
                 (status, gs_id)
+        )
+
+        return cursor.rowcount
+
+def update_geneset_count(gs_id, gs_count):
+    """
+    Update the size of a geneset.
+
+    :ret int: the number of rows affected by the update
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            UPDATE  production.geneset
+            SET     gs_count = %s
+            WHERE   gs_id = %s;
+            ''', 
+                (gs_count, gs_id)
         )
 
         return cursor.rowcount
