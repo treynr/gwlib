@@ -29,9 +29,11 @@ import json
 import random
 import re
 import urllib2 as url2
-import config
 
 import db
+
+        ## UTILITY ##
+        #############
 
 def readBatchFile(fp):
     """
@@ -45,12 +47,14 @@ def readBatchFile(fp):
     with open(fp, 'r') as fl:
         return fl.readlines()
 
-def makeDigrams(s):
+def make_digrams(s):
     """
     Recursively creates an exhaustive list of digrams from the given string.
 
-    :arg string:
-    :ret list: list of strings, each string is a digram
+    :type s: str
+    :arg s: string to generate digrams with
+
+    :ret list: list of digram strings
     """
 
     if len(s) <= 2:
@@ -61,22 +65,26 @@ def makeDigrams(s):
 
     return b
 
-def calcStringSimilarity(s1, s2):
+def calculate_str_similarity(s1, s2):
     """
     Calculates the percent similarity between two strings. Meant to be a
     replacement for PHP's similar_text function, which old GeneWeaver uses
     to determine the right microarray platform to use.
     Couldn't find how similar_text was implemented (just that it used some
     algorithm in the book 'Programming Classics' by Oliver) so this function
-    is fairly different but achieves the same result. This algorithm uses
-    digrams and their intersections to determine percent similarity. It is
-    calculated as:
+    was written achieve similar results. This algorithm uses digrams and 
+    their intersections to determine percent similarity. It is calculated
+    as:
 
     sim(s1, s2) = (2 * intersection(digrams(s1), digrams(s2)) /
                    |digrams(s1) + digrams(s2)|
 
-    :param string:
-    :param string:
+    :type s1: str
+    :arg s1: string #1
+
+    :type s2: str
+    :arg s2: string #2
+
     :ret float: percent similarity
     """
 
@@ -98,11 +106,17 @@ def parseScoreType(s):
         6.0 < Effect < 22.50
     The numbers listed above are only examples and can vary depending on
     geneset. If those numbers can't be parsed for some reason, default values
-    (e.g. 0.05) are used.
-    There is an issue with the regexs in this function. See the TODO list
-    at the top of the file for a description.
+    (e.g. 0.05) are used. The score types are converted into a numeric
+    representation:
+        P-Value = 1
+        Q-Value = 2
+        Binary = 3
+        Correlation = 4
+        Effect = 5
 
-    :param string: string containing score type and possibly threshold value
+    :type s: str
+    :arg s: string containing score type and possibly threshold value(s)
+
     :return tuple: (gs_threshold_type, gs_threshold, errors)
     """
 
@@ -170,55 +184,6 @@ def parseScoreType(s):
     return (stype, thresh, error)
 
 
-#### makeGeneset
-##
-##
-def makeGeneset(name, abbr, desc, spec, pub, grp, ttype, thresh, gtype, vals,
-                usr=0, cur_id=5):
-    """
-    Given a shitload of arguments, this function returns a dictionary
-    representation of a single geneset. Each key is a different column found
-    in the geneset table. Not all columns are (or need to be) represented.
-
-    TODO:	Need to retrieve the user's id and attach it, right now it just
-            uses a placeholder.
-
-    :arg string: geneset name
-    :arg string: geneset abbreviation
-    :arg string: geneset description
-    :arg int: species ID, converted to an int if a string
-    :arg int: publication ID
-    :arg string: group ID, should be a string not an int
-    :arg int: threshold type
-    :arg string: geneset threshold, see parseScoreType for a description
-    :arg int: gene ID type
-    :arg list: geneset_values, a list of tuples (gene, value)
-    :arg int: user ID
-    :arg int: curation ID, unless specified it defaults to private (5)
-    :ret dict: geneset
-    """
-
-    gs = {}
-
-    gs['gs_name'] = name
-    gs['gs_abbreviation'] = abbr
-    gs['gs_description'] = desc
-    gs['sp_id'] = int(spec)
-    gs['gs_groups'] = grp
-    gs['pub_id'] = pub  # The pubmed article still needs to retrieved
-    gs['gs_threshold_type'] = int(ttype)
-    gs['gs_threshold'] = thresh
-    gs['gs_gene_id_type'] = int(gtype)
-    gs['usr_id'] = int(usr)
-    gs['values'] = vals  # Not a column in the geneset table; processed later
-
-    ## Other fields we can fill out
-    gs['gs_count'] = len(vals)
-    gs['cur_id'] = cur_id  # auto private tier?
-
-    return gs
-
-
 #### getPubmedInfo
 ##
 #### Retrieves Pubmed article info from the NCBI servers using the NCBI eutils.
@@ -279,42 +244,53 @@ def getPubmedInfo(pmid):
 #### parseBatchFile
 ##
 ##
-def parseBatchFile(lns, usr=0, cur=5):
+def parse_batch_file(lns):
     """
-    Parses the batch file according to the format listed on
+    Parses a batch file according to the format listed on
     http://geneweaver.org/index.php?action=manage&cmd=batchgeneset
 
-    :param list: list of strings, one per line of the batch file
-    :param int: user ID to associate with the parsed genesets
-    :param int: curation ID
-    :ret tuple: triplet (list of gensets, list of warnings, list of errors)
+    :type lns: list
+    :arg lns: each of the lines found in a batch file
+
+    :ret tuple: (geneset list, warning list, error list)
     """
 
     genesets = []
-    gsvals = []  # geneset_values, here as a list of tuples (sym, pval)
-    abbr = ''  # geneset abbreviation
-    name = ''  # geneset name
-    desc = ''  # geneset description
-    gene = ''  # gene type (gs_gene_id_type)
-    pub = None  # pubmed ID
-    group = 'private'  # group (public or private)
-    stype = ''  # score type (gs_threshold_type)
-    thresh = '0.05'  # threshold value for scores
-    spec = ''  # species name
-    cerr = ''  # critical errors discovered during parsing
-    ncerr = []  # non-critical errors discovered during parsing
-    errors = [] # critical errors discovered during parsing
-    warns = [] # non-critical errors discovered during parsing
+    ## geneset_values, here as a list of tuples (symbol, value)
+    gsvals = []  
+    ## geneset abbreviation
+    abbr = ''
+    ## geneset name
+    name = ''
+    ## geneset description
+    desc = ''
+    ## gene ID type (gs_gene_id_type)
+    gene = ''
+    ## PubMed ID, later converted to a GW pub_id
+    pub = None
+    ## Group identifier, default is private (gs_groups)
+    group = '-1'
+    ## Score type (gs_threshold_type)
+    stype = ''
+    ## Threshold value (gs_threshold)
+    thresh = '0.05'
+    ## Species name, later converted to a GW sp_id
+    spec = ''
+    ## Critical errors discovered during parsing
+    cerr = ''
+    ## Non-critical errors discovered during parsing
+    ncerr = []
+    ## Critical errors discovered during parsing
+    errors = []
+    ## Non-critical errors discovered during parsing
+    warns = [] 
 
-    #for ln in lns:
     for i in range(len(lns)):
-        #ln = eatWhiteSpace(ln)
         lns[i] = lns[i].strip()
 
-        ## :, =, + are required for all datasets
+        ## :, =, + is required for each geneset in the batch file
         #
         ## Lines beginning with ':' are geneset abbreviations (REQUIRED)
-        #if ln[:1] == ':':
         if lns[i][:1] == ':':
             ## This checks to see if we've already read in some geneset_values
             ## If we have, that means we can save the geneset, clear out any
@@ -329,11 +305,9 @@ def parseBatchFile(lns, usr=0, cur=5):
                 gsvals = []
                 genesets.append(gs)
 
-            #abbr = eatWhiteSpace(ln[1:])
-            abbr = eatWhiteSpace(lns[i][1:])
+            abbr = lns[i][1:].strip()
 
         ## Lines beginning with '=' are geneset names (REQUIRED)
-        #elif ln[:1] == '=':
         elif lns[i][:1] == '=':
             ## This checks to see if we've already read in some geneset_values
             ## If we have, that means we can save the geneset, clear out any
@@ -348,11 +322,9 @@ def parseBatchFile(lns, usr=0, cur=5):
                 gsvals = []
                 genesets.append(gs)
 
-            #name = eatWhiteSpace(ln[1:])
-            name = eatWhiteSpace(lns[i][1:])
+            name = lns[i][1:].strip()
 
         ## Lines beginning with '+' are geneset descriptions (REQUIRED)
-        #elif ln[:1] == '+':
         elif lns[i][:1] == '+':
             ## This checks to see if we've already read in some geneset_values
             ## If we have, that means we can save the geneset, clear out any
@@ -367,25 +339,20 @@ def parseBatchFile(lns, usr=0, cur=5):
                 gsvals = []
                 genesets.append(gs)
 
-            #desc += eatWhiteSpace(ln[1:])
-            desc += eatWhiteSpace(lns[i][1:])
+            desc += lns[i][1:].strip()
             desc += ' '
 
         ## !, @, %, are required but can be omitted from later sections if
         ## they don't differ from the first.
         #
         ## Lines beginning with '!' are score types (REQUIRED)
-        #elif ln[:1] == '!':
         elif lns[i][:1] == '!':
-            #score = eatWhiteSpace(ln[1:])
-            score = eatWhiteSpace(lns[i][1:])
-            score = parseScoreType(score)
+            score = lns[i][1:].strip()
+            score = parse_score_type(score)
 
             ## Indicates a critical error has occured (no score type w/ an
             ## error message)
             if not score[0] and score[2]:
-                #cerr = score[2]
-                #break
                 errors.append(score[2])
 
             else:
@@ -394,20 +361,17 @@ def parseBatchFile(lns, usr=0, cur=5):
 
             ## Any warnings
             if score[0] and score[2]:
-                #ncerr.append(score[2])
                 warns.append(score[2])
 
         ## Lines beginning with '@' are species types (REQUIRED)
-        #elif ln[:1] == '@':
         elif lns[i][:1] == '@':
-            #spec = eatWhiteSpace(ln[1:])
-            spec = eatWhiteSpace(lns[i][1:])
-            specs = db.getSpecies()
+            spec = lns[i][1:].strip()
+            specs = db.get_species()
+
+            for sp_name, sp_id in specs.items():
+                specs[sp_name.lower()] = sp_id
 
             if spec.lower() not in specs.keys():
-                #cerr = ('Critical error! There is no data for the species (%s) '
-                #        'you specified. ' % spec)
-                #break
                 err = 'LINE %s: %s is an invalid species' % (i + 1, spec)
                 errors.append(err)
 
@@ -416,28 +380,25 @@ def parseBatchFile(lns, usr=0, cur=5):
                 spec = specs[spec.lower()]
 
         ## Lines beginning with '%' are gene ID types (REQUIRED)
-        #elif ln[:1] == '%':
         elif lns[i][:1] == '%':
-            #gene = eatWhiteSpace(ln[1:])
-            gene = eatWhiteSpace(lns[i][1:])
+            gene = lns[i][1:].strip()
 
-            ## In the PHP source, it looks like the gene type is checked
-            ## to see if it's a microarray first, if it is then the pf_id is
-            ## used, otherwise gdb_id is used. Doesn't make much sense because
-            ## some pf_ids overlap with gdb_ids. On second glance the PHP code
-            ## for gene id types makes no fucking sense but whatever.
+            ## Gene ID representation is fucking ass backwards. If a 
+            ## microarray platform is specified, the best possible match above
+            ## a given threshold is found and used. All other gene types are 
+            ## retrieved from the DB and their ID types are negated. 
             if gene.lower().find('microarray') != -1:
-                plats = db.getMicroarrayTypes()
-                origplat = gene
-                gene = gene[len('microarray '):]  # delete 'microarray ' text
+                plats = db.get_microarray_types()
+                ## Remove 'microarray ' text
+                gene = gene[len('microarray '):]
+                original = gene
 
-                ## Determine the closest microarry platform match. The PHP
-                ## function calculated % string similarity between the user
-                ## supplied platform and the list of plats in the db, choosing
-                ## the one with the best match
+                ## Determine the closest microarry platform match above a 70%
+                ## similarity threshold.
                 best = 0.70
+
                 for plat, pid in plats.items():
-                    sim = calcStringSimilarity(plat.lower(), origplat.lower())
+                    sim = calc_str_similarity(plat.lower(), original.lower())
 
                     if sim > best:
                         best = sim
@@ -448,12 +409,8 @@ def parseBatchFile(lns, usr=0, cur=5):
 
                 if type(gene) != int:
                     err = 'LINE %s: %s is an invalid platform' % \
-                          (i + 1, origplat)
+                          (i + 1, original)
                     errors.append(err)
-                    #cerr = ('Critical error! We aren\'t sure what microarray '
-                    #        'platform (%s) you specified. Check the list of '
-                    #        'supported platforms.' % origplat)
-                    #break
 
             ## Otherwise the user specified one of the gene types, not a
             ## microarray platform
@@ -756,13 +713,13 @@ def buGenesets(fp, usr_id=0, cur_id=5):
         gs['gs_id'] = db.insertGeneset(gs)
         gsverr = buGenesetValues(gs)
 
-        # Update gs_count if some geneset_values were found to be invalid
+        ## Update gs_count if some geneset_values were found to be invalid
         if gsverr[0] != len(gs['values']):
             db.updateGenesetCount(gs['gs_id'], gsverr[0])
 
         added.append(gs['gs_id'])
 
-        # Non-critical errors discovered during geneset_value creation
+        ## Non-critical errors discovered during geneset_value creation
         if gsverr[1]:
             noncrits.extend(gsverr[1])
 

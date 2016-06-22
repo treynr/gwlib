@@ -106,7 +106,7 @@ def parse_generic_file(fp, delim='\t'):
     return data
 
 def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
-                 gene_type, gene_vals, usr_id, cur_id=5):
+                 gene_type, gene_vals, usr_id, cur_id=5, file_id=0):
     """
     Given a shitload of arguments, this function returns a dictionary
     representation of a single geneset. Each key is a different column found
@@ -147,6 +147,9 @@ def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
 
     :type cur_id: int
     :arg cur_id: curation tier
+
+    :type file_id: int
+    :arg file_id: file ID
 
     :ret dict: 
     """

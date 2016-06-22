@@ -567,6 +567,24 @@ def get_geneset_size(gs_ids):
 
         return associate(cursor)
 
+def get_gene_types():
+    """
+    Returns a mapping of gene type names to their IDs.
+
+    :ret dict: mapping of gdb_name -> gdb_id
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  gdb_name, gdb_id
+            FROM    odestatic.genedb;
+            '''
+        )
+
+        return associate(cursor)
+
 def get_microarray_types():
     """
     Returns the list of supported microarray platforms as a mapping of platform
