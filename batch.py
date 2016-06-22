@@ -285,6 +285,19 @@ def parse_batch_file(lns):
     ## Non-critical errors discovered during parsing
     warns = [] 
 
+    gene_types = db.get_gene_types()
+    species = db.get_species()
+    platforms = db.get_microarray_types()
+
+    for gdb_name, gdb_id in types.items():
+        gene_types[gdb_name.lower()] = gdb_id
+
+    for sp_name, sp_id in specs.items():
+        specs[sp_name.lower()] = sp_id
+
+    for pf_name, pf_id in platforms.items():
+        platforms[pf_name.lower()] = pf_id
+
     for i in range(len(lns)):
         lns[i] = lns[i].strip()
 
@@ -366,10 +379,6 @@ def parse_batch_file(lns):
         ## Lines beginning with '@' are species types (REQUIRED)
         elif lns[i][:1] == '@':
             spec = lns[i][1:].strip()
-            specs = db.get_species()
-
-            for sp_name, sp_id in specs.items():
-                specs[sp_name.lower()] = sp_id
 
             if spec.lower() not in specs.keys():
                 err = 'LINE %s: %s is an invalid species' % (i + 1, spec)
@@ -388,7 +397,6 @@ def parse_batch_file(lns):
             ## a given threshold is found and used. All other gene types are 
             ## retrieved from the DB and their ID types are negated. 
             if gene.lower().find('microarray') != -1:
-                plats = db.get_microarray_types()
                 ## Remove 'microarray ' text
                 gene = gene[len('microarray '):]
                 original = gene
@@ -397,7 +405,7 @@ def parse_batch_file(lns):
                 ## similarity threshold.
                 best = 0.70
 
-                for plat, pid in plats.items():
+                for plat, pid in platforms.items():
                     sim = calc_str_similarity(plat.lower(), original.lower())
 
                     if sim > best:
@@ -405,7 +413,7 @@ def parse_batch_file(lns):
                         gene = plat
 
                 ## Convert to the ID, gene will now be an integer
-                gene = plats.get(gene, 'unknown')
+                gene = platforms.get(gene, 'unknown')
 
                 if type(gene) != int:
                     err = 'LINE %s: %s is an invalid platform' % \
@@ -418,12 +426,8 @@ def parse_batch_file(lns):
             ## gs_gene_id_types while all other types (e.g. symbols) should
             ## have negative (-) integer ID types.
             else:
-                types = db.getGeneTypes()
 
                 if gene.lower() not in types.keys():
-                    #cerr = ('Critical error! There is no data for the gene type '
-                    #        '(%s) you specified.' % gene)
-                    #break
                     err = 'LINE %s: %s is an invalid gene type' % (i + 1, gene)
                     errors.append(err)
 
@@ -432,7 +436,6 @@ def parse_batch_file(lns):
                     gene = types[gene.lower()]
                     ## Negate, see comment tagged important above
                     gene = -gene
-
 
         ## Lines beginning with 'P ' are PubMed IDs (OPTIONAL)
         #elif (ln[:2].lower() == 'p ') and (len(ln.split('\t')) == 1):
