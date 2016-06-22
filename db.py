@@ -551,7 +551,7 @@ def get_geneset_size(gs_ids):
     :type gs_ids: list
     :arg gs_ids: geneset IDs
 
-    :ret list: mapping of gs_id to size (gs_count)
+    :ret dict: mapping of gs_id to size (gs_count)
     """
 
     with PooledCursor() as cursor:
@@ -563,6 +563,82 @@ def get_geneset_size(gs_ids):
             WHERE   gs_id IN %s;
             ''',
                 (gs_ids,)
+        )
+
+        return associate(cursor)
+
+def get_microarray_types():
+    """
+    Returns the list of supported microarray platforms as a mapping of platform
+    names -> IDs.
+
+    :ret dict: mapping of pf_name -> pf_id
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  pf_name, pf_id
+            FROM    odestatic.platform;
+            '''
+        )
+
+        return associate(cursor)
+
+def get_platform_probes(pf_id, refs):
+    """
+    Returns a mapping of probe names (prb_ref_ids from a particular microarray
+    platform) to their IDs.
+
+    :type pf_id: int
+    :arg pf_id: platform ID
+
+    :type refs: list
+    :arg refs: list of probe references/names
+
+    :ret dict: mapping of pf_id -> prb_ref_id
+    """
+
+    if type(refs) == list:
+        refs = tuple(refs)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  prb_ref_id, prb_id
+            FROM    odestatic.probe
+            WHERE   pf_id = %s AND
+                    prb_ref_id IN %s;
+            ''',
+                (pf_id, refs)
+        )
+
+        return associate(cursor)
+
+def get_probe2gene(prb_ids):
+    """
+    Returns a mapping of prb_ids -> ode_gene_ids for the given set of prb_ids.
+
+    :type refs: list
+    :arg refs: list of probe references/names
+
+    :ret dict: mapping of prb_id -> ode_gene_id
+    """
+
+    if type(prb_ids) == list:
+        prb_ids = tuple(prb_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  prb_id, ode_gene_id
+            FROM    extsrc.probe2gene
+            WHERE   prb_id in %s;
+            ''',
+                (prb_ids)
         )
 
         return associate(cursor)

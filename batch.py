@@ -1,14 +1,10 @@
-
-
-__author__ = 'baker'
-__author__ = 'reynolds'
-
-# !/usr/bin/python
+#!/usr/bin/env python
 
 ## file:    batch.py
 ## desc:    Rewrite of the PHP batch geneset upload function.
 ## vers:    0.2.1
-## auth:    TR
+## auth:    Baker
+##          TR
 #
 ## TODO:    1. The regex taken from the PHP code for effect and correlation
 ##	    scores doesn't work on all input cases. It breaks for cases such
@@ -35,7 +31,8 @@ import random
 import re
 import urllib2 as url2
 import config
-#import geneweaverdb
+
+import db
 
 #### TheDB
 ##
