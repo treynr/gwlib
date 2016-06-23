@@ -31,9 +31,18 @@ import re
 import urllib2 as url2
 
 import db
+import util
 
         ## UTILITY ##
         #############
+
+def read_file(fp):
+    """
+    Reads a file and splits it into lines.
+    """
+
+    with open(fp, 'r') as fl:
+        return fl.read().split('\n')
 
 def make_digrams(s):
     """
@@ -85,7 +94,7 @@ def calculate_str_similarity(s1, s2):
         ## PARSERS ##
         #############
 
-def parseScoreType(s):
+def parse_score_type(s):
     """
     Attempts to parse out the score type and any threshold value
     from a given string.
@@ -263,6 +272,11 @@ def parse_batch_syntax(lns):
     thresh = '0.05'
     ## Species name, later converted to a GW sp_id
     spec = ''
+    ## Curation tier
+    cur_id = 5
+    usr_id = 0
+    ## Attribution
+    at_id = None
     ## Critical errors discovered during parsing
     cerr = ''
     ## Non-critical errors discovered during parsing
@@ -276,17 +290,48 @@ def parse_batch_syntax(lns):
     species = db.get_species()
     platforms = db.get_microarray_types()
 
-    for gdb_name, gdb_id in types.items():
+    def reset_add_geneset():
+        gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype, 
+                               thresh, gene, gsvals, at_id, usr_id, cur_id)
+        abbr = ''
+        desc = ''
+        name = ''
+        gsvals = []
+        genesets.append(gs)
+
+    for gdb_name, gdb_id in gene_types.items():
         gene_types[gdb_name.lower()] = gdb_id
 
-    for sp_name, sp_id in specs.items():
-        specs[sp_name.lower()] = sp_id
+    for sp_name, sp_id in species.items():
+        species[sp_name.lower()] = sp_id
 
     for pf_name, pf_id in platforms.items():
         platforms[pf_name.lower()] = pf_id
 
     for i in range(len(lns)):
         lns[i] = lns[i].strip()
+
+        ## These are special additions to the batch file that allow curation
+        ## tiers, user IDs, and attributions to be specified.
+        #
+        ## Lines beginning with 'T' are Tier IDs
+        if lns[i][:2].lower() == 't ':
+            if gsvals:
+                reset_add_geneset()
+
+            cur_id = int(lns[i][1:].strip())
+
+        elif lns[i][:2].lower() == 'u ':
+            if gsvals:
+                reset_add_geneset()
+
+            usr_id = int(lns[i][1:].strip())
+
+        elif lns[i][:2].lower() == 'd ':
+            if gsvals:
+                reset_add_geneset()
+
+            at_id = int(lns[i][1:].strip())
 
         ## :, =, + is required for each geneset in the batch file
         #
@@ -296,14 +341,15 @@ def parse_batch_syntax(lns):
             ## If we have, that means we can save the geneset, clear out any
             ## REQUIRED fields before we do more parsing, and start over
             if gsvals:
-                gs = util.make_geneset(name, abbr, desc, spec, pub, group,
-                                       stype, thresh, gene, gsvals, usr, cur)
-                ## Start a new dataset
-                abbr = ''
-                desc = ''
-                name = ''
-                gsvals = []
-                genesets.append(gs)
+                reset_add_geneset()
+                #gs = util.make_geneset(name, abbr, desc, spec, pub, group,
+                #                       stype, thresh, gene, gsvals)
+                ### Start a new dataset
+                #abbr = ''
+                #desc = ''
+                #name = ''
+                #gsvals = []
+                #genesets.append(gs)
 
             abbr = lns[i][1:].strip()
 
@@ -313,14 +359,15 @@ def parse_batch_syntax(lns):
             ## If we have, that means we can save the geneset, clear out any
             ## REQUIRED fields before we do more parsing, and start over
             if gsvals:
-                gs = util.make_geneset(name, abbr, desc, spec, pub, group,
-                                       stype, thresh, gene, gsvals, usr, cur)
-                ## Start a new dataset
-                abbr = ''
-                desc = ''
-                name = ''
-                gsvals = []
-                genesets.append(gs)
+                reset_add_geneset()
+                #gs = util.make_geneset(name, abbr, desc, spec, pub, group,
+                #                       stype, thresh, gene, gsvals)
+                ### Start a new dataset
+                #abbr = ''
+                #desc = ''
+                #name = ''
+                #gsvals = []
+                #genesets.append(gs)
 
             name = lns[i][1:].strip()
 
@@ -330,14 +377,15 @@ def parse_batch_syntax(lns):
             ## If we have, that means we can save the geneset, clear out any
             ## REQUIRED fields before we do more parsing, and start over
             if gsvals:
-                gs = util.make_geneset(name, abbr, desc, spec, pub, group,
-                                       stype, thresh, gene, gsvals, usr, cur)
-                ## Start a new dataset
-                abbr = ''
-                desc = ''
-                name = ''
-                gsvals = []
-                genesets.append(gs)
+                reset_add_geneset()
+                #gs = util.make_geneset(name, abbr, desc, spec, pub, group,
+                #                       stype, thresh, gene, gsvals)
+                ### Start a new dataset
+                #abbr = ''
+                #desc = ''
+                #name = ''
+                #gsvals = []
+                #genesets.append(gs)
 
             desc += lns[i][1:].strip()
             desc += ' '
@@ -493,7 +541,7 @@ def parse_batch_syntax(lns):
 
     else:
         gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype,
-                               thresh, gene, gsvals, usr, cur)
+                               thresh, gene, gsvals)
         genesets.append(gs)
 
         return (genesets, warns, errors)
@@ -519,7 +567,7 @@ def create_geneset_file(genes):
     for tup in genes:
         conts += (tup[0] + '\t' + tup[1] + '\n')
 
-    return db.insertFile(len(conts), makeRandomFilename(), conts, '')
+    return db.insert_file(len(conts), conts, '')
 
 
 def create_geneset_values(gs):
@@ -533,13 +581,13 @@ def create_geneset_values(gs):
 
     ## Geneset values should be a list of tuples (symbol, pval)
     ## First we attempt to map them to the internal ode_gene_ids
-    symbols = filter(lambda x: not not x, gs['values'])
+    symbols = filter(lambda x: not not x, gs['geneset_values'])
     symbols = map(lambda x: x[0], symbols)
 
     ## Negative numbers indicate normal gene types (found in genedb) while
     ## positive numbers indicate expression platforms and more work :(
     if gs['gs_gene_id_type'] < 0:
-        sym2ode = db.get_gene_ids_by_species(gs['sp_id'], symbols)
+        sym2ode = db.get_gene_ids_by_species(symbols, gs['sp_id'])
 
     else:
         sym2probe = db.get_platform_probes(gs['gs_gene_id_type'], symbols)
@@ -557,7 +605,7 @@ def create_geneset_values(gs):
     dups = dd(str)
     total = 0
 
-    for sym, value in gs['values']:
+    for sym, value in gs['geneset_values']:
 
         ## Platform handling
         if gs['gs_gene_id_type'] > 0:
@@ -573,7 +621,7 @@ def create_geneset_values(gs):
             for ode in odes:
                 ## Check for duplicate ode_gene_ids, otherwise postgres bitches
                 if not dups[ode]:
-                    dups[ode] = tup[0]
+                    dups[ode] = sym
 
                 else:
                     err = ('Error! Seems that %s is a duplicate of %s. %s was not '
@@ -583,42 +631,44 @@ def create_geneset_values(gs):
                     continue
 
                 db.insert_geneset_value(gs['gs_id'], ode, value, sym,
-                                        value <= gs['gs_threshold'])
+                                        gs['gs_threshold'])
 
                 total += 1
 
             continue
 
         ## Not platform stuff
-        if not sym2ode[tup[0].lower()]:
+        if not sym2ode[sym]:
             err = ("Error! There doesn't seem to be any gene/locus data for "
-                   "%s in the database." % tup[0])
+                   "%s in the database." % sym)
             noncrit.append(err)
             continue
 
         ## Check for duplicate ode_gene_ids, otherwise postgres bitches
-        if not dups[sym2ode[tup[0].lower()]]:
-            dups[sym2ode[tup[0].lower()]] = tup[0]
+        if not dups[sym2ode[sym]]:
+            dups[sym2ode[sym]] = sym
 
         else:
             err = ('Error! Seems that %s is a duplicate of %s. %s was not '
                    'added to the geneset.' %
-                   (tup[0], dups[sym2ode[tup[0].lower()]], tup[0]))
+                   (sym, dups[sym2ode[sym]], sym))
             noncrit.append(err)
             continue
 
-        ## Remember to lower that shit, forgot earlier :(
-        db.insert_geneset_value(gs['gs_id'], sym2ode[tup[0].lower()], value,
-                                sym, value < gs['gs_threshold'])
+        db.insert_geneset_value(gs['gs_id'], sym2ode[sym], value,
+                                sym, gs['gs_threshold'])
 
         total += 1
 
     return (total, noncrit)
 
 
-def parse_batch_file(fp):
+def parse_batch_file(fp, cur_id=None, usr_id=0):
     """
     Parses a batch file to completion.
+
+    :type fp: str
+    :arg fp: filepath to a batch file
 
     :type fp: str
     :arg fp: filepath to a batch file
@@ -628,7 +678,7 @@ def parse_batch_file(fp):
     added = []  # list of gs_ids successfully added to the db
 
     ## returns (genesets, non-critical errors, critical errors)
-    b = parseBatchFile(readBatchFile(fp), usr_id, cur_id)
+    b = parse_batch_syntax(read_file(fp))
 
     ## A critical error has occurred
     if b[2]:
@@ -638,8 +688,27 @@ def parse_batch_file(fp):
         genesets = b[0]
         noncrits = b[1]
 
+    ## Custom tier
+    if cur_id:
+        for gs in genesets:
+            gs.update({'cur_id': cur_id})
+
+    ## Custom usr_id or just use guest ID
+    for gs in genesets:
+        gs.update({'usr_id': usr_id})
+
+    attributions = db.get_attributions()
+
+    for abbrev, at_id in attributions.items():
+        ## Fucking none type in the db
+        if abbrev:
+            attributions[abbrev.lower()] = at_id
+
+    for gs in genesets:
+        gs.update({'usr_id': usr_id})
+
     ## Geneset post-processing: PubMed retrieval, gene -> ode_gene_id mapping,
-    ## and file table insertion
+    ## attribution mapping, and file table insertion
     for gs in genesets:
         ## If a PMID was provided, we get the info from NCBI
         if gs['pub_id']:
@@ -650,7 +719,7 @@ def parse_batch_file(fp):
                 gs['pub_id'] = None
 
             else:
-                gs['pub_id'] = db.insertPublication(gs['pub_id'])
+                gs['pub_id'] = db.insert_publication(gs['pub_id'])
 
                 ## Non-critical pubmed retrieval errors
                 if pub[1]:
@@ -659,14 +728,18 @@ def parse_batch_file(fp):
         else:
             gs['pub_id'] = None  # empty pub
 
+        if gs['at_id']:
+            gs['at_id'] = attributions.get(gs['at_id'], None)
+
         ## Insert the data into the file table
-        gs['file_id'] = create_geneset_file(gs['values'])
-        ## Insert new genesets and geneset_values
+        gs['file_id'] = create_geneset_file(gs['geneset_values'])
+        ## Insert new genesets...
         gs['gs_id'] = db.insert_geneset(gs)
+        ## ...then geneset_values
         gsverr = create_geneset_values(gs)
 
         ## Update gs_count if some geneset_values were found to be invalid
-        if gsverr[0] != len(gs['values']):
+        if gsverr[0] != len(gs['geneset_values']):
             db.update_geneset_count(gs['gs_id'], gsverr[0])
 
         added.append(gs['gs_id'])
@@ -705,7 +778,7 @@ if __name__ == '__main__':
         opts.cur_id = 5
 
     ## Where all the magic happens
-    stuff = buGenesets(args[1], opts.usr_id, opts.cur_id)
+    stuff = parse_batch_file(args[1], opts.cur_id, opts.usr_id)
 
     print '[+] The following genesets were added:'
     print ', '.join(map(str, stuff[0]))

@@ -506,8 +506,8 @@ def get_publication(pmid):
             '''
             SELECT      pub_id
             FROM        production.publication
-            WHERE       pub_pubmed = %s;
-            ORDER BY    pub_id ASC
+            WHERE       pub_pubmed = %s
+            ORDER BY    pub_id ASC;
             ''',
                 (pmid,)
         )
@@ -698,6 +698,9 @@ def insert_geneset(gs):
     if ('gs_groups' not in gs):
         gs['gs_groups'] = 0
 
+    if 'gs_attribution' not in gs:
+        gs['gs_attribution'] = None
+
     with PooledCursor() as cursor:
 
         cursor.execute(
@@ -706,7 +709,7 @@ def insert_geneset(gs):
 
                 (usr_id, file_id, gs_name, gs_abbreviation, pub_id, cur_id,
                 gs_description, sp_id, gs_count, gs_threshold_type,
-                gs_threshold, gs_groups, gs_gene_id_type, gs_created, gsv_qual,
+                gs_threshold, gs_groups, gs_gene_id_type, gs_created,
                 gs_attribution)
 
             VALUES
@@ -715,15 +718,12 @@ def insert_geneset(gs):
                 %(pub_id)s, %(cur_id)s, %(gs_description)s, %(sp_id)s, 
                 %(gs_count)s, %(gs_threshold_type)s, %(gs_threshold)s, 
                 %(gs_groups)s, %(gs_gene_id_type)s, %(gs_created)s, 
-                %(gsv_qual)s, %(gs_attribution))
+                %(gs_attribution)s)
             
             RETURNING gs_id;
             ''', 
                 gs
         )
-
-        ## Returns a list of tuples [(gs_id)]
-        res = g_cur.fetchone()
 
         return cursor.fetchone()[0]
 
@@ -750,7 +750,7 @@ def insert_geneset_value(gs_id, gene_id, value, name, threshold):
     """
 
     ## thresh will eventually specify the value for gsv_in_threshold
-    thresh = 't' if value <= thresh else 'f'
+    threshold = 't' if value <= threshold else 'f'
 
     with PooledCursor() as cursor:
 
@@ -763,15 +763,12 @@ def insert_geneset_value(gs_id, gene_id, value, name, threshold):
 
             VALUES
                 
-                (%s, %s, %s, %s, %s, %s, 0, NOW());
+                (%s, %s, %s, %s, %s, %s, 0, NOW())
 
             RETURNING gs_id;
             ''', 
-                (gs_id, gene_id, value, [name], [float(value)], thresh)
+                (gs_id, gene_id, value, [name], [float(value)], threshold)
         )
-
-        ## Returns a list of tuples [(gs_id)]
-        res = g_cur.fetchone()
 
         return cursor.fetchone()[0]
 

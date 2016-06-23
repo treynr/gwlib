@@ -106,7 +106,8 @@ def parse_generic_file(fp, delim='\t'):
     return data
 
 def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
-                 gene_type, gene_vals, usr_id, cur_id=5, file_id=0):
+                 gene_type, gene_vals, at_id=None, usr_id=0, cur_id=5, 
+                 file_id=0):
     """
     Given a shitload of arguments, this function returns a dictionary
     representation of a single geneset. Each key is a different column found
@@ -159,7 +160,7 @@ def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
     ## If the geneset isn't private, neither should the group be
     if cur_id != 5 and grps.find('-1'):
         grps = grps.split(',')
-        grps = map(lambda x: if x == '-1': '0' else x, grps)
+        grps = map(lambda x: '0' if x == '-1' else x, grps)
         grps = ','.join(grps)
 
     gs['gs_name'] = name
@@ -175,9 +176,10 @@ def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
     ## Not a column in the geneset table; but these are processed later since
     ## each geneset_value requires a gs_id
     gs['geneset_values'] = gene_vals
+    gs['at_id'] = at_id
 
     ## Other fields we can fill out
-    gs['gs_count'] = len(vals)
+    gs['gs_count'] = len(gene_vals)
     gs['cur_id'] = cur_id
 
     return gs
