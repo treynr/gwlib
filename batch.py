@@ -1,25 +1,13 @@
 #!/usr/bin/env python
 
 ## file:    batch.py
-## desc:    Batch file reader and writer.
-## vers:    0.2.1
+## desc:    Batch file reader and writer. This is a variant of the batch parser
+##          found in the GW2 sauce. It works the same way but decouples most of
+##          the DB code and adds support for specifying tiers, attributions, 
+##          and user IDs in the batch file.
 ## auth:    Baker
 ##          TR
 #
-## TODO:    1. The regex taken from the PHP code for effect and correlation
-##	    scores doesn't work on all input cases. It breaks for cases such
-##	    as "0.75 < Correlation." For almost all cases now though, it works.
-#
-##	    2. Genesets still need to be associated with a usr_id. This isn't
-## 	    done now because there's no point in getting usr_ids offline.
-##	    However, one of the cmd line args allows you to specify a usr_id.
-#
-##	    3. Actually determine gsv_in_threshold insead of just setting it
-##	    to be true lol.
-#
-##	    4. Better messages for duplicate/missing genes and pubmed errors
-##	    (i.e. provide the gs_name these failures are associated with).
-
 
 ## multisets because regular sets remove duplicates, requires python 2.7
 from collections import Counter as mset
