@@ -24,54 +24,69 @@ import util
         ## UTILITY ##
         #############
 
-def getPubmedInfo(pmid):
-    ## URL for pubmed article summary info
-    url = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?'
-           'retmode=json&db=pubmed&id=%s') % pmid
-    ## NCBI eFetch URL that only retrieves the abstract
-    url_abs = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
+def get_pubmed_info(pmid):
+    """
+    Retrieves PubMed article metadata for a given PMID.
+
+    arguments:
+        pmid: an int PubMed ID
+
+    returns:
+        a dict where each key corresponds to a column in the publication table.
+    """
+    ## Sumarry info includes everything but the abstract
+    sum_url = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?'
+               'retmode=json&db=pubmed&id=%s') % pmid
+    ## Abstract only
+    abs_url = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
                '?rettype=abstract&retmode=text&db=pubmed&id=%s') % pmid
 
     ## Sometimes the NCBI servers shit the bed and return errors that kill
     ## the python script, we catch these and just return blank pubmed info
-    try:
-        res = url2.urlopen(url).read()
-        res2 = url2.urlopen(url_abs).read()
+    for attempt in range(5):
+        try:
+            sum_res = url2.urlopen(url).read()
+            abs_res = url2.urlopen(url_abs).read()
 
-    except url2.HTTPError:
-        er = ('Error! There was a problem accessing the NCBI servers. No '
-              'PubMed info for the PMID you provided could be retrieved.')
-        return ({}, er)
+        except url2.HTTPError as e:
+            #print 'Error! Failed to retrieve a set of UniGene IDs from NCBI:'
+            #print e
+            continue
+
+        break
+
+    ## for-else construct, if the loop doesn't break (in our case this
+    ## indicates success) then this statement is executed
+    else:
+        return {}
 
     pinfo = {}
-    res = json.loads(res)
+    sum_res = json.loads(sum_res)
 
-    ## In case of KeyErrors...
+    ## Key errors will indicate an crucial metadata component of the article is
+    ## missing. If this occurs we won't insert any new pubs.
     try:
         pub = res['result']
         pub = pub[pmid]
 
         pinfo['pub_title'] = pub['title']
-        pinfo['pub_abstract'] = res2
+        pinfo['pub_abstract'] = abs_res
         pinfo['pub_journal'] = pub['fulljournalname']
-        pinfo['pub_volume'] = pub['volume']
-        pinfo['pub_pages'] = pub['pages']
+        pinfo['pub_volume'] = pub.get('volume', '')
+        pinfo['pub_pages'] = pub.get('pages', '')
         pinfo['pub_pubmed'] = pmid
-        pinfo['pub_authors'] = ''
+        pinfo['pub_authors'] = []
 
         ## Author struct {name, authtype, clustid}
         for auth in pub['authors']:
-            pinfo['pub_authors'] += auth['name'] + ', '
+            pinfo['pub_authors'].append(auth['name'])
 
-        ## Delete the last comma + space
-        pinfo['pub_authors'] = pinfo['pub_authors'][:-2]
+        pinfo['pub_authors'] = ','.join(pinfo['pub_authors'])
 
     except:
-        er = ('Error! The PubMed info retrieved from NCBI was incomplete. No '
-              'PubMed data will be attributed to this geneset.')
-        return ({}, er)
+        return {}
 
-    return (pinfo, '')
+    return pinfo
 
 def read_file(fp):
     """
@@ -131,16 +146,23 @@ def calculate_str_similarity(s1, s2):
         ## PARSERS ##
         #############
 
-class BatchReader():
+class BatchReader(object):
+    """
+    Class used to read and parse batch geneset files.
+
+
+    attributes:
+        filepath: string indicating the location of a batch file
+        genesets: list of dicts representing the parsed genesets
+        errors: list of strings indicating critical errors found during parsing
+        warns: list of strings indicating non-crit errors found during parsing
+    """
 
     def __init__(self, filepath):
 
         self.filepath = filepath
-        ## Parsed genesets
         self.genesets = []
-        ## Errors encountered during parsing--these prevent further parsing
         self.errors = []
-        ## Errors that aren't critical
         self.warns = []
 
     def __parse_score_type(s):
@@ -163,10 +185,12 @@ class BatchReader():
             Correlation = 4
             Effect = 5
 
-        :type s: str
-        :arg s: string containing score type and possibly threshold value(s)
+        arguments:
+            s: string containing score type and possibly threshold value(s)
 
-        :return tuple: (gs_threshold_type, gs_threshold)
+        returns:
+            a tuple containing the threshold type and threshold value. 
+            E.g. (gs_threshold_type, gs_threshold)
         """
 
         ## The score type, a numeric value but currently stored as a string
@@ -235,11 +259,11 @@ class BatchReader():
         """
         Parses a batch file according to the format listed on
         http://geneweaver.org/index.php?action=manage&cmd=batchgeneset
+        The results (parsed genesets) and any errors or warnings are stored in
+        their respective class attributes. 
 
-        :type lns: list
-        :arg lns: each of the lines found in a batch file
-
-        :ret tuple: (geneset list, warning list, error list)
+        arguments:
+            lns: list of strings, one for each line in the batch file
         """
 
         genesets = []
@@ -483,10 +507,12 @@ class BatchReader():
         Parses the geneset_values into the proper format for storage in the file
         table and inserts the result.
 
-        :type genes: list
-        :arg genes: geneset_value tuples (gene, value)
+        arguments:
+            genes: a list of tuples representing geneset values
+            e.g. [('Mobp', 0.001), ('Daxx', 0.2)]
 
-        :ret int: file_id of the newly inserted file
+        returns:
+            the file_id (int) of the newly inserted file
         """
 
         conts = ''
@@ -502,8 +528,12 @@ class BatchReader():
         Maps the given reference IDs to ode_gene_ids and inserts them into the
         geneset_value table.
 
-        :type gs: dict
-        :arg gs: geneset dict
+        arguments:
+            gs: a dict representing a geneset
+
+        returns:
+            an int indicating the total number of geneset_values inserted into
+            the DB.
         """
 
         ## Geneset values should be a list of tuples (symbol, pval)
@@ -581,92 +611,63 @@ class BatchReader():
         return total
 
 
-def parse_batch_file(fp, cur_id=None, usr_id=0):
-    """
-    Parses a batch file to completion.
+    def parse_batch_file(self):
+        """
+        Parses a batch file to completion.
 
-    :type fp: str
-    :arg fp: filepath to a batch file
+        arguments:
+            fp: a string, the filepath to a batch file
 
-    :type fp: str
-    :arg fp: filepath to a batch file
-    """
+        returns:
+            A list of ints. Each int is the gs_id of an inserted geneset.
+        """
 
-    noncrits = []  # non-critical errors we will inform the user about
-    added = []  # list of gs_ids successfully added to the db
+        ## list of gs_ids successfully added to the db
+        added = []  
 
-    ## returns (genesets, non-critical errors, critical errors)
-    b = __parse_batch_syntax(read_file(fp))
+        ## returns (genesets, non-critical errors, critical errors)
+        b = __parse_batch_syntax(read_file(fp))
 
-    ## A critical error has occurred
-    if b[2]:
-        return b
+        if self.errors:
+            return []
 
-    else:
-        genesets = b[0]
-        noncrits = b[1]
+        attributions = db.get_attributions()
 
-    ## Custom tier
-    if cur_id:
+        for abbrev, at_id in attributions.items():
+            ## Fucking none type in the db
+            if abbrev:
+                attributions[abbrev.lower()] = at_id
+
+        ## Geneset post-processing: PubMed retrieval, gene -> ode_gene_id mapping,
+        ## attribution mapping, and file table insertion
         for gs in genesets:
-            gs.update({'cur_id': cur_id})
+            ## If a PMID was provided, we get the info from NCBI
+            if gs['pub_id']:
+                pub = get_pubmed_info(gs['pub_id'])
 
-    ## Custom usr_id or just use guest ID
-    for gs in genesets:
-        gs.update({'usr_id': usr_id})
+                if not pub:
+                    gs['pub_id'] = None
 
-    attributions = db.get_attributions()
-
-    for abbrev, at_id in attributions.items():
-        ## Fucking none type in the db
-        if abbrev:
-            attributions[abbrev.lower()] = at_id
-
-    for gs in genesets:
-        gs.update({'usr_id': usr_id})
-
-    ## Geneset post-processing: PubMed retrieval, gene -> ode_gene_id mapping,
-    ## attribution mapping, and file table insertion
-    for gs in genesets:
-        ## If a PMID was provided, we get the info from NCBI
-        if gs['pub_id']:
-            pub = getPubmedInfo(gs['pub_id'])
-            gs['pub_id'] = pub[0]
-
-            if not pub[0]:
-                gs['pub_id'] = None
+                else:
+                    gs['pub_id'] = db.insert_publication(pub)
 
             else:
-                gs['pub_id'] = db.insert_publication(gs['pub_id'])
+                gs['pub_id'] = None
 
-                ## Non-critical pubmed retrieval errors
-                if pub[1]:
-                    noncrits.append(pub[1])
+            if gs['at_id']:
+                gs['at_id'] = attributions.get(gs['at_id'], None)
 
-        else:
-            gs['pub_id'] = None  # empty pub
+            gs['file_id'] = self.__create_geneset_file(gs['geneset_values'])
+            gs['gs_id'] = db.insert_geneset(gs)
+            gsv_count = self.__create_geneset_values(gs)
 
-        if gs['at_id']:
-            gs['at_id'] = attributions.get(gs['at_id'], None)
+            ## Update gs_count if some geneset_values were found to be invalid
+            if gsv_count != len(gs['geneset_values']):
+                db.update_geneset_count(gs['gs_id'], gsv_count)
 
-        ## Insert the data into the file table
-        gs['file_id'] = create_geneset_file(gs['geneset_values'])
-        ## Insert new genesets...
-        gs['gs_id'] = db.insert_geneset(gs)
-        ## ...then geneset_values
-        gsverr = create_geneset_values(gs)
+            added.append(gs['gs_id'])
 
-        ## Update gs_count if some geneset_values were found to be invalid
-        if gsverr[0] != len(gs['geneset_values']):
-            db.update_geneset_count(gs['gs_id'], gsverr[0])
-
-        added.append(gs['gs_id'])
-
-        ## Non-critical errors discovered during geneset_value creation
-        if gsverr[1]:
-            noncrits.extend(gsverr[1])
-
-    return (added, noncrits)
+        return added
 
 
 if __name__ == '__main__':
