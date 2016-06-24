@@ -24,6 +24,55 @@ import util
         ## UTILITY ##
         #############
 
+def getPubmedInfo(pmid):
+    ## URL for pubmed article summary info
+    url = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?'
+           'retmode=json&db=pubmed&id=%s') % pmid
+    ## NCBI eFetch URL that only retrieves the abstract
+    url_abs = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
+               '?rettype=abstract&retmode=text&db=pubmed&id=%s') % pmid
+
+    ## Sometimes the NCBI servers shit the bed and return errors that kill
+    ## the python script, we catch these and just return blank pubmed info
+    try:
+        res = url2.urlopen(url).read()
+        res2 = url2.urlopen(url_abs).read()
+
+    except url2.HTTPError:
+        er = ('Error! There was a problem accessing the NCBI servers. No '
+              'PubMed info for the PMID you provided could be retrieved.')
+        return ({}, er)
+
+    pinfo = {}
+    res = json.loads(res)
+
+    ## In case of KeyErrors...
+    try:
+        pub = res['result']
+        pub = pub[pmid]
+
+        pinfo['pub_title'] = pub['title']
+        pinfo['pub_abstract'] = res2
+        pinfo['pub_journal'] = pub['fulljournalname']
+        pinfo['pub_volume'] = pub['volume']
+        pinfo['pub_pages'] = pub['pages']
+        pinfo['pub_pubmed'] = pmid
+        pinfo['pub_authors'] = ''
+
+        ## Author struct {name, authtype, clustid}
+        for auth in pub['authors']:
+            pinfo['pub_authors'] += auth['name'] + ', '
+
+        ## Delete the last comma + space
+        pinfo['pub_authors'] = pinfo['pub_authors'][:-2]
+
+    except:
+        er = ('Error! The PubMed info retrieved from NCBI was incomplete. No '
+              'PubMed data will be attributed to this geneset.')
+        return ({}, er)
+
+    return (pinfo, '')
+
 def read_file(fp):
     """
     Reads a file and splits it into lines.
@@ -82,573 +131,454 @@ def calculate_str_similarity(s1, s2):
         ## PARSERS ##
         #############
 
-def parse_score_type(s):
-    """
-    Attempts to parse out the score type and any threshold value
-    from a given string.
-    Acceptable score types and threshold values include:
-        Binary
-        P-Value < 0.05
-        Q-Value < 0.05
-        0.40 < Correlation < 0.50
-        6.0 < Effect < 22.50
-    The numbers listed above are only examples and can vary depending on
-    geneset. If those numbers can't be parsed for some reason, default values
-    (e.g. 0.05) are used. The score types are converted into a numeric
-    representation:
-        P-Value = 1
-        Q-Value = 2
-        Binary = 3
-        Correlation = 4
-        Effect = 5
+class BatchReader():
 
-    :type s: str
-    :arg s: string containing score type and possibly threshold value(s)
+    def __init__(self, filepath):
 
-    :return tuple: (gs_threshold_type, gs_threshold, errors)
-    """
+        self.filepath = filepath
+        ## Parsed genesets
+        self.genesets = []
+        ## Errors encountered during parsing--these prevent further parsing
+        self.errors = []
+        ## Errors that aren't critical
+        self.warns = []
 
-    ## The score type, a numeric value but currently stored as a string
-    stype = ''
-    ## Default theshold values
-    thresh = '0.05'
-    thresh2 = '0.05'
-    error = ''
+    def __parse_score_type(s):
+        """
+        Attempts to parse out the score type and any threshold value
+        from a given string.
+        Acceptable score types and threshold values include:
+            Binary
+            P-Value < 0.05
+            Q-Value < 0.05
+            0.40 < Correlation < 0.50
+            6.0 < Effect < 22.50
+        The numbers listed above are only examples and can vary depending on
+        geneset. If those numbers can't be parsed for some reason, default values
+        (e.g. 0.05) are used. The score types are converted into a numeric
+        representation:
+            P-Value = 1
+            Q-Value = 2
+            Binary = 3
+            Correlation = 4
+            Effect = 5
 
-    ## Binary threshold is left at the default of 1
-    if s.lower() == 'binary':
-        stype = '3'
-        thresh = '1'
+        :type s: str
+        :arg s: string containing score type and possibly threshold value(s)
 
-    elif s.lower().find('p-value') != -1:
-        ## Try to find the threshold, this regex is from the PHP func.
-        ## my regex: ([0-9]?\.[0-9]+)
-        m = re.search(r"([0-9.-]{2,})", s.lower())
-        stype = '1'
+        :return tuple: (gs_threshold_type, gs_threshold)
+        """
 
-        if m:
-            thresh = m.group(1)
-        else:
-            error = 'No threshold specified for P-Value data. Using p < 0.05.'
+        ## The score type, a numeric value but currently stored as a string
+        stype = ''
+        ## Default theshold values
+        thresh = '0.05'
+        thresh2 = '0.05'
 
-    elif s.lower().find('q-value') != -1:
-        m = re.search(r"([0-9.-]{2,})", s.lower())
-        stype = '2'
+        ## Binary threshold is left at the default of 1
+        if s.lower() == 'binary':
+            stype = '3'
+            thresh = '1'
 
-        if m:
-            thresh = m.group(1)
-        else:
-            error = 'No threshold specified for Q-Value data. Using q < 0.05.'
+        elif s.lower().find('p-value') != -1:
+            ## Try to find the threshold, this regex is from the PHP func.
+            ## my regex: ([0-9]?\.[0-9]+)
+            m = re.search(r"([0-9.-]{2,})", s.lower())
+            stype = '1'
 
-    elif s.lower().find('correlation') != -1:
-        ## This disgusting regex is from the PHP function
-        ## And it sucks. It breaks on some input, might have to change this
-        ## later.
-        m = re.search(r"([0-9.-]{2,})[^0-9.-]*([0-9.-]{2,})", s.lower())
-        stype = '4'
-
-        if m:
-            thresh = m.group(1) + ',' + m.group(2)
-        else:
-            thresh = '-0.75,0.75'
-            error = ('No thresholds specified for Correlation data.'
-                     ' Using -0.75 < value < 0.75.')
-
-    elif s.lower().find('effect') != -1:
-        ## Again, PHP regex
-        m = re.search(r"([0-9.-]{2,})[^0-9.-]*([0-9.-]{2,})", s.lower())
-        stype = '5'
-
-        if m:
-            thresh = m.group(1) + ',' + m.group(2)
-        else:
-            thresh = '0,1'
-            error = ('No thresholds specified for Effect data.'
-                     ' Using 0 < value < 1.')
-
-    else:
-        error = 'An unknown score type (%s) was provided.' % s
-
-    return (stype, thresh, error)
-
-
-#### getPubmedInfo
-##
-#### Retrieves Pubmed article info from the NCBI servers using the NCBI eutils.
-#### The result is a dictionary whose keys are the same as the publication
-#### table. The actualy return value for this function though is a tuple. The
-#### first member is the dict, the second is any error message.
-##
-def getPubmedInfo(pmid):
-    ## URL for pubmed article summary info
-    url = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?'
-           'retmode=json&db=pubmed&id=%s') % pmid
-    ## NCBI eFetch URL that only retrieves the abstract
-    url_abs = ('http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi'
-               '?rettype=abstract&retmode=text&db=pubmed&id=%s') % pmid
-
-    ## Sometimes the NCBI servers shit the bed and return errors that kill
-    ## the python script, we catch these and just return blank pubmed info
-    try:
-        res = url2.urlopen(url).read()
-        res2 = url2.urlopen(url_abs).read()
-
-    except url2.HTTPError:
-        er = ('Error! There was a problem accessing the NCBI servers. No '
-              'PubMed info for the PMID you provided could be retrieved.')
-        return ({}, er)
-
-    pinfo = {}
-    res = json.loads(res)
-
-    ## In case of KeyErrors...
-    try:
-        pub = res['result']
-        pub = pub[pmid]
-
-        pinfo['pub_title'] = pub['title']
-        pinfo['pub_abstract'] = res2
-        pinfo['pub_journal'] = pub['fulljournalname']
-        pinfo['pub_volume'] = pub['volume']
-        pinfo['pub_pages'] = pub['pages']
-        pinfo['pub_pubmed'] = pmid
-        pinfo['pub_authors'] = ''
-
-        ## Author struct {name, authtype, clustid}
-        for auth in pub['authors']:
-            pinfo['pub_authors'] += auth['name'] + ', '
-
-        ## Delete the last comma + space
-        pinfo['pub_authors'] = pinfo['pub_authors'][:-2]
-
-    except:
-        er = ('Error! The PubMed info retrieved from NCBI was incomplete. No '
-              'PubMed data will be attributed to this geneset.')
-        return ({}, er)
-
-    return (pinfo, '')
-
-def parse_batch_syntax(lns):
-    """
-    Parses a batch file according to the format listed on
-    http://geneweaver.org/index.php?action=manage&cmd=batchgeneset
-
-    :type lns: list
-    :arg lns: each of the lines found in a batch file
-
-    :ret tuple: (geneset list, warning list, error list)
-    """
-
-    genesets = []
-    ## geneset_values, here as a list of tuples (symbol, value)
-    gsvals = []  
-    ## geneset abbreviation
-    abbr = ''
-    ## geneset name
-    name = ''
-    ## geneset description
-    desc = ''
-    ## gene ID type (gs_gene_id_type)
-    gene = ''
-    ## PubMed ID, later converted to a GW pub_id
-    pub = None
-    ## Group identifier, default is private (gs_groups)
-    group = '-1'
-    ## Score type (gs_threshold_type)
-    stype = ''
-    ## Threshold value (gs_threshold)
-    thresh = '0.05'
-    ## Species name, later converted to a GW sp_id
-    spec = ''
-    ## Curation tier
-    cur_id = 5
-    usr_id = 0
-    ## Attribution
-    at_id = None
-    ## Critical errors discovered during parsing
-    cerr = ''
-    ## Non-critical errors discovered during parsing
-    ncerr = []
-    ## Critical errors discovered during parsing
-    errors = []
-    ## Non-critical errors discovered during parsing
-    warns = [] 
-
-    gene_types = db.get_gene_types()
-    species = db.get_species()
-    platforms = db.get_microarray_types()
-
-    def reset_add_geneset():
-        gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype, 
-                               thresh, gene, gsvals, at_id, usr_id, cur_id)
-        abbr = ''
-        desc = ''
-        name = ''
-        gsvals = []
-        genesets.append(gs)
-
-    for gdb_name, gdb_id in gene_types.items():
-        gene_types[gdb_name.lower()] = gdb_id
-
-    for sp_name, sp_id in species.items():
-        species[sp_name.lower()] = sp_id
-
-    for pf_name, pf_id in platforms.items():
-        platforms[pf_name.lower()] = pf_id
-
-    for i in range(len(lns)):
-        lns[i] = lns[i].strip()
-
-        ## These are special additions to the batch file that allow curation
-        ## tiers, user IDs, and attributions to be specified.
-        #
-        ## Lines beginning with 'T' are Tier IDs
-        if lns[i][:2].lower() == 't ':
-            if gsvals:
-                reset_add_geneset()
-
-            cur_id = int(lns[i][1:].strip())
-
-        elif lns[i][:2].lower() == 'u ':
-            if gsvals:
-                reset_add_geneset()
-
-            usr_id = int(lns[i][1:].strip())
-
-        elif lns[i][:2].lower() == 'd ':
-            if gsvals:
-                reset_add_geneset()
-
-            at_id = int(lns[i][1:].strip())
-
-        ## :, =, + is required for each geneset in the batch file
-        #
-        ## Lines beginning with ':' are geneset abbreviations (REQUIRED)
-        if lns[i][:1] == ':':
-            ## This checks to see if we've already read in some geneset_values
-            ## If we have, that means we can save the geneset, clear out any
-            ## REQUIRED fields before we do more parsing, and start over
-            if gsvals:
-                reset_add_geneset()
-                #gs = util.make_geneset(name, abbr, desc, spec, pub, group,
-                #                       stype, thresh, gene, gsvals)
-                ### Start a new dataset
-                #abbr = ''
-                #desc = ''
-                #name = ''
-                #gsvals = []
-                #genesets.append(gs)
-
-            abbr = lns[i][1:].strip()
-
-        ## Lines beginning with '=' are geneset names (REQUIRED)
-        elif lns[i][:1] == '=':
-            ## This checks to see if we've already read in some geneset_values
-            ## If we have, that means we can save the geneset, clear out any
-            ## REQUIRED fields before we do more parsing, and start over
-            if gsvals:
-                reset_add_geneset()
-                #gs = util.make_geneset(name, abbr, desc, spec, pub, group,
-                #                       stype, thresh, gene, gsvals)
-                ### Start a new dataset
-                #abbr = ''
-                #desc = ''
-                #name = ''
-                #gsvals = []
-                #genesets.append(gs)
-
-            name = lns[i][1:].strip()
-
-        ## Lines beginning with '+' are geneset descriptions (REQUIRED)
-        elif lns[i][:1] == '+':
-            ## This checks to see if we've already read in some geneset_values
-            ## If we have, that means we can save the geneset, clear out any
-            ## REQUIRED fields before we do more parsing, and start over
-            if gsvals:
-                reset_add_geneset()
-                #gs = util.make_geneset(name, abbr, desc, spec, pub, group,
-                #                       stype, thresh, gene, gsvals)
-                ### Start a new dataset
-                #abbr = ''
-                #desc = ''
-                #name = ''
-                #gsvals = []
-                #genesets.append(gs)
-
-            desc += lns[i][1:].strip()
-            desc += ' '
-
-        ## !, @, %, are required but can be omitted from later sections if
-        ## they don't differ from the first.
-        #
-        ## Lines beginning with '!' are score types (REQUIRED)
-        elif lns[i][:1] == '!':
-            score = lns[i][1:].strip()
-            score = parse_score_type(score)
-
-            ## Indicates a critical error has occured (no score type w/ an
-            ## error message)
-            if not score[0] and score[2]:
-                errors.append(score[2])
-
+            if m:
+                thresh = m.group(1)
             else:
+                self.warns.append('Invalid threshold. Using p < 0.05.')
+
+        elif s.lower().find('q-value') != -1:
+            m = re.search(r"([0-9.-]{2,})", s.lower())
+            stype = '2'
+
+            if m:
+                thresh = m.group(1)
+            else:
+                self.warns.append('Invalid threshold. Using q < 0.05.')
+
+        elif s.lower().find('correlation') != -1:
+            ## This disgusting regex is from the PHP function
+            ## And it sucks. It breaks on some input, might have to change this
+            ## later.
+            m = re.search(r"([0-9.-]{2,})[^0-9.-]*([0-9.-]{2,})", s.lower())
+            stype = '4'
+
+            if m:
+                thresh = m.group(1) + ',' + m.group(2)
+            else:
+                thresh = '-0.75,0.75'
+                self.warns.append(('Invalid threshold.' 
+                                  'Using -0.75 < Correlation < 0.75'))
+
+        elif s.lower().find('effect') != -1:
+            ## Again, PHP regex
+            m = re.search(r"([0-9.-]{2,})[^0-9.-]*([0-9.-]{2,})", s.lower())
+            stype = '5'
+
+            if m:
+                thresh = m.group(1) + ',' + m.group(2)
+            else:
+                thresh = '0,1'
+                self.warns.append('Invalid threshold. Using 0 < Effect < 1.')
+
+        else:
+            self.errors.append('An unknown score type (%s) was provided.' % s)
+
+        return (stype, thresh)
+
+
+    def __parse_batch_syntax(lns):
+        """
+        Parses a batch file according to the format listed on
+        http://geneweaver.org/index.php?action=manage&cmd=batchgeneset
+
+        :type lns: list
+        :arg lns: each of the lines found in a batch file
+
+        :ret tuple: (geneset list, warning list, error list)
+        """
+
+        genesets = []
+        ## geneset_values, here as a list of tuples (symbol, value)
+        gsvals = []  
+        ## geneset abbreviation
+        abbr = ''
+        ## geneset name
+        name = ''
+        ## geneset description
+        desc = ''
+        ## gene ID type (gs_gene_id_type)
+        gene = ''
+        ## PubMed ID, later converted to a GW pub_id
+        pub = None
+        ## Group identifier, default is private (gs_groups)
+        group = '-1'
+        ## Score type (gs_threshold_type)
+        stype = ''
+        ## Threshold value (gs_threshold)
+        thresh = '0.05'
+        ## Species name, later converted to a GW sp_id
+        spec = ''
+        ## Curation tier
+        cur_id = 5
+        usr_id = 0
+        ## Attribution
+        at_id = None
+
+        gene_types = db.get_gene_types()
+        species = db.get_species()
+        platforms = db.get_microarray_types()
+
+        def reset_add_geneset():
+            gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype, 
+                                   thresh, gene, gsvals, at_id, usr_id, cur_id)
+            abbr = ''
+            desc = ''
+            name = ''
+            gsvals = []
+            self.genesets.append(gs)
+
+        for gdb_name, gdb_id in gene_types.items():
+            gene_types[gdb_name.lower()] = gdb_id
+
+        for sp_name, sp_id in species.items():
+            species[sp_name.lower()] = sp_id
+
+        for pf_name, pf_id in platforms.items():
+            platforms[pf_name.lower()] = pf_id
+
+        for i in range(len(lns)):
+            lns[i] = lns[i].strip()
+
+            ## These are special additions to the batch file that allow curation
+            ## tiers, user IDs, and attributions to be specified.
+            #
+            ## Lines beginning with 'T' are Tier IDs
+            if lns[i][:2].lower() == 't ':
+                if gsvals:
+                    reset_add_geneset()
+
+                cur_id = int(lns[i][1:].strip())
+
+            elif lns[i][:2].lower() == 'u ':
+                if gsvals:
+                    reset_add_geneset()
+
+                usr_id = int(lns[i][1:].strip())
+
+            elif lns[i][:2].lower() == 'd ':
+                if gsvals:
+                    reset_add_geneset()
+
+                at_id = int(lns[i][1:].strip())
+
+            ## :, =, + is required for each geneset in the batch file
+            #
+            ## Lines beginning with ':' are geneset abbreviations (REQUIRED)
+            if lns[i][:1] == ':':
+                ## This checks to see if we've already read in some geneset_values
+                ## If we have, that means we can save the geneset, clear out any
+                ## REQUIRED fields before we do more parsing, and start over
+                if gsvals:
+                    reset_add_geneset()
+
+                abbr = lns[i][1:].strip()
+
+            ## Lines beginning with '=' are geneset names (REQUIRED)
+            elif lns[i][:1] == '=':
+                ## This checks to see if we've already read in some geneset_values
+                ## If we have, that means we can save the geneset, clear out any
+                ## REQUIRED fields before we do more parsing, and start over
+                if gsvals:
+                    reset_add_geneset()
+
+                name = lns[i][1:].strip()
+
+            ## Lines beginning with '+' are geneset descriptions (REQUIRED)
+            elif lns[i][:1] == '+':
+                ## This checks to see if we've already read in some geneset_values
+                ## If we have, that means we can save the geneset, clear out any
+                ## REQUIRED fields before we do more parsing, and start over
+                if gsvals:
+                    reset_add_geneset()
+
+                desc += lns[i][1:].strip()
+                desc += ' '
+
+            ## !, @, %, are required but can be omitted from later sections if
+            ## they don't differ from the first.
+            #
+            ## Lines beginning with '!' are score types (REQUIRED)
+            elif lns[i][:1] == '!':
+                score = lns[i][1:].strip()
+                score = self.__parse_score_type(score)
                 stype = score[0]
                 thresh = score[1]
 
-            ## Any warnings
-            if score[0] and score[2]:
-                warns.append(score[2])
+            ## Lines beginning with '@' are species types (REQUIRED)
+            elif lns[i][:1] == '@':
+                spec = lns[i][1:].strip()
 
-        ## Lines beginning with '@' are species types (REQUIRED)
-        elif lns[i][:1] == '@':
-            spec = lns[i][1:].strip()
-
-            if spec.lower() not in species.keys():
-                err = 'LINE %s: %s is an invalid species' % (i + 1, spec)
-                errors.append(err)
-
-            else:
-                ## spec is now an integer (sp_id)
-                spec = species[spec.lower()]
-
-        ## Lines beginning with '%' are gene ID types (REQUIRED)
-        elif lns[i][:1] == '%':
-            gene = lns[i][1:].strip()
-
-            ## Gene ID representation is fucking ass backwards. If a 
-            ## microarray platform is specified, the best possible match above
-            ## a given threshold is found and used. All other gene types are 
-            ## retrieved from the DB and their ID types are negated. 
-            if gene.lower().find('microarray') != -1:
-                ## Remove 'microarray ' text
-                gene = gene[len('microarray '):]
-                original = gene
-
-                ## Determine the closest microarry platform match above a 70%
-                ## similarity threshold.
-                best = 0.70
-
-                for plat, pid in platforms.items():
-                    sim = calc_str_similarity(plat.lower(), original.lower())
-
-                    if sim > best:
-                        best = sim
-                        gene = plat
-
-                ## Convert to the ID, gene will now be an integer
-                gene = platforms.get(gene, 'unknown')
-
-                if type(gene) != int:
-                    err = 'LINE %s: %s is an invalid platform' % \
-                          (i + 1, original)
-                    errors.append(err)
-
-            ## Otherwise the user specified one of the gene types, not a
-            ## microarray platform
-            ## :IMPORTANT: Expression platforms have positive (+)
-            ## gs_gene_id_types while all other types (e.g. symbols) should
-            ## have negative (-) integer ID types.
-            else:
-
-                if gene.lower() not in gene_types.keys():
-                    err = 'LINE %s: %s is an invalid gene type' % (i + 1, gene)
-                    errors.append(err)
+                if spec.lower() not in species.keys():
+                    self.errors.append(('LINE %s: %s is an invalid species' 
+                                       % (i + 1, spec))
 
                 else:
-                    ## gene is now an integer (gdb_id)
-                    gene = gene_types[gene.lower()]
-                    gene = -gene
+                    ## spec is now an integer (sp_id)
+                    spec = species[spec.lower()]
 
-        ## Lines beginning with 'P ' are PubMed IDs (OPTIONAL)
-        elif (lns[i][:2].lower() == 'p ') and (len(lns[i].split('\t')) == 1):
-            pub = lns[i][1:].strip()
+            ## Lines beginning with '%' are gene ID types (REQUIRED)
+            elif lns[i][:1] == '%':
+                gene = lns[i][1:].strip()
 
-        ## Lines beginning with 'A' are groups, default is private (OPTIONAL)
-        elif lns[i][:2].lower() == 'a ' and (len(lns[i].split('\t')) == 1):
-            group = lns[i][1:].strip()
+                ## Gene ID representation is fucking ass backwards. If a 
+                ## microarray platform is specified, the best possible match above
+                ## a given threshold is found and used. All other gene types are 
+                ## retrieved from the DB and their ID types are negated. 
+                if gene.lower().find('microarray') != -1:
+                    ## Remove 'microarray ' text
+                    gene = gene[len('microarray '):]
+                    original = gene
 
-            ## If the user gives something other than private/public,
-            ## automatically make it private
-            if group.lower() != 'private' and group.lower() != 'public':
-                group = '-1'
-                cur = 5
+                    ## Determine the closest microarry platform match above a 70%
+                    ## similarity threshold.
+                    best = 0.70
 
-            ## Public data sets are initially thrown into the provisional
-            ## Tier IV. Tier should never be null.
-            elif group.lower() == 'public':
-                group = '0'
-                cur = 4
+                    for plat, pid in platforms.items():
+                        sim = calc_str_similarity(plat.lower(), original.lower())
 
-            else:  # private
-                group = '-1'
-                cur = 5
+                        if sim > best:
+                            best = sim
+                            gene = plat
 
-        ## If the lines are tab separated, we assume it's the gene data that
-        ## will become apart of the geneset_values
-        elif len(lns[i].split('\t')) == 2:
+                    ## Convert to the ID, gene will now be an integer
+                    gene = platforms.get(gene, 'unknown')
 
-            ## First we check to see if all the required data was specified
-            if ((not abbr) or (not name) or (not desc) or (not stype) or
-                (not spec) or (not gene)):
+                    if type(gene) != int:
+                        self.errors.append(('LINE %s: %s is an invalid '
+                                           'platform' % (i + 1, original)))
 
-                err = 'One or more of the required fields are missing.'
-                ## Otherwise this string will get appended a bajillion times
-                if err not in errors:
-                    errors.append(err)
+                ## Otherwise the user specified one of the gene types, not a
+                ## microarray platform
+                ## :IMPORTANT: Expression platforms have positive (+)
+                ## gs_gene_id_types while all other types (e.g. symbols) should
+                ## have negative (-) integer ID types.
+                else:
+                    if gene.lower() not in gene_types.keys():
+                        self.errors.append(('LINE %s: %s is an invalid gene '
+                                           'type' % (i + 1, gene)))
 
-            else:
-                lns[i] = lns[i].split()
+                    else:
+                        ## gene is now an integer (gdb_id)
+                        gene = gene_types[gene.lower()]
+                        gene = -gene
 
-                ## I don't think this code can ever be reached...
-                if len(lns[i]) < 2:
-                    err = 'LINE %s: Skipping invalid gene, value formatting' \
-                          % (i + 1)
-                    warns.append(err)
+            ## Lines beginning with 'P ' are PubMed IDs (OPTIONAL)
+            elif (lns[i][:2].lower() == 'p ') and (len(lns[i].split('\t')) == 1):
+                pub = lns[i][1:].strip()
+
+            ## Lines beginning with 'A' are groups, default is private (OPTIONAL)
+            elif lns[i][:2].lower() == 'a ' and (len(lns[i].split('\t')) == 1):
+                group = lns[i][1:].strip()
+
+                ## If the user gives something other than private/public,
+                ## automatically make it private
+                if group.lower() != 'private' and group.lower() != 'public':
+                    group = '-1'
+                    cur = 5
+
+                ## Public data sets are initially thrown into the provisional
+                ## Tier IV. Tier should never be null.
+                elif group.lower() == 'public':
+                    group = '0'
+                    cur = 4
+
+                else:  # private
+                    group = '-1'
+                    cur = 5
+
+            ## If the lines are tab separated, we assume it's the gene data that
+            ## will become apart of the geneset_values
+            elif len(lns[i].split('\t')) == 2:
+
+                ## First we check to see if all the required data was specified
+                if ((not abbr) or (not name) or (not desc) or (not stype) or
+                    (not spec) or (not gene)):
+
+                    err = 'One or more of the required fields are missing.'
+                    ## Otherwise this string will get appended a bajillion times
+                    if err not in errors:
+                        self.errors.append(err)
 
                 else:
+                    lns[i] = lns[i].split()
+
                     gsvals.append((lns[i][0], lns[i][1]))
 
 
-        ## Lines beginning with '#' are comments
-        elif lns[i][:1] == '#':
-            continue
-
-        ## Skip blank lines
-        elif lns[i][:1] == '':
-            continue
-
-        ## Who knows what the fuck this line is, just skip it
-        else:
-            err = 'LINE %s: Skipping unknown identifiers' % (i + 1)
-            warns.append(err)
-
-    ## awwww shit, we're finally finished! Check for critical errors and
-    ## if there were none, make the final parsed geneset and return
-    if errors:
-        return ([], warns, errors)
-
-    else:
-        gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype,
-                               thresh, gene, gsvals)
-        genesets.append(gs)
-
-        return (genesets, warns, errors)
-
-#### buFile
-##
-#### Parses geneset content into the proper format and inserts it into the file
-#### table. The proper format is gene\tvalue\n .
-##
-def create_geneset_file(genes):
-    """
-    Parses the geneset_values into the proper format for storage in the file
-    table and inserts the result.
-
-    :type genes: list
-    :arg genes: geneset_value tuples (gene, value)
-
-    :ret int: file_id of the newly inserted file
-    """
-
-    conts = ''
-    ## Geneset values should be a list of tuples (symbol, pval)
-    for tup in genes:
-        conts += (tup[0] + '\t' + tup[1] + '\n')
-
-    return db.insert_file(len(conts), conts, '')
-
-
-def create_geneset_values(gs):
-    """
-    Maps the given reference IDs to ode_gene_ids and inserts them into the
-    geneset_value table.
-
-    :type gs: dict
-    :arg gs: geneset dict
-    """
-
-    ## Geneset values should be a list of tuples (symbol, pval)
-    ## First we attempt to map them to the internal ode_gene_ids
-    symbols = filter(lambda x: not not x, gs['geneset_values'])
-    symbols = map(lambda x: x[0], symbols)
-
-    ## Negative numbers indicate normal gene types (found in genedb) while
-    ## positive numbers indicate expression platforms and more work :(
-    if gs['gs_gene_id_type'] < 0:
-        sym2ode = db.get_gene_ids_by_species(symbols, gs['sp_id'])
-
-    else:
-        sym2probe = db.get_platform_probes(gs['gs_gene_id_type'], symbols)
-        prb_ids = []
-
-        for sym in symbols:
-            prb_ids.append(sym2probe[sym])
-
-        prb_ids = list(set(prb_ids))
-        prb2odes = db.get_probe2gene(prbids)
-
-    # non-critical errors we will inform the user about
-    noncrit = []
-    # duplicate detection
-    dups = dd(str)
-    total = 0
-
-    for sym, value in gs['geneset_values']:
-
-        ## Platform handling
-        if gs['gs_gene_id_type'] > 0:
-            prbid = sym2probe[sym]
-            odes = prb2odes[prbid]
-
-            if not prbid or not odes:
-                err = ("Error! There doesn't seem to be any gene/locus data for "
-                       "%s in the database." % sym)
-                noncrit.append(err)
+            ## Lines beginning with '#' are comments
+            elif lns[i][:1] == '#':
                 continue
 
-            for ode in odes:
-                ## Check for duplicate ode_gene_ids, otherwise postgres bitches
-                if not dups[ode]:
-                    dups[ode] = sym
+            ## Skip blank lines
+            elif lns[i][:1] == '':
+                continue
 
-                else:
-                    err = ('Error! Seems that %s is a duplicate of %s. %s was not '
-                           'added to the geneset.' %
-                           (sym, dups[ode], sym))
-                    noncrit.append(err)
-                    continue
+            ## Who knows what the fuck this line is, just skip it
+            else:
+                self.warns.append(('LINE %s: Skipping unknown identifiers' 
+                                  % (i + 1)))
 
-                db.insert_geneset_value(gs['gs_id'], ode, value, sym,
-                                        gs['gs_threshold'])
+        ## awwww shit, we're finally finished! Make the final parsed geneset.
+        gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype,
+                               thresh, gene, gsvals)
+        self.genesets.append(gs)
 
-                total += 1
+    def __create_geneset_file(self, genes):
+        """
+        Parses the geneset_values into the proper format for storage in the file
+        table and inserts the result.
 
-            continue
+        :type genes: list
+        :arg genes: geneset_value tuples (gene, value)
 
-        ## Not platform stuff
-        if not sym2ode[sym]:
-            err = ("Error! There doesn't seem to be any gene/locus data for "
-                   "%s in the database." % sym)
-            noncrit.append(err)
-            continue
+        :ret int: file_id of the newly inserted file
+        """
 
-        ## Check for duplicate ode_gene_ids, otherwise postgres bitches
-        if not dups[sym2ode[sym]]:
-            dups[sym2ode[sym]] = sym
+        conts = ''
+        ## Geneset values should be a list of tuples (symbol, pval)
+        for tup in genes:
+            conts += (tup[0] + '\t' + tup[1] + '\n')
+
+        return db.insert_file(len(conts), conts, '')
+
+
+    def __create_geneset_values(self, gs):
+        """
+        Maps the given reference IDs to ode_gene_ids and inserts them into the
+        geneset_value table.
+
+        :type gs: dict
+        :arg gs: geneset dict
+        """
+
+        ## Geneset values should be a list of tuples (symbol, pval)
+        ## First we attempt to map them to the internal ode_gene_ids
+        symbols = filter(lambda x: not not x, gs['geneset_values'])
+        symbols = map(lambda x: x[0], symbols)
+
+        ## Negative numbers indicate normal gene types (found in genedb) while
+        ## positive numbers indicate expression platforms and more work :(
+        if gs['gs_gene_id_type'] < 0:
+            sym2ode = db.get_gene_ids_by_species(symbols, gs['sp_id'])
 
         else:
-            err = ('Error! Seems that %s is a duplicate of %s. %s was not '
-                   'added to the geneset.' %
-                   (sym, dups[sym2ode[sym]], sym))
-            noncrit.append(err)
-            continue
+            sym2probe = db.get_platform_probes(gs['gs_gene_id_type'], symbols)
+            prb_ids = []
 
-        db.insert_geneset_value(gs['gs_id'], sym2ode[sym], value,
-                                sym, gs['gs_threshold'])
+            for sym in symbols:
+                prb_ids.append(sym2probe[sym])
 
-        total += 1
+            prb_ids = list(set(prb_ids))
+            prb2odes = db.get_probe2gene(prbids)
 
-    return (total, noncrit)
+        # duplicate detection
+        dups = dd(str)
+        total = 0
+
+        for sym, value in gs['geneset_values']:
+
+            ## Platform handling
+            if gs['gs_gene_id_type'] > 0:
+                prbid = sym2probe[sym]
+                odes = prb2odes[prbid]
+
+                if not prbid or not odes:
+                    self.warns.append('No gene/locus exists data for %s' % sym)
+                    continue
+
+                for ode in odes:
+                    ## Check for duplicate ode_gene_ids, otherwise postgres bitches
+                    if not dups[ode]:
+                        dups[ode] = sym
+
+                    else:
+                        self.warns.append(('%s is a duplicate of %s and '
+                                          'was not added to the geneset' 
+                                          % (sym, dups[ode])))
+                        continue
+
+                    db.insert_geneset_value(gs['gs_id'], ode, value, sym,
+                                            gs['gs_threshold'])
+
+                    total += 1
+
+                continue
+
+            ## Not platform stuff
+            if not sym2ode[sym]:
+                self.warns.append('No gene/locus exists data for %s' % sym)
+                continue
+
+            ## Check for duplicate ode_gene_ids, otherwise postgres bitches
+            if not dups[sym2ode[sym]]:
+                dups[sym2ode[sym]] = sym
+
+            else:
+                self.warns.append(('%s is a duplicate of %s and was not '
+                                  'added to the geneset' % (sym, dups[ode])))
+                continue
+
+            db.insert_geneset_value(gs['gs_id'], sym2ode[sym], value,
+                                    sym, gs['gs_threshold'])
+
+            total += 1
+
+        return total
 
 
 def parse_batch_file(fp, cur_id=None, usr_id=0):
@@ -666,7 +596,7 @@ def parse_batch_file(fp, cur_id=None, usr_id=0):
     added = []  # list of gs_ids successfully added to the db
 
     ## returns (genesets, non-critical errors, critical errors)
-    b = parse_batch_syntax(read_file(fp))
+    b = __parse_batch_syntax(read_file(fp))
 
     ## A critical error has occurred
     if b[2]:
