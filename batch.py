@@ -45,8 +45,8 @@ def get_pubmed_info(pmid):
     ## the python script, we catch these and just return blank pubmed info
     for attempt in range(5):
         try:
-            sum_res = url2.urlopen(url).read()
-            abs_res = url2.urlopen(url_abs).read()
+            sum_res = url2.urlopen(sum_url).read()
+            abs_res = url2.urlopen(abs_url).read()
 
         except url2.HTTPError as e:
             #print 'Error! Failed to retrieve a set of UniGene IDs from NCBI:'
@@ -88,13 +88,6 @@ def get_pubmed_info(pmid):
 
     return pinfo
 
-def read_file(fp):
-    """
-    Reads a file and splits it into lines.
-    """
-
-    with open(fp, 'r') as fl:
-        return fl.read().split('\n')
 
 def make_digrams(s):
     """
@@ -165,7 +158,18 @@ class BatchReader(object):
         self.errors = []
         self.warns = []
 
-    def __parse_score_type(s):
+    def __read_file(self, fp=None):
+        """
+        Reads a file and splits it into lines.
+        """
+
+        if not fp:
+            fp = self.filepath
+
+        with open(fp, 'r') as fl:
+            return fl.read().split('\n')
+
+    def __parse_score_type(self, s):
         """
         Attempts to parse out the score type and any threshold value
         from a given string.
@@ -255,7 +259,7 @@ class BatchReader(object):
         return (stype, thresh)
 
 
-    def __parse_batch_syntax(lns):
+    def __parse_batch_syntax(self, lns):
         """
         Parses a batch file according to the format listed on
         http://geneweaver.org/index.php?action=manage&cmd=batchgeneset
@@ -328,12 +332,14 @@ class BatchReader(object):
 
                 cur_id = int(lns[i][1:].strip())
 
+            ## Lines beginning with 'U' are user IDs
             elif lns[i][:2].lower() == 'u ':
                 if gsvals:
                     reset_add_geneset()
 
                 usr_id = int(lns[i][1:].strip())
 
+            ## Lines beginning with 'D' are attribution abbrevations
             elif lns[i][:2].lower() == 'd ':
                 if gsvals:
                     reset_add_geneset()
@@ -388,8 +394,8 @@ class BatchReader(object):
                 spec = lns[i][1:].strip()
 
                 if spec.lower() not in species.keys():
-                    self.errors.append(('LINE %s: %s is an invalid species' 
-                                       % (i + 1, spec))
+                    self.errors.append(('LINE %s: %s is an invalid species'
+                                       % (i + 1, spec)))
 
                 else:
                     ## spec is now an integer (sp_id)
@@ -622,11 +628,17 @@ class BatchReader(object):
             A list of ints. Each int is the gs_id of an inserted geneset.
         """
 
+        self.errors = []
+        self.warns = []
+
+        if not self.filepath:
+            self.errors('No batch file was provided.')
+            return []
+
         ## list of gs_ids successfully added to the db
         added = []  
 
-        ## returns (genesets, non-critical errors, critical errors)
-        b = __parse_batch_syntax(read_file(fp))
+        self.__parse_batch_syntax(self.__read_file())
 
         if self.errors:
             return []
@@ -634,13 +646,13 @@ class BatchReader(object):
         attributions = db.get_attributions()
 
         for abbrev, at_id in attributions.items():
-            ## Fucking none type in the db
+            ## Fucking NULL row in the db, this needs to be removed
             if abbrev:
                 attributions[abbrev.lower()] = at_id
 
         ## Geneset post-processing: PubMed retrieval, gene -> ode_gene_id mapping,
         ## attribution mapping, and file table insertion
-        for gs in genesets:
+        for gs in self.genesets:
             ## If a PMID was provided, we get the info from NCBI
             if gs['pub_id']:
                 pub = get_pubmed_info(gs['pub_id'])

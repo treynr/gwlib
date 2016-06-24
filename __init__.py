@@ -9,6 +9,7 @@
 from os import path
 import ConfigParser
 
+from batch import BatchReader
 from log import Log
 import db
 import util
