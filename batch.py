@@ -66,7 +66,18 @@ def get_pubmed_info(pmid):
     ## Key errors will indicate an crucial metadata component of the article is
     ## missing. If this occurs we won't insert any new pubs.
     try:
-        pub = res['result']
+        pub = sum_res[u'result']
+        #print pub
+
+        ## fucking unicode errors
+        #for k, v in pub.items():
+        #    k = k.encode('ascii', 'ignore')
+
+        #    if isinstance(v, str):
+        #        v = v.encode('ascii', 'ignore')
+
+        #    pub[k] = v
+
         pub = pub[pmid]
 
         pinfo['pub_title'] = pub['title']
@@ -79,11 +90,13 @@ def get_pubmed_info(pmid):
 
         ## Author struct {name, authtype, clustid}
         for auth in pub['authors']:
-            pinfo['pub_authors'].append(auth['name'])
+            #name = auth[u'name'].encode('ascii', 'ignore')
+            #pinfo[u'pub_authors'].append(name)
+            pinfo[u'pub_authors'].append(auth['name'])
 
         pinfo['pub_authors'] = ','.join(pinfo['pub_authors'])
 
-    except:
+    except KeyError:
         return {}
 
     return pinfo
@@ -718,20 +731,6 @@ class BatchWriter(object):
 
     def __format_threshold(self, threshold_type, threshold=''):
         """
-            Binary
-            P-Value < 0.05
-            Q-Value < 0.05
-            0.40 < Correlation < 0.50
-            6.0 < Effect < 22.50
-        The numbers listed above are only examples and can vary depending on
-        geneset. If those numbers can't be parsed for some reason, default values
-        (e.g. 0.05) are used. The score types are converted into a numeric
-        representation:
-            P-Value = 1
-            Q-Value = 2
-            Binary = 3
-            Correlation = 4
-            Effect = 5
             """
 
         serial = ''
@@ -755,7 +754,7 @@ class BatchWriter(object):
             serial = '! Q-Value < ' + threshold
 
         elif threshold_type == 3:
-            erial = '! Binary'
+            serial = '! Binary'
 
         elif threshold_type == 4:
             serial = '! ' + threshold[0] + ' < Correlation < ' + threshold[1]
@@ -772,7 +771,7 @@ class BatchWriter(object):
         """
         """
 
-        if sp_id not in self.species():
+        if sp_id not in self.species:
             self.errors.append('Invalid species ID')
             return ''
 
@@ -792,9 +791,9 @@ class BatchWriter(object):
                 self.errors.append('Invalid gene type')
                 return ''
 
-            serial = '% ' + self.gene_types(gene_type)
+            serial = '% ' + self.gene_types[gene_type]
 
-        else
+        else:
             if gene_type not in self.platforms:
                 self.errors.append('Invalid expression platform')
                 return ''
@@ -814,6 +813,25 @@ class BatchWriter(object):
 
         else:
             return 'A Public'
+
+    def __format_publication(self, pub_id, pmid=None):
+        """
+        """
+
+        if pmid:
+            return 'P ' + str(pmid)
+
+        elif pub_id:
+            pmid = db.get_publication_pmid(pub_id)
+
+            if pmid:
+                return 'P ' + pmid
+
+            else:
+                return ''
+
+        else:
+            return ''
 
     def __format_label(self, label):
         """
@@ -856,13 +874,13 @@ class BatchWriter(object):
 
         return 'T ' + str(tier)
 
-    def __format_user(self, usr_id)
+    def __format_user(self, usr_id):
         """
         """
 
         return 'U ' + str(usr_id)
 
-    def __format_attribution(self, at_id)
+    def __format_attribution(self, at_id):
         """
         """
 
@@ -891,12 +909,15 @@ class BatchWriter(object):
         groups = None
         access = None
         pmid = None
+        usr_id = None
+        pub_id = None
+        at_id = None
 
         for gs in self.genesets:
 
             ## General parameters are allowed to change in between geneset
             ## definitions
-            if threshold_type != gs['gs_threshold_type'] or
+            if threshold_type != gs['gs_threshold_type'] or\
                threshold != gs['gs_threshold']:
 
                 threshold_type = gs['gs_threshold_type']
@@ -915,12 +936,57 @@ class BatchWriter(object):
 
                 serial.append(self.__format_gene_type(gene_type))
 
-            if access != gs['gs_gene_id_type']:
-                gene_type = gs['gs_gene_id_type']
+            if gs['pmid'] and pmid != gs['pmid']:
+                pmid = gs['pmid']
 
-                serial.append(self.__format_gene_type(gene_type))
+                serial.append(self.__format_publication(None, pmid))
 
+            elif gs['pub_id'] and pub_id != gs['pub_id']:
+                pub_id = gs['pub_id']
 
+                serial.append(self.__format_publication(pub_id))
+
+            print gs['pub_id']
+
+            if not access:
+                access = True
+
+                serial.append(
+                    self.__format_access(gs['gs_groups'], gs['cur_id']))
+
+            ## Enable developer parameters
+            if self.is_dev:
+                if tier != gs['cur_id']:
+                    tier = gs['cur_id']
+
+                    serial.append(self.__format_tier(tier))
+
+                if at_id != gs['at_id']:
+                    at_id = gs['at_id']
+
+                    serial.append(self.__format_attribution(at_id))
+
+                if usr_id != gs['usr_id']:
+                    usr_id = gs['usr_id']
+
+                    serial.append(self.__format_user(usr_id))
+
+            serial.append('')
+            serial.append(self.__format_label(gs['gs_abbreviation']))
+            serial.append(self.__format_name(gs['gs_name']))
+            serial.append(self.__format_description(gs['gs_description']))
+            serial.append('')
+            serial.append(
+                self.__format_geneset_values(gs['geneset_values']))
+            serial.append('')
+
+        if self.errors:
+            return False
+
+        with open(self.filepath, 'w') as fl:
+            print >> fl, '\n'.join(serial)
+
+        return True
 
 if __name__ == '__main__':
     from optparse import OptionParser
