@@ -520,6 +520,36 @@ def get_publication(pmid):
         else:
             return 0
 
+def get_publication_pmid(pub_id):
+    """
+    Returns the PMID associated with a GW publication ID.
+
+    arguments:
+        pub_id: int publication ID
+
+    returns:
+        a string representing the article's PMID
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT      pub_pubmed
+            FROM        production.publication
+            WHERE       pub_id = %s;
+            ''',
+                (pub_id,)
+        )
+
+        result = cursor.fetchone()
+
+        if result:
+            return result[0]
+
+        else:
+            return 0
+
 def get_geneset_metadata(gs_ids):
     """
     Returns names, descriptions, and abbreviations for each geneset in the

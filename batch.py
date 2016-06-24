@@ -93,10 +93,11 @@ def make_digrams(s):
     """
     Recursively creates an exhaustive list of digrams from the given string.
 
-    :type s: str
-    :arg s: string to generate digrams with
+    arguments:
+        s: string to generate digrams with
 
-    :ret list: list of digram strings
+    returns:
+        a list of digram strings.
     """
 
     if len(s) <= 2:
@@ -121,13 +122,12 @@ def calculate_str_similarity(s1, s2):
     sim(s1, s2) = (2 * intersection(digrams(s1), digrams(s2)) /
                    |digrams(s1) + digrams(s2)|
 
-    :type s1: str
-    :arg s1: string #1
+    arguments:
+        s1: string #1
+        s2: string #2
 
-    :type s2: str
-    :arg s2: string #2
-
-    :ret float: percent similarity
+    returns:
+        a float indicating the percent similarity between two strings
     """
 
     sd1 = makeDigrams(s1)
@@ -136,8 +136,8 @@ def calculate_str_similarity(s1, s2):
 
     return (2 * len(intersect)) / float(len(sd1) + len(sd2))
 
-        ## PARSERS ##
-        #############
+        ## READER ##
+        ############
 
 class BatchReader(object):
     """
@@ -680,6 +680,246 @@ class BatchReader(object):
             added.append(gs['gs_id'])
 
         return added
+
+class BatchWriter(object):
+    """
+    Serializes geneset data into the batch geneset format. 
+
+    attributes:
+        genesets: a list of geneset dicts to serialize
+    """
+
+    def __init__(self, filepath, genesets, is_dev=False):
+        self.filepath = filepath
+        self.genesets = genesets
+        self.is_dev = is_dev
+        self.errors = []
+        self.species = db.get_species()
+        self.gene_types = db.get_gene_types()
+        self.platforms = db.get_microarray_types()
+        self.attributions = db.get_attributions()
+
+        ## Reverse each of the mappings
+        for sp_name, sp_id in self.species.items():
+            self.species[sp_id] = sp_name
+            del self.species[sp_name]
+
+        for gdb_name, gdb_id in self.gene_types.items():
+            self.gene_types[gdb_id] = gdb_name
+            del self.gene_types[gdb_name]
+
+        for pf_name, pf_id in self.platforms.items():
+            self.platforms[pf_id] = pf_name
+            del self.platforms[pf_name]
+
+        for at_abbrev, at_id in self.attributions.items():
+            self.attributions[at_id] = at_abbrev
+            del self.attributions[at_abbrev]
+
+    def __format_threshold(self, threshold_type, threshold=''):
+        """
+            Binary
+            P-Value < 0.05
+            Q-Value < 0.05
+            0.40 < Correlation < 0.50
+            6.0 < Effect < 22.50
+        The numbers listed above are only examples and can vary depending on
+        geneset. If those numbers can't be parsed for some reason, default values
+        (e.g. 0.05) are used. The score types are converted into a numeric
+        representation:
+            P-Value = 1
+            Q-Value = 2
+            Binary = 3
+            Correlation = 4
+            Effect = 5
+            """
+
+        serial = ''
+
+        if not threshold and (threshold_type == 1 or threshold_type == 2):
+            threshold = '0.05'
+
+        elif threshold_type == 4 and len(threshold.split(',')) < 2:
+            threshold = ['-0.75', '0.75']
+
+        elif threshold_type == 5 and len(threshold.split(',')) < 2:
+            threshold = ['0', '1']
+
+        elif threshold_type == 5 or threshold_type == 4:
+            threshold = threshold.split(',')
+
+        if threshold_type == 1:
+            serial = '! P-Value < ' + threshold
+
+        elif threshold_type == 2:
+            serial = '! Q-Value < ' + threshold
+
+        elif threshold_type == 3:
+            erial = '! Binary'
+
+        elif threshold_type == 4:
+            serial = '! ' + threshold[0] + ' < Correlation < ' + threshold[1]
+
+        elif threshold_type == 5:
+            serial = '! ' + threshold[0] + ' < Effect < ' + threshold[1]
+
+        else:
+            self.errors.append('Invalid threshold type')
+
+        return serial
+    
+    def __format_species(self, sp_id):
+        """
+        """
+
+        if sp_id not in self.species():
+            self.errors.append('Invalid species ID')
+            return ''
+
+        return '@ ' + self.species[sp_id]
+
+    def __format_gene_type(self, gene_type):
+        """
+        """
+
+        serial = ''
+
+        ## (-) == normal gene types, (+) == expression platforms
+        if gene_type < 0:
+            gene_type = abs(gene_type)
+
+            if gene_type not in self.gene_types:
+                self.errors.append('Invalid gene type')
+                return ''
+
+            serial = '% ' + self.gene_types(gene_type)
+
+        else
+            if gene_type not in self.platforms:
+                self.errors.append('Invalid expression platform')
+                return ''
+
+            serial = '% microarray ' + self.platforms(gene_type)
+
+        return serial
+
+    def __format_access(self, groups, tier):
+        """
+        """
+
+        groups = groups.split(',')
+
+        if '-1' in groups and tier == 5:
+            return 'A Private'
+
+        else:
+            return 'A Public'
+
+    def __format_label(self, label):
+        """
+        """
+
+        return ': ' + label
+
+    def __format_name(self, name):
+        """
+        """
+
+        return '= ' + name
+
+    def __format_description(self, desc):
+        """
+        """
+        desc = desc.split()
+        desc = util.chunk_list(desc, 8)
+        serial = []
+
+        for line in desc:
+            serial.append('+ ' + ' '.join(line))
+
+        return '\n'.join(serial)
+
+    def __format_geneset_values(self, values):
+        """
+        """
+
+        serial = []
+
+        for symbol, value in values:
+            serial.append('%s\t%s' % (symbol, value))
+
+        return '\n'.join(serial)
+
+    def __format_tier(self, tier):
+        """
+        """
+
+        return 'T ' + str(tier)
+
+    def __format_user(self, usr_id)
+        """
+        """
+
+        return 'U ' + str(usr_id)
+
+    def __format_attribution(self, at_id)
+        """
+        """
+
+        if at_id not in self.attributions:
+            self.errors.append('Invalid attribution ID')
+            return ''
+
+        return 'D ' + self.attributions[at_id]
+
+    def serialize(self):
+        """
+        Formats the list of genesets into a single batch file and outputs the
+        result.
+        """
+
+        serial = []
+        serial.append('## Auto generated BGF')
+        serial.append('#')
+        serial.append('')
+
+        threshold_type = None
+        threshold = None
+        species = None
+        gene_type = None
+        tier = None
+        groups = None
+        access = None
+        pmid = None
+
+        for gs in self.genesets:
+
+            ## General parameters are allowed to change in between geneset
+            ## definitions
+            if threshold_type != gs['gs_threshold_type'] or
+               threshold != gs['gs_threshold']:
+
+                threshold_type = gs['gs_threshold_type']
+                threshold = gs['gs_threshold']
+
+                serial.append(
+                    self.__format_threshold(threshold_type, threshold))
+
+            if species != gs['sp_id']:
+                species = gs['sp_id']
+
+                serial.append(self.__format_species(species))
+
+            if gene_type != gs['gs_gene_id_type']:
+                gene_type = gs['gs_gene_id_type']
+
+                serial.append(self.__format_gene_type(gene_type))
+
+            if access != gs['gs_gene_id_type']:
+                gene_type = gs['gs_gene_id_type']
+
+                serial.append(self.__format_gene_type(gene_type))
+
 
 
 if __name__ == '__main__':

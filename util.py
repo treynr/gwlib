@@ -107,7 +107,7 @@ def parse_generic_file(fp, delim='\t'):
 
 def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
                  gene_type, gene_vals, at_id=None, usr_id=0, cur_id=5, 
-                 file_id=0):
+                 file_id=0, pmid=None):
     """
     Given a shitload of arguments, this function returns a dictionary
     representation of a single geneset. Each key is a different column found
@@ -169,6 +169,7 @@ def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
     gs['sp_id'] = int(sp_id)
     gs['gs_groups'] = grps
     gs['pub_id'] = pub_id
+    gs['pmid'] = pmid
     gs['gs_threshold_type'] = int(score_type)
     gs['gs_threshold'] = thresh
     gs['gs_gene_id_type'] = int(gene_type)
