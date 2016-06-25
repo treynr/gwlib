@@ -67,7 +67,6 @@ def get_pubmed_info(pmid):
     ## missing. If this occurs we won't insert any new pubs.
     try:
         pub = sum_res[u'result']
-        #print pub
 
         ## fucking unicode errors
         #for k, v in pub.items():
@@ -945,8 +944,6 @@ class BatchWriter(object):
                 pub_id = gs['pub_id']
 
                 serial.append(self.__format_publication(pub_id))
-
-            print gs['pub_id']
 
             if not access:
                 access = True

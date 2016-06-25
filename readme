@@ -6,6 +6,10 @@ ABOUT
 	includes two additional modules for logging and miscellaneous utility
 	functions.
 
+VERSION
+    
+    0.6.126
+
 REQUIREMENTS
 	
 	python 2.7
