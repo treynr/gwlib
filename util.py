@@ -5,7 +5,7 @@
 ## auth:    TR
 # 
 
-from collections import defaultdict as dd
+from sys import argv
 import datetime as dt
 import json
 
@@ -36,6 +36,17 @@ def flatten(outlist):
     """
 
     return [a for inlist in outlist for a in inlist]
+
+def make_export_tag():
+    """
+    Generates a string using script arguments. This is attached to output so we
+    know the exact commands used to generate a particular data file.
+
+    returns
+        a string containing the script name and any arguments.
+    """
+
+    return reduce(lambda x, y: x + ' ' + y, argv)
 
 def export_json(fp, data, dtag=''):
     """
