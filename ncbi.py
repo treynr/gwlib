@@ -12,8 +12,8 @@ import urllib as url
 import urllib2 as url2
 
 ## Email and tool names are required for NCBI eutils usage
-NAME = 'geneweaver.org'
-EMAIL = 'timothy_reynolds@baylor.edu'
+NAME = ''
+EMAIL = ''
 
 ## Data export tag so we know how the data was generated
 #DTAG = reduce(lambda x, y: x + ' ' + y, sys.argv)
@@ -22,6 +22,16 @@ EMAIL = 'timothy_reynolds@baylor.edu'
 EBASE = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/'
 ESEARCH = EBASE + 'esearch.fcgi?'
 EFETCH = EBASE + 'efetch.fcgi?'
+
+def set_tool(name=None, email=None):
+    """
+    """
+
+    if name:
+        NAME = name
+
+    if email:
+        EMAIL = email
 
 def rate(new_rate=None):
     """
@@ -73,10 +83,10 @@ def check_api_defaults(db, opts):
     """
 
     if not opts.get('email', None):
-        opts['email'] = _EMAIL
+        opts['email'] = EMAIL
 
     if not opts.get('tool', None):
-        opts['tool'] = _NAME
+        opts['tool'] = NAME
 
     if not opts.get('retmax', None):
         opts['retmax'] = 5000
@@ -153,6 +163,8 @@ def e_fetch(uids, db, opts={}):
             res = url2.urlopen(req)
 
         except url2.HTTPError as e:
+            print 'HTTP Error:'
+            print e
             continue
 
         res = res.read()

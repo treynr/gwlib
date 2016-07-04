@@ -2,7 +2,7 @@
 
 ## file:    __init__.py
 ## desc:    Module initialization and db connection stuff. 
-## vers:    0.6.126
+## vers:    0.6.129
 ## auth:    TR
 #
 
@@ -21,7 +21,7 @@ CONFIG_PATH = 'gwlib.cfg'
         ## CONFIGURATION ##
         ###################
 
-def create_config():
+def __create_config():
     """
     Creates a default config containing database connection info.
     """
@@ -45,7 +45,7 @@ def create_config():
         print >> fl, 'usr_id = 3507787'
         print >> fl, ''
 
-def load_config():
+def __load_config():
     """
     Attempts to load the lib config. If it doesn't exist, one is created. Makes
     no attempt to check if the config is correct since any errors will prevent
@@ -55,7 +55,7 @@ def load_config():
     """
 
     if not path.exists(CONFIG_PATH):
-        create_config()
+        __create_config()
 
         print '[!] A new config was created for the DB library.'
         exit()
@@ -66,7 +66,7 @@ def load_config():
 
     return parser
 
-def get(section, option):
+def __get(section, option):
     """
     Retrieves the value for an option under the specified section.
 
@@ -81,27 +81,34 @@ def get(section, option):
 
     return PARSER.get(section, option)
 
-## Only time this really ever fails is when the config is bad or the postgres
-## server isn't running. Executed on import.
-try:
-    parser = load_config()
-    ##
-    host = parser.get('db', 'host')
-    database = parser.get('db', 'database')
-    user = parser.get('db', 'user')
-    password = parser.get('db', 'password')
-    port = parser.get('db', 'port')
-    ##
-    constr = "host='%s' dbname='%s' user='%s' password='%s' port='%s'" 
-    constr = constr % (host, database, user, password, port)
-    db.conn = db.psycopg2.connect(constr)
+def initialize_db():
+    """
+    Reads in the config file containing DB auth info and initializes the
+    connection. If the config file doesn't exist, one is created. Only needs 
+    to be called when using the DB module. 
+    """
 
-    db.conn.autocommit = parser.getboolean('db', 'autocommit')
+    ## Only time this really ever fails is when the config is bad or the
+    ## postgres server isn't running.
+    try:
+        parser = __load_config()
+        ##
+        host = parser.get('db', 'host')
+        database = parser.get('db', 'database')
+        user = parser.get('db', 'user')
+        password = parser.get('db', 'password')
+        port = parser.get('db', 'port')
+        ##
+        constr = "host='%s' dbname='%s' user='%s' password='%s' port='%s'" 
+        constr = constr % (host, database, user, password, port)
+        db.conn = db.psycopg2.connect(constr)
 
-except Exception as e:
-    print '[!] Oh noes, failed to connect to the db'
-    print 'The exception:'
-    print e
+        db.conn.autocommit = parser.getboolean('db', 'autocommit')
 
-    exit()
+    except Exception as e:
+        print '[!] Oh noes, failed to connect to the db'
+        print 'The exception:'
+        print e
+
+        exit()
 
