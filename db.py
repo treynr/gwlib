@@ -6,6 +6,7 @@
 ## auth:    TR
 #
 
+from collections import OrderedDict as od
 import os
 import psycopg2
 import random
@@ -73,16 +74,18 @@ def asciify(s):
 
     return s.encode('ascii', 'ignore') if isinstance(s, basestring) else s
 
-def dictify(cursor):
+def dictify(cursor, ordered=False):
     """
     Converts each row returned by the cursor into a list of dicts, where  
     each key is a column name and each value is whatever is returned by the
     query.
 
-    :type cursor: object
-    :arg cursor: the psycopg cursor
+    arguments
+        cursor: an active psycopg cursor
+        ordered: a boolean indicating whether to use a regular or ordered dict
 
-    :ret list: dicts containing the results of the SQL query
+    returns
+        a list of dicts containing the results of the SQL query
     """
 
     dlist = []
@@ -91,7 +94,7 @@ def dictify(cursor):
         ## Prevents unicode type errors from cropping up later. Convert to
         ## ascii, ignore any conversion errors.
         row = map(lambda s: asciify(s), row)
-        d = {}
+        d = od() if ordered else {}
 
         for i, col in enumerate(cursor.description):
             d[col[0]] = row[i]
@@ -377,7 +380,7 @@ def get_preferred_gene_refs(gene_ids):
 
         return associate(cursor)
 
-def get_genesets(gs_ids)
+def get_genesets(gs_ids):
     """
     Returns a list of genesets for the given list of gs_ids.
 
@@ -402,7 +405,7 @@ def get_genesets(gs_ids)
                 (gs_ids)
         )
 
-        return dictify(cursor)
+        return dictify(cursor, ordered=True)
 
 def get_genesets_by_tier(tiers=[1,2,3,4,5], size=5000):
     """
