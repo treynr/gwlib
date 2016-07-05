@@ -797,7 +797,7 @@ class BatchWriter(object):
                 self.errors.append('Invalid expression platform')
                 return ''
 
-            serial = '% microarray ' + self.platforms(gene_type)
+            serial = '% microarray ' + self.platforms[gene_type]
 
         return serial
 
