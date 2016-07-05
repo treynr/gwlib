@@ -377,6 +377,33 @@ def get_preferred_gene_refs(gene_ids):
 
         return associate(cursor)
 
+def get_genesets(gs_ids)
+    """
+    Returns a list of genesets for the given list of gs_ids.
+
+    arguments
+        gs_ids: a list of gs_ids (long)
+
+    returns
+        a list of geneset objects that contain all columns in the geneset table
+    """
+
+    if type(tiers) == list:
+        tiers = tuple(tiers)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  *
+            FROM    production.geneset
+            WHERE   gs_id IN %s;
+            ''', 
+                (gs_ids)
+        )
+
+        return dictify(cursor)
+
 def get_genesets_by_tier(tiers=[1,2,3,4,5], size=5000):
     """
     Returns a list of normal (i.e. their status is not deleted or deprecated) 
