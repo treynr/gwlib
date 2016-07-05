@@ -391,8 +391,8 @@ def get_genesets(gs_ids):
         a list of geneset objects that contain all columns in the geneset table
     """
 
-    if type(tiers) == list:
-        tiers = tuple(tiers)
+    if type(gs_ids) == list:
+        gs_ids = tuple(gs_ids)
 
     with PooledCursor() as cursor:
 
