@@ -402,7 +402,7 @@ def get_genesets(gs_ids):
             FROM    production.geneset
             WHERE   gs_id IN %s;
             ''', 
-                (gs_ids)
+                (gs_ids,)
         )
 
         return dictify(cursor, ordered=True)
