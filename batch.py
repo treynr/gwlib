@@ -935,7 +935,7 @@ class BatchWriter(object):
 
                 serial.append(self.__format_gene_type(gene_type))
 
-            if gs['pmid'] and pmid != gs['pmid']:
+            if gs.get('pmid', None) and pmid != gs['pmid']:
                 pmid = gs['pmid']
 
                 serial.append(self.__format_publication(None, pmid))
