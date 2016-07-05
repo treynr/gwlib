@@ -645,6 +645,24 @@ def get_gene_types():
 
         return associate(cursor)
 
+def get_short_gene_types():
+    """
+    Returns a mapping of gene type short names to their IDs.
+
+    :ret dict: mapping of gdb_shortname -> gdb_id
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  gdb_shortname, gdb_id
+            FROM    odestatic.genedb;
+            '''
+        )
+
+        return associate(cursor)
+
 def get_microarray_types():
     """
     Returns the list of supported microarray platforms as a mapping of platform
