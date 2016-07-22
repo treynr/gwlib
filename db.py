@@ -713,6 +713,34 @@ def get_platform_probes(pf_id, refs):
 
         return associate(cursor)
 
+def get_all_platform_probes(pf_id, refs):
+    """
+    Returns a mapping of all current probe names (prb_ref_ids) to their IDs for
+    a particular platform.
+
+    arguments
+        pf_id: platform ID
+
+    returns
+        a maping of prb_id -> prb_ref_id
+    """
+
+    if type(refs) == list:
+        refs = tuple(refs)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  prb_ref_id, prb_id
+            FROM    odestatic.probe
+            WHERE   pf_id = %s;
+            ''',
+                (pf_id,)
+        )
+
+        return associate(cursor)
+
 def get_probe2gene(prb_ids):
     """
     Returns a mapping of prb_ids -> ode_gene_ids for the given set of prb_ids.
