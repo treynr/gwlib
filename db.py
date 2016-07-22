@@ -760,7 +760,7 @@ def get_platform_probes(pf_id, refs):
 
         return associate(cursor)
 
-def get_all_platform_probes(pf_id, refs):
+def get_all_platform_probes(pf_id):
     """
     Returns a mapping of all current probe names (prb_ref_ids) to their IDs for
     a particular platform.
@@ -771,9 +771,6 @@ def get_all_platform_probes(pf_id, refs):
     returns
         a dict maping of prb_id -> prb_ref_id
     """
-
-    if type(refs) == list:
-        refs = tuple(refs)
 
     with PooledCursor() as cursor:
 
