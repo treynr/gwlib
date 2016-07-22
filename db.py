@@ -36,6 +36,8 @@ class PooledCursor(object):
     def __enter__(self):
         self.cursor = self.connection.cursor()
 
+        self.cursor.execute('SET search_path = extsrc,odestatic,production;')
+
         return self.cursor
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -1049,6 +1051,87 @@ def insert_file(size, contents, comments):
 
         return cursor.fetchone()[0]
 
+def insert_platform(platform):
+    """
+    Inserts a new platform into the database using the given platform object.
+    Some fields are skipped because I have no fucking clue what they're used
+    for. As soon as I figure it out, they'll get added.
+
+    arguments
+        platform: a dict whose keys should match those of the platform table
+
+    returns
+        an int representing the newly inserted platform ID
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO platform
+                (pf_gpl_id, pf_shortname, pf_name, sp_id, pf_date)
+            VALUES
+                (%(pf_gpl_id)s, %(pf_shortname)s, %(pf_name)s, %(sp_id)s, NOW())
+            RETURNING pf_id;
+            ''', 
+                platform
+        )
+
+        return cursor.fetchone()[0]
+
+def insert_probe(prb_ref, pf_id):
+    """
+    Inserts a new probe reference ID for the given platform ID.
+
+    arguments
+        prb_ref: a string probe reference ID
+        pf_id: a platform ID
+
+    returns
+        an unique int for the given (prb_ref_id, pf_id) combo
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO probe
+                (prb_ref_id, pf_id)
+            VALUES
+                (%s, %s)
+            RETURNING prb_id;
+            ''', 
+                (prb_ref, pf_id)
+        )
+
+        return cursor.fetchone()[0]
+
+def insert_probe2gene(prb_id, ode_id):
+    """
+    Inserts a new prb_id, ode_gene_id combination into the database.
+
+    arguments
+        prb_id: a probe ID
+        ode_id: an ODE gene ID
+
+    returns
+        the prb_id of the newly inserted probe/gene ID combo
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO probe2gene
+                (prb_id, ode_gene_id)
+            VALUES
+                (%s, %s)
+            RETURNING prb_id;
+            ''', 
+                (prb_id, ode_id)
+        )
+
+        return cursor.fetchone()[0]
 
         ## UPDATES ##
         #############
