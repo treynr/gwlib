@@ -276,7 +276,7 @@ def get_gene_ids_by_species(refs, sp_id):
 
         return associate(cursor)
 
-def get_species_genes(refs, sp_id):
+def get_species_genes(sp_id):
     """
     Similar to the above get_gene_ids() but an ode_ref_id -> ode_gene_id
     mapping for all genes for the given species.
@@ -287,9 +287,6 @@ def get_species_genes(refs, sp_id):
     returns
         a dict mapping of ode_ref_id -> ode_gene_id
     """
-
-    if type(refs) == list:
-        refs = tuple(refs)
 
     with PooledCursor() as cursor:
 
