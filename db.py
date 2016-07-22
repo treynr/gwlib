@@ -274,6 +274,34 @@ def get_gene_ids_by_species(refs, sp_id):
 
         return associate(cursor)
 
+def get_species_genes(refs, sp_id):
+    """
+    Similar to the above get_gene_ids() but an ode_ref_id -> ode_gene_id
+    mapping for all genes for the given species.
+
+    arguments
+        sp_id: species ID
+
+    returns
+        a dict mapping of ode_ref_id -> ode_gene_id
+    """
+
+    if type(refs) == list:
+        refs = tuple(refs)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  ode_ref_id, ode_gene_id
+            FROM    extsrc.gene
+            WHERE   sp_id = %s;
+            ''', 
+                (sp_id,)
+        )
+
+        return associate(cursor)
+
 def get_gene_refs(gene_ids):
     """
     Retrieves external reference IDs for the given list of ode_gene_ids. The
@@ -722,7 +750,7 @@ def get_all_platform_probes(pf_id, refs):
         pf_id: platform ID
 
     returns
-        a maping of prb_id -> prb_ref_id
+        a dict maping of prb_id -> prb_ref_id
     """
 
     if type(refs) == list:
@@ -745,10 +773,11 @@ def get_probe2gene(prb_ids):
     """
     Returns a mapping of prb_ids -> ode_gene_ids for the given set of prb_ids.
 
-    :type refs: list
-    :arg refs: list of probe references/names
+    arguments
+        prb_ids: a list of probe IDs
 
-    :ret dict: mapping of prb_id -> ode_gene_id
+    returns
+        a dict mapping of prb_id -> prb_ref_id
     """
 
     if type(prb_ids) == list:
@@ -762,7 +791,7 @@ def get_probe2gene(prb_ids):
             FROM    extsrc.probe2gene
             WHERE   prb_id in %s;
             ''',
-                (prb_ids)
+                (prb_ids,)
         )
 
         return associate(cursor)
