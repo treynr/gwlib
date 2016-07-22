@@ -691,7 +691,27 @@ def get_short_gene_types():
 
         return associate(cursor)
 
-def get_microarray_types():
+def get_platforms():
+    """
+    Returns the list of supported microarray platforms as objects containing
+    any and all information associated with a particular platform.
+
+    returns
+        a list of objects whose keys match the platform table
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  pf_id, pf_name, pf_shortname, pf_gpl_id
+            FROM    odestatic.platform;
+            '''
+        )
+
+        return dictify(cursor)
+
+def get_platform_names():
     """
     Returns the list of supported microarray platforms as a mapping of platform
     names -> IDs.
