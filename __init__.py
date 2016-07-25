@@ -2,7 +2,7 @@
 
 ## file:    __init__.py
 ## desc:    Module initialization and db connection stuff. 
-## vers:    0.6.137
+## vers:    0.6.144
 ## auth:    TR
 #
 
@@ -17,6 +17,7 @@ import util
 
 ## Config is in the same folder as the rest of the GW library
 CONFIG_PATH = 'gwlib.cfg'
+VERSION = '0.6.144'
 
         ## CONFIGURATION ##
         ###################
@@ -58,7 +59,7 @@ def __load_config():
         __create_config()
 
         print '[!] A new config was created for the DB library.'
-        exit()
+        print '[!] You should probably fill it out.'
 
     parser = ConfigParser.RawConfigParser()
 
@@ -87,28 +88,29 @@ def initialize_db():
     connection. If the config file doesn't exist, one is created. Only needs 
     to be called when using the DB module. 
     """
+    pass
 
-    ## Only time this really ever fails is when the config is bad or the
-    ## postgres server isn't running.
-    try:
-        parser = __load_config()
-        ##
-        host = parser.get('db', 'host')
-        database = parser.get('db', 'database')
-        user = parser.get('db', 'user')
-        password = parser.get('db', 'password')
-        port = parser.get('db', 'port')
-        ##
-        constr = "host='%s' dbname='%s' user='%s' password='%s' port='%s'" 
-        constr = constr % (host, database, user, password, port)
-        db.conn = db.psycopg2.connect(constr)
+## Only time this really ever fails is when the config is bad or the
+## postgres server isn't running.
+try:
+    parser = __load_config()
+    ##
+    host = parser.get('db', 'host')
+    database = parser.get('db', 'database')
+    user = parser.get('db', 'user')
+    password = parser.get('db', 'password')
+    port = parser.get('db', 'port')
+    ##
+    constr = "host='%s' dbname='%s' user='%s' password='%s' port='%s'" 
+    constr = constr % (host, database, user, password, port)
+    db.conn = db.psycopg2.connect(constr)
 
-        db.conn.autocommit = parser.getboolean('db', 'autocommit')
+    db.conn.autocommit = parser.getboolean('db', 'autocommit')
 
-    except Exception as e:
-        print '[!] Oh noes, failed to connect to the db'
-        print 'The exception:'
-        print e
+except Exception as e:
+    print '[!] Oh noes, failed to connect to the db. Will attempt to continue.'
+    print 'The exception:'
+    print e
 
-        exit()
+    #exit()
 
