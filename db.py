@@ -165,6 +165,40 @@ def associate(cursor):
 
     return d
 
+def associate_duplicate(cursor):
+    """
+    Like associate(), creates a simple mapping from all the rows returned by
+    the cursor. The first tuple member serves as the key and the rest are the 
+    values. This function correctly handles duplicate entries.
+
+    arguments
+        cursor: a psycopg cursor object
+
+    returns
+        a dict mapping tuple elemnt #1 to the rest
+    """
+
+    d = {}
+
+    for row in cursor:
+        row = map(lambda s: asciify(s), row)
+
+        ## 1:1
+        if len(row) == 2:
+            if row[0] in d:
+                d[row[0]].append(row[1])
+            else:
+                d[row[0]] = [row[1]]
+
+        ## 1:many
+        else:
+            if row[0] in d:
+                d[row[0]].extend(list(row[1:]))
+            else:
+                d[row[0]] = list(row[1:])
+
+    return d
+
 def commit():
     """
     Commits the transaction.
@@ -810,7 +844,8 @@ def get_probe2gene(prb_ids):
                 (prb_ids,)
         )
 
-        return associate(cursor)
+        #return associate(cursor)
+        return associate_duplicate(cursor)
 
         ## INSERTS ##
         #############
