@@ -311,7 +311,7 @@ class BatchReader(object):
 
         gene_types = db.get_gene_types()
         species = db.get_species()
-        platforms = db.get_microarray_types()
+        platforms = db.get_platform_names()
 
         def reset_add_geneset():
             gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype, 
@@ -708,7 +708,7 @@ class BatchWriter(object):
         self.errors = []
         self.species = db.get_species()
         self.gene_types = db.get_gene_types()
-        self.platforms = db.get_microarray_types()
+        self.platforms = db.get_platform_names()
         self.attributions = db.get_attributions()
 
         ## Reverse each of the mappings
