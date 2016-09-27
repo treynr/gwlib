@@ -74,7 +74,7 @@ def asciify(s):
     :arg s: string being converted to ASCII
     """
 
-    return s.decode('ascii', 'ignore') if isinstance(s, basestring) else s
+    return s.encode('ascii', 'ignore') if isinstance(s, basestring) else s
 
 def dictify(cursor, ordered=False):
     """
