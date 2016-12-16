@@ -228,6 +228,24 @@ def get_species():
 
         return associate(cursor)
 
+def get_species_by_taxid():
+    """
+    Returns a mapping of species taxids (NCBI taxonomy ID) to their sp_id.
+
+    :ret dict: mapping of sp_taxids to sp_ids
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  sp_taxid, sp_id
+            FROM    odestatic.species;
+            '''
+        )
+
+        return associate(cursor)
+
 def get_attributions():
     """
     Returns all the attributions (at_id and at_abbrev) found in the DB.
