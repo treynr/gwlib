@@ -74,7 +74,12 @@ def asciify(s):
     :arg s: string being converted to ASCII
     """
 
-    return s.encode('ascii', 'ignore') if isinstance(s, basestring) else s
+    #return s.encode('ascii', 'ignore') if isinstance(s, basestring) else s
+    #return s.encode('utf-8', 'ignore') if isinstance(s, basestring) else s
+    if isinstance(s, basestring):
+        return s.decode('utf-8').encode('utf-8', 'ignore')
+
+    return s
 
 def dictify(cursor, ordered=False):
     """
@@ -669,6 +674,8 @@ def get_geneset_metadata(gs_ids):
 
     :ret list: dicts with column names as keys
     """
+    if type(gs_ids) == list:
+        gs_ids = tuple(gs_ids)
 
     with PooledCursor() as cursor:
 
@@ -692,6 +699,8 @@ def get_geneset_size(gs_ids):
 
     :ret dict: mapping of gs_id to size (gs_count)
     """
+    if type(gs_ids) == list:
+        gs_ids = tuple(gs_ids)
 
     with PooledCursor() as cursor:
 
