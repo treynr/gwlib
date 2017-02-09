@@ -1189,6 +1189,90 @@ def insert_probe2gene(prb_id, ode_id):
 
         return cursor.fetchone()[0]
 
+def insert_ontologydb_entry(name, prefix):
+    """
+    Inserts a new ontology into the ontologydb table.
+
+    arguments
+        name:   the ontology name
+        prefix: the ontology ID prefix (e.g. GO, MP)
+
+    returns
+        the ontdb_id of the newly inserted ontology
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO odestatic.ontologydb
+                (ontdb_name, ontdb_prefix, ontdb_date)
+            VALUES
+                (%s, %s, NOW())
+            RETURNING ontdb_id;
+            ''', 
+                (name, prefix)
+        )
+
+        return cursor.fetchone()[0]
+
+def insert_ontology(ref_id, name, desc, children, parents, ontdb_id):
+    """
+    Inserts a new ontology term into the ontology table.
+
+    arguments
+        ref_id:     the ontology ID for this term
+        name:       the ontology term
+        desc:       description of the term
+        children:   number of children this term has
+        parents:    number of parents this term has
+
+    returns
+        the ont_id of the newly inserted term
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.ontology (
+                ont_ref_id, ont_name, ont_description, ont_children, 
+                ont_parents, ontdb_id
+
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s
+
+            ) RETURNING ont_id;
+            ''', 
+                (ref_id, name, desc, children, parents, ontdb_id)
+        )
+
+        return cursor.fetchone()[0]
+
+def insert_ontology_relation(left, right, relation):
+    """
+    Inserts a new relationship into the ontology_relation table.
+    The left ID should always be the more granular term, i.e. the left term is
+    the child of the right term.
+
+    arguments
+        left:       the ontology ID for the child term
+        right:      the ontology ID for the parent term
+        relation:   the type of relationship (e.g. is_a, part_of, regulates)
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.ontology_relation
+                (left_ont_id, right_ont_id, or_type)
+            VALUES
+                (%s, %s, %s);
+            ''', 
+                (left, right, relation)
+        )
+
         ## UPDATES ##
         #############
 

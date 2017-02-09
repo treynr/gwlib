@@ -2,7 +2,7 @@
 
 ## file:    __init__.py
 ## desc:    Module initialization and db connection stuff. 
-## vers:    0.6.147
+## vers:    0.6.151
 ## auth:    TR
 #
 
