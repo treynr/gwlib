@@ -1217,6 +1217,34 @@ def insert_probe2gene(prb_id, ode_id):
 
         return cursor.fetchone()[0]
 
+def insert_jaccard(lid, rid, jac):
+    """
+    Inserts an entry into the jaccard table.
+
+    arguments
+        lid: left gs_id
+        rid: right gs_id
+        jac: jaccard value
+    """
+
+    ## This is a constraint in production
+    if lid >= rid:
+        lid, rid = rid, lid
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.geneset_jaccard
+                (gs_id_left, gs_id_right, jac_value)
+            VALUES
+                (%s, %s, %s);
+            ''', 
+                (lid, rid, jac)
+        )
+
+        return cursor.rowcount
+
         ## UPDATES ##
         #############
 
@@ -1281,6 +1309,9 @@ def delete_jaccard(lid, rid):
         lid: left gs_id
         rid: right gs_id
     """
+
+    if lid >= rid:
+        lid, rid = rid, lid
 
     with PooledCursor() as cursor:
 
