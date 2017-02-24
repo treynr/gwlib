@@ -7,6 +7,7 @@
 #
 
 from collections import OrderedDict as od
+from sys import maxint
 import os
 import psycopg2
 import random
@@ -491,7 +492,7 @@ def get_genesets(gs_ids):
 
         return dictify(cursor, ordered=True)
 
-def get_genesets_by_tier(tiers=[1,2,3,4,5], size=5000):
+def get_genesets_by_tier(tiers=[1,2,3,4,5], size=maxint):
     """
     Returns a list of normal (i.e. their status is not deleted or deprecated) 
     geneset IDs that belong in a particular tier or set of tiers. Also allows
@@ -522,7 +523,7 @@ def get_genesets_by_tier(tiers=[1,2,3,4,5], size=5000):
 
         return listify(cursor)
 
-def get_genesets_by_attribute(at_id, size=5000):
+def get_genesets_by_attribute(at_id, size=maxint):
     """
     Returns a list of normal (i.e. their status is not deleted or deprecated) 
     geneset IDs that belong to a particular attribution group. Also allows
@@ -1271,6 +1272,29 @@ def commit():
 
     ## DELETES ##
     #############
+
+def delete_jaccard(lid, rid):
+    """
+    Deletes an entry from the jaccard table.
+
+    arguments
+        lid: left gs_id
+        rid: right gs_id
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            DELETE
+            FROM   extsrc.geneset_jaccard
+            WHERE  gs_id_left = %s AND
+                   gs_id_right = %s;
+            ''', 
+                (lid, rid)
+        )
+
+        return cursor.rowcount
 
     ## VARIANT SCHEMA ADDITIONS ##
     ##############################
