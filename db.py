@@ -715,6 +715,33 @@ def get_geneset_size(gs_ids):
 
         return associate(cursor)
 
+def get_geneset_species(gs_ids):
+    """
+    Returns geneset species IDs for the given genesets.
+
+    arguments
+        gs_ids: list of gs_ids to get species data for
+
+    returns
+        a dict mapping gs_id -> sp_id
+    """
+
+    if type(gs_ids) == list:
+        gs_ids = tuple(gs_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  gs_id, sp_id
+            FROM    production.geneset
+            WHERE   gs_id IN %s;
+            ''',
+                (gs_ids,)
+        )
+
+        return associate(cursor)
+
 def get_gene_types():
     """
     Returns a mapping of gene type names to their IDs.
@@ -1245,6 +1272,100 @@ def commit():
     ## DELETES ##
     #############
 
+    ## VARIANT SCHEMA ADDITIONS ##
+    ##############################
+
+def get_genome_builds():
+    """
+    Retrieves the list of genome builds supported by GW.
+
+    returns
+        a list of objects representing rows from the genome_build table
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute('''SELECT * FROM odestatic.genome_build;''')
+
+        return dictify(cursor)
+
+def get_variant_type_by_effect(effect):
+    """
+    Retrieves the list of genome builds supported by GW.
+
+    returns
+        a list of objects representing rows from the genome_build table
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT * 
+            FROM   odestatic.variant_type
+            WHERE  vt_effect = %s;
+            ''',
+                (effect,))
+
+        return dictify(cursor)
+
+def insert_variant(var):
+    """
+    Inserts a new variant into the database. This function does not check to
+    see if the insertion would violate any DB consistency checks.
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.variant
+
+                (var_ref_id, var_allele, var_chromosome, var_position, vt_id,
+                var_ref_cur, var_obs_alleles, var_ma, var_maf, var_clinsig,
+                gb_id)
+
+            VALUES
+
+                (%(var_ref_id)s, %(var_allele)s, %(var_chromosome)s, 
+                %(var_position)s, %(vt_id)s, %(var_ref_cur)s, 
+                %(var_obs_alleles)s, %(var_ma)s, %(var_maf)s, %(var_clinsig)s,
+                %(gb_id)s)
+            
+            RETURNING var_id;
+            ''', 
+                var
+        )
+
+        return cursor.fetchone()[0]
+
+def insert_variant_with_id(var):
+    """
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.variant
+
+                (var_id, var_ref_id, var_allele, var_chromosome, var_position,
+                vt_id, var_ref_cur, var_obs_alleles, var_ma, var_maf,
+                var_clinsig, gb_id)
+
+            VALUES
+
+                (%(var_id)s, %(var_ref_id)s, %(var_allele)s, %(var_chromosome)s, 
+                %(var_position)s, %(vt_id)s, %(var_ref_cur)s, 
+                %(var_obs_alleles)s, %(var_ma)s, %(var_maf)s, %(var_clinsig)s,
+                %(gb_id)s)
+            
+            RETURNING var_id;
+            ''', 
+                var
+        )
+
+        return cursor.fetchone()[0]
 
 if __name__ == '__main__':
 
