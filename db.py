@@ -7,6 +7,7 @@
 #
 
 from collections import OrderedDict as od
+from sys import maxint
 import os
 import psycopg2
 import random
@@ -491,7 +492,7 @@ def get_genesets(gs_ids):
 
         return dictify(cursor, ordered=True)
 
-def get_genesets_by_tier(tiers=[1,2,3,4,5], size=5000):
+def get_genesets_by_tier(tiers=[1,2,3,4,5], size=maxint):
     """
     Returns a list of normal (i.e. their status is not deleted or deprecated) 
     geneset IDs that belong in a particular tier or set of tiers. Also allows
@@ -522,7 +523,7 @@ def get_genesets_by_tier(tiers=[1,2,3,4,5], size=5000):
 
         return listify(cursor)
 
-def get_genesets_by_attribute(at_id, size=5000):
+def get_genesets_by_attribute(at_id, size=maxint):
     """
     Returns a list of normal (i.e. their status is not deleted or deprecated) 
     geneset IDs that belong to a particular attribution group. Also allows
@@ -734,6 +735,33 @@ def get_geneset_size(gs_ids):
         cursor.execute(
             '''
             SELECT  gs_id, gs_count
+            FROM    production.geneset
+            WHERE   gs_id IN %s;
+            ''',
+                (gs_ids,)
+        )
+
+        return associate(cursor)
+
+def get_geneset_species(gs_ids):
+    """
+    Returns geneset species IDs for the given genesets.
+
+    arguments
+        gs_ids: list of gs_ids to get species data for
+
+    returns
+        a dict mapping gs_id -> sp_id
+    """
+
+    if type(gs_ids) == list:
+        gs_ids = tuple(gs_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  gs_id, sp_id
             FROM    production.geneset
             WHERE   gs_id IN %s;
             ''',
@@ -1216,6 +1244,118 @@ def insert_probe2gene(prb_id, ode_id):
 
         return cursor.fetchone()[0]
 
+def insert_jaccard(lid, rid, jac):
+    """
+    Inserts an entry into the jaccard table.
+
+    arguments
+        lid: left gs_id
+        rid: right gs_id
+        jac: jaccard value
+    """
+
+    ## This is a constraint in production
+    if lid >= rid:
+        lid, rid = rid, lid
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.geneset_jaccard
+                (gs_id_left, gs_id_right, jac_value)
+            VALUES
+                (%s, %s, %s);
+            ''', 
+                (lid, rid, jac)
+        )
+
+        return cursor.rowcount
+
+def insert_ontologydb_entry(name, prefix):
+    """
+    Inserts a new ontology into the ontologydb table.
+
+    arguments
+        name:   the ontology name
+        prefix: the ontology ID prefix (e.g. GO, MP)
+
+    returns
+        the ontdb_id of the newly inserted ontology
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO odestatic.ontologydb
+                (ontdb_name, ontdb_prefix, ontdb_date)
+            VALUES
+                (%s, %s, NOW())
+            RETURNING ontdb_id;
+            ''', 
+                (name, prefix)
+        )
+
+        return cursor.fetchone()[0]
+
+def insert_ontology(ref_id, name, desc, children, parents, ontdb_id):
+    """
+    Inserts a new ontology term into the ontology table.
+
+    arguments
+        ref_id:     the ontology ID for this term
+        name:       the ontology term
+        desc:       description of the term
+        children:   number of children this term has
+        parents:    number of parents this term has
+
+    returns
+        the ont_id of the newly inserted term
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.ontology (
+                ont_ref_id, ont_name, ont_description, ont_children, 
+                ont_parents, ontdb_id
+
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s
+
+            ) RETURNING ont_id;
+            ''', 
+                (ref_id, name, desc, children, parents, ontdb_id)
+        )
+
+        return cursor.fetchone()[0]
+
+def insert_ontology_relation(left, right, relation):
+    """
+    Inserts a new relationship into the ontology_relation table.
+    The left ID should always be the more granular term, i.e. the left term is
+    the child of the right term.
+
+    arguments
+        left:       the ontology ID for the child term
+        right:      the ontology ID for the parent term
+        relation:   the type of relationship (e.g. is_a, part_of, regulates)
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.ontology_relation
+                (left_ont_id, right_ont_id, or_type)
+            VALUES
+                (%s, %s, %s);
+            ''', 
+                (left, right, relation)
+        )
+
         ## UPDATES ##
         #############
 
@@ -1272,6 +1412,126 @@ def commit():
     ## DELETES ##
     #############
 
+def delete_jaccard(lid, rid):
+    """
+    Deletes an entry from the jaccard table.
+
+    arguments
+        lid: left gs_id
+        rid: right gs_id
+    """
+
+    if lid >= rid:
+        lid, rid = rid, lid
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            DELETE
+            FROM   extsrc.geneset_jaccard
+            WHERE  gs_id_left = %s AND
+                   gs_id_right = %s;
+            ''', 
+                (lid, rid)
+        )
+
+        return cursor.rowcount
+
+    ## VARIANT SCHEMA ADDITIONS ##
+    ##############################
+
+def get_genome_builds():
+    """
+    Retrieves the list of genome builds supported by GW.
+
+    returns
+        a list of objects representing rows from the genome_build table
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute('''SELECT * FROM odestatic.genome_build;''')
+
+        return dictify(cursor)
+
+def get_variant_type_by_effect(effect):
+    """
+    Retrieves the list of genome builds supported by GW.
+
+    returns
+        a list of objects representing rows from the genome_build table
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT * 
+            FROM   odestatic.variant_type
+            WHERE  vt_effect = %s;
+            ''',
+                (effect,))
+
+        return dictify(cursor)
+
+def insert_variant(var):
+    """
+    Inserts a new variant into the database. This function does not check to
+    see if the insertion would violate any DB consistency checks.
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.variant
+
+                (var_ref_id, var_allele, var_chromosome, var_position, vt_id,
+                var_ref_cur, var_obs_alleles, var_ma, var_maf, var_clinsig,
+                gb_id)
+
+            VALUES
+
+                (%(var_ref_id)s, %(var_allele)s, %(var_chromosome)s, 
+                %(var_position)s, %(vt_id)s, %(var_ref_cur)s, 
+                %(var_obs_alleles)s, %(var_ma)s, %(var_maf)s, %(var_clinsig)s,
+                %(gb_id)s)
+            
+            RETURNING var_id;
+            ''', 
+                var
+        )
+
+        return cursor.fetchone()[0]
+
+def insert_variant_with_id(var):
+    """
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.variant
+
+                (var_id, var_ref_id, var_allele, var_chromosome, var_position,
+                vt_id, var_ref_cur, var_obs_alleles, var_ma, var_maf,
+                var_clinsig, gb_id)
+
+            VALUES
+
+                (%(var_id)s, %(var_ref_id)s, %(var_allele)s, %(var_chromosome)s, 
+                %(var_position)s, %(vt_id)s, %(var_ref_cur)s, 
+                %(var_obs_alleles)s, %(var_ma)s, %(var_maf)s, %(var_clinsig)s,
+                %(gb_id)s)
+            
+            RETURNING var_id;
+            ''', 
+                var
+        )
+
+        return cursor.fetchone()[0]
 
 if __name__ == '__main__':
 
