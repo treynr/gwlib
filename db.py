@@ -602,6 +602,33 @@ def get_gene_homologs(gene_ids):
 
         return associate(cursor)
 
+def get_homolog_species(hom_ids):
+    """
+    Returns all the species associated with a given hom_id.
+
+    arguments
+        hom_ids: a list of hom_ids
+
+    returns
+        a mapping of ode_gene_ids to homology IDs (hom_id)
+    """
+
+    if type(hom_ids) == list:
+        hom_ids = tuple(hom_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  hom_id, sp_id
+            FROM    extsrc.homology
+            WHERE   hom_id IN %s;
+            ''', 
+                (hom_ids,)
+        )
+
+        return associate_duplicate(cursor)
+
 def get_publication(pmid):
     """
     Returns the GW publication ID associated with the gived PubMed ID.
