@@ -929,6 +929,35 @@ def get_probe2gene(prb_ids):
         #return associate(cursor)
         return associate_duplicate(cursor)
 
+def get_group_by_name(name):
+    """
+    Returns the grp_id for the given grp_name.
+
+    arguments
+        name: the name of group
+
+    returns
+        a grp_id (int)
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  grp_id
+            FROM    extsrc.grp
+            WHERE   grp_name = %s
+            ''',
+                (name,)
+        )
+
+        result = listify(cursor)
+
+        if not result:  
+            return None
+
+        return result[0]
+
         ## INSERTS ##
         #############
 
