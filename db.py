@@ -958,6 +958,49 @@ def get_group_by_name(name):
 
         return result[0]
 
+def get_projects():
+    """
+    Returns all projects in the DB.
+
+    returns
+        a list of dicts representing projects
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  pj_id, pj_name, pj_groups
+            FROM    production.project;
+            '''
+        )
+
+        return dictify(cursor)
+
+def get_genesets_by_project(pj_ids):
+    """
+    Returns all genesets associated with the given project IDs.
+
+    returns
+        a mapping of pj_id -> gs_ids
+    """
+
+    if type(pj_ids) == list:
+        pj_ids = tuple(pj_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  pj_id, gs_id
+            FROM    production.project2geneset
+            WHERE   pj_id IN %s;
+            ''',
+                (pj_ids,)
+        )
+
+        return associate_duplicate(cursor)
+
         ## INSERTS ##
         #############
 
