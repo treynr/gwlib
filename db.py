@@ -624,7 +624,7 @@ def get_homolog_species(hom_ids):
             SELECT  hom_id, sp_id
             FROM    extsrc.homology
             WHERE   hom_id IN %s;
-            ''',
+            ''', 
                 (hom_ids,)
         )
 
@@ -927,6 +927,78 @@ def get_probe2gene(prb_ids):
         )
 
         #return associate(cursor)
+        return associate_duplicate(cursor)
+
+def get_group_by_name(name):
+    """
+    Returns the grp_id for the given grp_name.
+
+    arguments
+        name: the name of group
+
+    returns
+        a grp_id (int)
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  grp_id
+            FROM    extsrc.grp
+            WHERE   grp_name = %s
+            ''',
+                (name,)
+        )
+
+        result = listify(cursor)
+
+        if not result:  
+            return None
+
+        return result[0]
+
+def get_projects():
+    """
+    Returns all projects in the DB.
+
+    returns
+        a list of dicts representing projects
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  pj_id, pj_name, pj_groups
+            FROM    production.project;
+            '''
+        )
+
+        return dictify(cursor)
+
+def get_genesets_by_project(pj_ids):
+    """
+    Returns all genesets associated with the given project IDs.
+
+    returns
+        a mapping of pj_id -> gs_ids
+    """
+
+    if type(pj_ids) == list:
+        pj_ids = tuple(pj_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  pj_id, gs_id
+            FROM    production.project2geneset
+            WHERE   pj_id IN %s;
+            ''',
+                (pj_ids,)
+        )
+
         return associate_duplicate(cursor)
 
         ## INSERTS ##
