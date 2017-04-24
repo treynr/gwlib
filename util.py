@@ -118,7 +118,7 @@ def parse_generic_file(fp, delim='\t'):
 
 def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
                  gene_type, gene_vals, at_id=None, usr_id=0, cur_id=5, 
-                 file_id=0, pmid=None):
+                 file_id=0, pmid=None, annos=[]):
     """
     Given a shitload of arguments, this function returns a dictionary
     representation of a single geneset. Each key is a different column found
@@ -193,6 +193,9 @@ def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
     ## Other fields we can fill out
     gs['gs_count'] = len(gene_vals)
     gs['cur_id'] = cur_id
+
+    ## Ontology annotations
+    gs['annotations'] = annos
 
     return gs
 

@@ -902,14 +902,26 @@ class BatchWriter(object):
 
         return 'D ' + self.attributions[at_id]
 
-    def serialize(self):
+    def __format_annotations(self, annos):
+        """
+        """
+
+        annos = map(lambda s: '~ ' + str(s), annos)
+
+        return '\n'.join(annos)
+
+    def serialize(self, versioning=''):
         """
         Formats the list of genesets into a single batch file and outputs the
         result.
         """
 
         serial = []
-        serial.append('## Auto generated BGF')
+        serial.append('## Machine generated BGF file')
+
+        if versioning:
+            serial.append('## %s' % versioning)
+
         serial.append('#')
         serial.append('')
 
@@ -924,6 +936,7 @@ class BatchWriter(object):
         usr_id = None
         pub_id = None
         at_id = None
+        annos = None
 
         for gs in self.genesets:
 
@@ -953,10 +966,15 @@ class BatchWriter(object):
 
                 serial.append(self.__format_publication(None, pmid))
 
-            elif gs['pub_id'] and pub_id != gs['pub_id']:
+            if gs['pub_id'] and pub_id != gs['pub_id']:
                 pub_id = gs['pub_id']
 
                 serial.append(self.__format_publication(pub_id))
+
+            if gs['annotations'] and annos != gs['annotations']:
+                annos = gs['annotations']
+
+                serial.append(self.__format_annotations(annos))
 
             if not access:
                 access = True
