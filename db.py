@@ -945,7 +945,7 @@ def get_group_by_name(name):
         cursor.execute(
             '''
             SELECT  grp_id
-            FROM    extsrc.grp
+            FROM    production.grp
             WHERE   grp_name = %s
             ''',
                 (name,)

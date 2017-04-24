@@ -334,8 +334,8 @@ class BatchReader(object):
         for i in range(len(lns)):
             lns[i] = lns[i].strip()
 
-            ## These are special additions to the batch file that allow curation
-            ## tiers, user IDs, and attributions to be specified.
+            ## These are special (dev only) additions to the batch file that 
+            ## allow tiers, user IDs, and attributions to be specified.
             #
             ## Lines beginning with 'T' are Tier IDs
             if lns[i][:2].lower() == 't ':
@@ -401,13 +401,18 @@ class BatchReader(object):
                 stype = score[0]
                 thresh = score[1]
 
+                ## An error ocurred 
+                if not stype:
+                    self.errors[-1] = 'LINE %s: %s' % (i + 1, self.errors[-1])
+
             ## Lines beginning with '@' are species types (REQUIRED)
             elif lns[i][:1] == '@':
                 spec = lns[i][1:].strip()
 
                 if spec.lower() not in species.keys():
-                    self.errors.append(('LINE %s: %s is an invalid species'
-                                       % (i + 1, spec)))
+                    self.errors.append(
+                        'LINE %s: %s is an invalid species' % (i + 1, spec)
+                    )
 
                 else:
                     ## spec is now an integer (sp_id)
@@ -441,8 +446,9 @@ class BatchReader(object):
                     gene = platforms.get(gene, 'unknown')
 
                     if type(gene) != int:
-                        self.errors.append(('LINE %s: %s is an invalid '
-                                           'platform' % (i + 1, original)))
+                        self.errors.append(
+                            'LINE %s: %s is an invalid platform' % (i + 1, original)
+                        )
 
                 ## Otherwise the user specified one of the gene types, not a
                 ## microarray platform
@@ -451,8 +457,9 @@ class BatchReader(object):
                 ## have negative (-) integer ID types.
                 else:
                     if gene.lower() not in gene_types.keys():
-                        self.errors.append(('LINE %s: %s is an invalid gene '
-                                           'type' % (i + 1, gene)))
+                        self.errors.append(
+                            'LINE %s: %s is an invalid gene type' % (i + 1, gene)
+                        )
 
                     else:
                         ## gene is now an integer (gdb_id)
@@ -484,7 +491,7 @@ class BatchReader(object):
                     cur = 5
 
             ## If the lines are tab separated, we assume it's the gene data that
-            ## will become apart of the geneset_values
+            ## will become part of the geneset_values
             elif len(lns[i].split('\t')) == 2:
 
                 ## First we check to see if all the required data was specified
@@ -512,8 +519,9 @@ class BatchReader(object):
 
             ## Who knows what the fuck this line is, just skip it
             else:
-                self.warns.append(('LINE %s: Skipping unknown identifiers' 
-                                  % (i + 1)))
+                self.warns.append(
+                    'LINE %s: Skipping unknown identifiers' % (i + 1)
+                )
 
         ## awwww shit, we're finally finished! Make the final parsed geneset.
         gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype,
@@ -586,7 +594,7 @@ class BatchReader(object):
                 odes = prb2odes[prbid]
 
                 if not prbid or not odes:
-                    self.warns.append('No gene/locus exists data for %s' % sym)
+                    self.warns.append('No gene/locus data exists for %s' % sym)
                     continue
 
                 for ode in odes:
@@ -595,13 +603,15 @@ class BatchReader(object):
                         dups[ode] = sym
 
                     else:
-                        self.warns.append(('%s is a duplicate of %s and '
-                                          'was not added to the geneset' 
-                                          % (sym, dups[ode])))
+                        self.warns.append((
+                            '%s is a duplicate of %s and '
+                            'was not added to the geneset' % (sym, dups[ode])
+                        ))
                         continue
 
-                    db.insert_geneset_value(gs['gs_id'], ode, value, sym,
-                                            gs['gs_threshold'])
+                    db.insert_geneset_value(
+                        gs['gs_id'], ode, value, sym, gs['gs_threshold']
+                    )
 
                     total += 1
 
@@ -617,12 +627,15 @@ class BatchReader(object):
                 dups[sym2ode[sym]] = sym
 
             else:
-                self.warns.append(('%s is a duplicate of %s and was not '
-                                  'added to the geneset' % (sym, dups[ode])))
+                self.warns.append((
+                    '%s is a duplicate of %s and was not '
+                    'added to the geneset' % (sym, dups[ode])
+                ))
                 continue
 
-            db.insert_geneset_value(gs['gs_id'], sym2ode[sym], value,
-                                    sym, gs['gs_threshold'])
+            db.insert_geneset_value(
+                gs['gs_id'], sym2ode[sym], value, sym, gs['gs_threshold']
+            )
 
             total += 1
 
