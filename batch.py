@@ -314,8 +314,21 @@ class BatchReader(object):
         platforms = db.get_platform_names()
 
         def reset_add_geneset():
-            gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype, 
-                                   thresh, gene, gsvals, at_id, usr_id, cur_id)
+            gs = util.make_geneset(
+                name, 
+                abbr, 
+                desc, 
+                spec,
+                pub,
+                group,
+                stype,
+                thresh,
+                gene,
+                gsvals,
+                at_id,
+                usr_id,
+                cur_id
+            )
             abbr = ''
             desc = ''
             name = ''
@@ -512,12 +525,15 @@ class BatchReader(object):
 
             ## Who knows what the fuck this line is, just skip it
             else:
-                self.warns.append(('LINE %s: Skipping unknown identifiers' 
-                                  % (i + 1)))
+                self.warns.append(
+                    'LINE %s: Skipping unknown identifiers' % (i + 1)
+                )
+                                  
 
         ## awwww shit, we're finally finished! Make the final parsed geneset.
-        gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype,
-                               thresh, gene, gsvals)
+        gs = util.make_geneset(
+            name, abbr, desc, spec, pub, group, stype, thresh, gene, gsvals
+        )
         self.genesets.append(gs)
 
     def __create_geneset_file(self, genes):
