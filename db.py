@@ -111,6 +111,37 @@ def dictify(cursor, ordered=False):
 
     return dlist
 
+def dictify_and_map(cursor):
+    """
+    Converts each row returned by the cursor into a dicts, then maps those
+    dicts according to the first column.
+
+    e.g. SELECT sp_name, sp_id, sp_taxid FROM species; would return a mapping
+    of sp_name -> {sp_name, sp_id, sp_taxid}
+
+    arguments
+        cursor: an active psycopg cursor
+        ordered: a boolean indicating whether to use a regular or ordered dict
+
+    returns
+        a list of dicts containing the results of the SQL query
+    """
+
+    d = {}
+    
+    for row in cursor:
+        ## Prevents unicode type errors from cropping up later. Convert to
+        ## ascii, ignore any conversion errors.
+        row = map(lambda s: asciify(s), row)
+        drow = {}
+
+        for i, col in enumerate(cursor.description):
+            drow[col[0]] = row[i]
+
+        d[row[0]] = drow
+
+    return d
+
 def listify(cursor):
     """
     Converts each cursor row into a list. Only the first tuple member is saved
@@ -233,6 +264,26 @@ def get_species():
         )
 
         return associate(cursor)
+
+def get_species2():
+    """
+    Returns a species name and column mapping for all the species currently 
+    supported by GW.
+
+    returns
+        a dict mapping sp_name to the specified entries in the table
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  sp_name, sp_id, sp_taxid
+            FROM    odestatic.species;
+            '''
+        )
+
+        return dictify_and_map(cursor)
 
 def get_species_by_taxid():
     """
