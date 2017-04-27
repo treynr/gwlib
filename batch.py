@@ -315,8 +315,11 @@ class BatchReader(object):
         platforms = db.get_platform_names()
 
         def reset_add_geneset():
-            gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype, 
-                                   thresh, gene, gsvals, at_id, usr_id, cur_id)
+            gs = util.make_geneset(
+                name, abbr, desc, spec, pub, group, stype, 
+                thresh, gene, gsvals, at_id, usr_id, cur_id, 
+                pmid=pub, annos=annotations
+            )
             abbr = ''
             desc = ''
             name = ''
@@ -649,13 +652,14 @@ class BatchReader(object):
 
     def parse_batch_file(self):
         """
-        Parses a batch file to completion.
+        Parses a batch file to completion. 
 
         arguments:
             fp: a string, the filepath to a batch file
 
         returns:
-            A list of ints. Each int is the gs_id of an inserted geneset.
+            A list of gene set objects (dicts) with properly filled out fields,
+            ready for insertion into the GW DB.
         """
 
         self.errors = []
@@ -680,8 +684,8 @@ class BatchReader(object):
             if abbrev:
                 attributions[abbrev.lower()] = at_id
 
-        ## Geneset post-processing: PubMed retrieval, gene -> ode_gene_id mapping,
-        ## attribution mapping, and file table insertion
+        ## Geneset post-processing: PubMed retrieval, gene -> ode_gene_id 
+        ## mapping, and attribution mapping
         for gs in self.genesets:
             ## If a PMID was provided, we get the info from NCBI
             if gs['pub_id']:
@@ -689,15 +693,45 @@ class BatchReader(object):
 
                 if not pub:
                     gs['pub_id'] = None
+                    gs['pub'] = None
 
                 else:
-                    gs['pub_id'] = db.insert_publication(pub)
+                    #gs['pub_id'] = db.insert_publication(pub)
+                    gs['pub'] = pub
 
             else:
                 gs['pub_id'] = None
+                gs['pub'] = None
 
             if gs['at_id']:
                 gs['at_id'] = attributions.get(gs['at_id'], None)
+
+            #gs['file_id'] = self.__create_geneset_file(gs['geneset_values'])
+            #gs['gs_id'] = db.insert_geneset(gs)
+            #gsv_count = self.__create_geneset_values(gs)
+
+            ## Update gs_count if some geneset_values were found to be invalid
+            #if gsv_count != len(gs['geneset_values']):
+            #    db.update_geneset_count(gs['gs_id'], gsv_count)
+
+            #added.append(gs['gs_id'])
+
+        #return added
+        return self.genesets
+
+    def insert_genesets(self, genesets=None):
+        """
+        """
+
+        ids = []
+
+        if not genesets:
+            genesets = self.genesets
+
+        for gs in genesets:
+
+            if gs['pub']:
+                gs['pub_id'] = db.insert_publication(pub)
 
             gs['file_id'] = self.__create_geneset_file(gs['geneset_values'])
             gs['gs_id'] = db.insert_geneset(gs)
@@ -707,9 +741,9 @@ class BatchReader(object):
             if gsv_count != len(gs['geneset_values']):
                 db.update_geneset_count(gs['gs_id'], gsv_count)
 
-            added.append(gs['gs_id'])
+            ids.append(gs['gs_id'])
 
-        return added
+        return ids
 
 class BatchWriter(object):
     """
@@ -1009,8 +1043,7 @@ class BatchWriter(object):
             serial.append(self.__format_name(gs['gs_name']))
             serial.append(self.__format_description(gs['gs_description']))
             serial.append('')
-            serial.append(
-                self.__format_geneset_values(gs['geneset_values']))
+            serial.append(self.__format_geneset_values(gs['geneset_values']))
             serial.append('')
 
         if self.errors:
