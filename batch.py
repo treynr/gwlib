@@ -308,6 +308,7 @@ class BatchReader(object):
         usr_id = 0
         ## Attribution
         at_id = None
+        annotations = []
 
         gene_types = db.get_gene_types()
         species = db.get_species()
@@ -338,21 +339,21 @@ class BatchReader(object):
             ## allow tiers, user IDs, and attributions to be specified.
             #
             ## Lines beginning with 'T' are Tier IDs
-            if lns[i][:2].lower() == 't ':
+            if lns[i][:2] == 'T ':
                 if gsvals:
                     reset_add_geneset()
 
                 cur_id = int(lns[i][1:].strip())
 
             ## Lines beginning with 'U' are user IDs
-            elif lns[i][:2].lower() == 'u ':
+            elif lns[i][:2] == 'U ':
                 if gsvals:
                     reset_add_geneset()
 
                 usr_id = int(lns[i][1:].strip())
 
             ## Lines beginning with 'D' are attribution abbrevations
-            elif lns[i][:2].lower() == 'd ':
+            elif lns[i][:2] == 'D ':
                 if gsvals:
                     reset_add_geneset()
 
@@ -467,11 +468,11 @@ class BatchReader(object):
                         gene = -gene
 
             ## Lines beginning with 'P ' are PubMed IDs (OPTIONAL)
-            elif (lns[i][:2].lower() == 'p ') and (len(lns[i].split('\t')) == 1):
+            elif (lns[i][:2] == 'P ') and (len(lns[i].split('\t')) == 1):
                 pub = lns[i][1:].strip()
 
             ## Lines beginning with 'A' are groups, default is private (OPTIONAL)
-            elif lns[i][:2].lower() == 'a ' and (len(lns[i].split('\t')) == 1):
+            elif lns[i][:2] == 'A ' and (len(lns[i].split('\t')) == 1):
                 group = lns[i][1:].strip()
 
                 ## If the user gives something other than private/public,
@@ -489,6 +490,10 @@ class BatchReader(object):
                 else:  # private
                     group = '-1'
                     cur = 5
+
+            ## Lines beginning with '~' are ontology annotations (OPTIONAL)
+            elif lns[i][:2] == '~ ':
+                annotations.append(lns[i][1:].strip())
 
             ## If the lines are tab separated, we assume it's the gene data that
             ## will become part of the geneset_values
