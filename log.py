@@ -142,6 +142,10 @@ class Log(object):
         :arg s: text being logged
         """
 
+        ## Automatically removes my usual stdout logging prefixes
+        if len(s) > 3 and s[0] == '[' and s[2] == ']':
+            s = s[3:].strip()
+
         if self.on and self.fh:
             os = ''
 
@@ -233,6 +237,12 @@ class Log(object):
 
         self.__write_file(self.ERROR, s)
         self.__write_std(self.ERROR, s)
+
+    def log_to_file(self, s, level):
+        """
+        """
+
+        self.__write_file(level, s)
 
     def turn_on(self, on=True):
         """
