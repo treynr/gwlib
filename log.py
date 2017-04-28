@@ -152,10 +152,10 @@ class Log(object):
             if self.time:
                 os += '[%s] ' % self.__get_timestamp()
 
-            if self.prefix == 'level' or not self.prefix:
-                os += '<%s> ' % level
+            #if self.prefix == 'level' or not self.prefix:
+            os += '<%s> ' % level
 
-            else:
+            if self.prefix:
                 os += '%s ' % self.prefix
 
             os += '%s' % s

@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
-## file:    ncbi.py
-## desc:    Simple wrapper for the NCBI E-utilities API.
-##          Currently only supports fetch and search functionality.
-## auth:    TR
+## file: ncbi.py
+## desc: Simple wrapper for the NCBI E-utilities API.
+##       Currently only supports fetch and search functionality.
+## auth: TR
 #
 
 import json
 import time
 import urllib as url
 import urllib2 as url2
+import xml.etree.ElementTree as et
 
 ## Email and tool names are required for NCBI eutils usage
 NAME = ''
@@ -19,7 +20,7 @@ EMAIL = ''
 #DTAG = reduce(lambda x, y: x + ' ' + y, sys.argv)
 
 ## NCBI E-utils URLs 
-EBASE = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/'
+EBASE = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/'
 ESEARCH = EBASE + 'esearch.fcgi?'
 EFETCH = EBASE + 'efetch.fcgi?'
 
@@ -117,10 +118,12 @@ def check_fetch_defaults(opts):
     if retmode/rettype are set.
     """
 
-    if not opts.get('rettype', None):
+    #if not opts.get('rettype', None):
+    if 'rettype' not in opts:
         opts['rettype'] = 'uilist'
 
-    if not opts.get('retmode', None):
+    #if not opts.get('retmode', None):
+    if 'retmode' not in opts:
         opts['retmode'] = 'text'
 
     return opts
@@ -233,4 +236,58 @@ def e_search(term, db, opts={}):
         pass
 
     return json.loads(res)
+
+def get_pubmed_articles(pmids, asdict=True):
+    """
+    """
+
+    pmids = list(set(pmids))
+    results = e_fetch(pmids, 'pubmed', {'rettype': None, 'retmode': 'xml'})
+    root = et.fromstring(results)
+    pubs = []
+
+    for entry in root:
+        pub = {}
+
+        pub['pub_pubmed'] = entry.findtext('.//PMID')
+        pub['pub_title'] = entry.findtext('.//ArticleTitle')
+        pub['pub_abstract'] = entry.findtext('.//AbstractText')
+        pub['pub_journal'] = entry.findtext('.//Journal/Title')
+        pub['pub_volume'] = entry.findtext('.//Volume')
+        pub['pub_pages'] = entry.findtext('.//MedlinePgn')
+        pub['pub_year'] = entry.findtext('.//PubDate/Year')
+        pub['pub_month'] = entry.findtext('.//PubDate/Month')
+        pub['pub_day'] = entry.findtext('.//PubDate/Day')
+        pub['pub_authors'] = []
+        
+        auth_nodes = entry.find('.//AuthorList')
+
+        if len(auth_nodes):
+            for auth in auth_nodes:
+                name = []
+
+                name.append(auth.findtext('Initials'))
+                name.append(auth.findtext('LastName'))
+
+                name = filter(lambda n: n != None, name)
+
+                if name:
+                    pub['pub_authors'].append(' '.join(name))
+
+            pub['pub_authors'] = ', '.join(pub['pub_authors'])
+
+            if entry.find(".//AuthorList[@ValidYN='N']"):
+                pub['pub_authors'] += ' et al.'
+
+        pubs.append(pub)
+
+    if asdict:
+        pubd = {}
+
+        for pub in pubs:
+            pubd[pub['pub_pubmed']] = pub
+
+        return pubd
+
+    return pubs
 

@@ -1,23 +1,25 @@
 #!/usr/bin/env python
 
-## file:    batch.py
-## desc:    Batch file reader and writer. This is a variant of the batch parser
-##          found in the GW2 sauce. It works the same way but decouples most of
-##          the DB code and adds support for specifying tiers, attributions, 
-##          and user IDs in the batch file.
-## auth:    Baker
-##          TR
+## file: batch.py
+## desc: Batch file reader and writer. This is a variant of the batch parser
+##       found in the GW2 sauce. It works the same way but decouples most of
+##       the DB code and adds support for specifying tiers, attributions, 
+##       and user IDs in the batch file.
+## auth: Baker
+##       TR
 #
 
 ## multisets because regular sets remove duplicates, requires python 2.7
 from collections import Counter as mset
 from collections import defaultdict as dd
+from copy import copy
 import datetime
 import json
 import random
 import re
 import urllib2 as url2
 
+from ncbi import get_pubmed_articles
 import db
 import util
 
@@ -169,6 +171,9 @@ class BatchReader(object):
         self.genesets = []
         self.errors = []
         self.warns = []
+        self._parse_set = {}
+        self._pmid_cache = {}
+        self._pub_map = None
 
     def __read_file(self, fp=None):
         """
@@ -270,6 +275,35 @@ class BatchReader(object):
 
         return (stype, thresh)
 
+    def __reset_parsed_set(self):
+        """
+        """
+
+        if 'values' in self._parse_set and self._parse_set['values']:
+            self.genesets.append(copy(self._parse_set))
+
+        if 'pmid' not in self._parse_set:
+            self._parse_set['pmid'] = ''
+
+        self._parse_set['gs_name'] = ''
+        self._parse_set['gs_description'] = ''
+        self._parse_set['gs_abbreviation'] = ''
+        self._parse_set['values'] = []
+        self._parse_set['annotations'] = []
+
+    def __check_parsed_set(self):
+        """
+        """
+
+        if not self._parse_set['gs_name'] or\
+           not self._parse_set['gs_description'] or\
+           not self._parse_set['gs_abbreviation'] or\
+           'gs_gene_id_type' not in self._parse_set or\
+           'gs_threshold_type' not in self._parse_set or\
+           'sp_id' not in self._parse_set:
+               return False
+
+        return True
 
     def __parse_batch_syntax(self, lns):
         """
@@ -282,49 +316,11 @@ class BatchReader(object):
             lns: list of strings, one for each line in the batch file
         """
 
-        genesets = []
-        ## geneset_values, here as a list of tuples (symbol, value)
-        gsvals = []  
-        ## geneset abbreviation
-        abbr = ''
-        ## geneset name
-        name = ''
-        ## geneset description
-        desc = ''
-        ## gene ID type (gs_gene_id_type)
-        gene = ''
-        ## PubMed ID, later converted to a GW pub_id
-        pub = None
-        ## Group identifier, default is private (gs_groups)
-        group = '-1'
-        ## Score type (gs_threshold_type)
-        stype = ''
-        ## Threshold value (gs_threshold)
-        thresh = '0.05'
-        ## Species name, later converted to a GW sp_id
-        spec = ''
-        ## Curation tier
-        cur_id = 5
-        usr_id = 0
-        ## Attribution
-        at_id = None
-        annotations = []
+        self.__reset_parsed_set()
 
         gene_types = db.get_gene_types()
         species = db.get_species()
         platforms = db.get_platform_names()
-
-        def reset_add_geneset():
-            gs = util.make_geneset(
-                name, abbr, desc, spec, pub, group, stype, 
-                thresh, gene, gsvals, at_id, usr_id, cur_id, 
-                pmid=pub, annos=annotations
-            )
-            abbr = ''
-            desc = ''
-            name = ''
-            gsvals = []
-            self.genesets.append(gs)
 
         for gdb_name, gdb_id in gene_types.items():
             gene_types[gdb_name.lower()] = gdb_id
@@ -343,71 +339,72 @@ class BatchReader(object):
             #
             ## Lines beginning with 'T' are Tier IDs
             if lns[i][:2] == 'T ':
-                if gsvals:
-                    reset_add_geneset()
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
 
-                cur_id = int(lns[i][1:].strip())
+                self._parse_set['cur_id'] = int(lns[i][1:].strip())
 
             ## Lines beginning with 'U' are user IDs
             elif lns[i][:2] == 'U ':
-                if gsvals:
-                    reset_add_geneset()
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
 
-                usr_id = int(lns[i][1:].strip())
+                self._parse_set['usr_id'] = int(lns[i][1:].strip())
 
             ## Lines beginning with 'D' are attribution abbrevations
             elif lns[i][:2] == 'D ':
-                if gsvals:
-                    reset_add_geneset()
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
 
-                at_id = int(lns[i][1:].strip())
+                self._parse_set['at_id'] = lns[i][1:].strip()
 
             ## :, =, + is required for each geneset in the batch file
             #
             ## Lines beginning with ':' are geneset abbreviations (REQUIRED)
-            if lns[i][:1] == ':':
+            elif lns[i][:1] == ':':
                 ## This checks to see if we've already read in some geneset_values
                 ## If we have, that means we can save the geneset, clear out any
                 ## REQUIRED fields before we do more parsing, and start over
-                if gsvals:
-                    reset_add_geneset()
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
 
-                abbr = lns[i][1:].strip()
+                self._parse_set['gs_abbreviation'] = lns[i][1:].strip()
 
             ## Lines beginning with '=' are geneset names (REQUIRED)
             elif lns[i][:1] == '=':
                 ## This checks to see if we've already read in some geneset_values
                 ## If we have, that means we can save the geneset, clear out any
                 ## REQUIRED fields before we do more parsing, and start over
-                if gsvals:
-                    reset_add_geneset()
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
 
-                name = lns[i][1:].strip()
+                self._parse_set['gs_name'] = lns[i][1:].strip()
 
             ## Lines beginning with '+' are geneset descriptions (REQUIRED)
             elif lns[i][:1] == '+':
                 ## This checks to see if we've already read in some geneset_values
                 ## If we have, that means we can save the geneset, clear out any
                 ## REQUIRED fields before we do more parsing, and start over
-                if gsvals:
-                    reset_add_geneset()
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
 
-                desc += lns[i][1:].strip()
-                desc += ' '
+                self._parse_set['gs_description'] += lns[i][1:].strip()
+                self._parse_set['gs_description'] += ' '
 
             ## !, @, %, are required but can be omitted from later sections if
             ## they don't differ from the first.
             #
             ## Lines beginning with '!' are score types (REQUIRED)
             elif lns[i][:1] == '!':
-                score = lns[i][1:].strip()
-                score = self.__parse_score_type(score)
-                stype = score[0]
-                thresh = score[1]
+                ttype, threshold = self.__parse_score_type(lns[i][1:].strip())
 
                 ## An error ocurred 
-                if not stype:
+                if not ttype:
                     self.errors[-1] = 'LINE %s: %s' % (i + 1, self.errors[-1])
+
+                else:
+                    self._parse_set['gs_threshold_type'] = ttype
+                    self._parse_set['gs_threshold'] = threshold
 
             ## Lines beginning with '@' are species types (REQUIRED)
             elif lns[i][:1] == '@':
@@ -419,20 +416,20 @@ class BatchReader(object):
                     )
 
                 else:
-                    ## spec is now an integer (sp_id)
-                    spec = species[spec.lower()]
+                    ## Convert to sp_id
+                    self._parse_set['sp_id'] = species[spec.lower()]
 
             ## Lines beginning with '%' are gene ID types (REQUIRED)
             elif lns[i][:1] == '%':
                 gene = lns[i][1:].strip()
 
-                ## Gene ID representation is fucking ass backwards. If a 
-                ## microarray platform is specified, the best possible match above
-                ## a given threshold is found and used. All other gene types are 
-                ## retrieved from the DB and their ID types are negated. 
+                ## If a microarray platform is specified, the best possible 
+                ## match above a given threshold is found and used. All other
+                ## gene types are retrieved from the DB and their ID types 
+                ## are negated. 
                 if gene.lower().find('microarray') != -1:
-                    ## Remove 'microarray ' text
-                    gene = gene[len('microarray '):]
+                    ## Remove 'microarray' text
+                    gene = gene[len('microarray'):].strip()
                     original = gene
 
                     ## Determine the closest microarry platform match above a 70%
@@ -451,28 +448,36 @@ class BatchReader(object):
 
                     if type(gene) != int:
                         self.errors.append(
-                            'LINE %s: %s is an invalid platform' % (i + 1, original)
-                        )
-
-                ## Otherwise the user specified one of the gene types, not a
-                ## microarray platform
-                ## :IMPORTANT: Expression platforms have positive (+)
-                ## gs_gene_id_types while all other types (e.g. symbols) should
-                ## have negative (-) integer ID types.
-                else:
-                    if gene.lower() not in gene_types.keys():
-                        self.errors.append(
-                            'LINE %s: %s is an invalid gene type' % (i + 1, gene)
+                            'LINE %s: %s is an invalid platform' % 
+                            (i + 1, original)
                         )
 
                     else:
-                        ## gene is now an integer (gdb_id)
-                        gene = gene_types[gene.lower()]
-                        gene = -gene
+                        self._parse_set['gs_gene_id_type'] = gene
+
+                ## Otherwise the user specified one of the gene types, not a
+                ## microarray platform
+                ## :IMPORTANT: Gene ID representation is fucking ass backwards.
+                ## Expression platforms have positive (+) gs_gene_id_types 
+                ## while all other types (e.g. symbols) should have negative 
+                ## (-) integer ID types despite their gdb_ids being positive.
+                else:
+                    gene = gene.lower()
+
+                    if gene not in gene_types.keys():
+                        self.errors.append(
+                            'LINE %s: %s is an invalid gene type' % 
+                            (i + 1, gene)
+                        )
+
+                    else:
+                        ## Convert to a negative integer (gdb_id)
+                        self._parse_set['gs_gene_id_type'] = -gene_types[gene]
+                            
 
             ## Lines beginning with 'P ' are PubMed IDs (OPTIONAL)
             elif (lns[i][:2] == 'P ') and (len(lns[i].split('\t')) == 1):
-                pub = lns[i][1:].strip()
+                self._parse_set['pmid'] = lns[i][1:].strip()
 
             ## Lines beginning with 'A' are groups, default is private (OPTIONAL)
             elif lns[i][:2] == 'A ' and (len(lns[i].split('\t')) == 1):
@@ -481,30 +486,30 @@ class BatchReader(object):
                 ## If the user gives something other than private/public,
                 ## automatically make it private
                 if group.lower() != 'private' and group.lower() != 'public':
-                    group = '-1'
-                    cur = 5
+                    self._parse_set['gs_groups'] = '-1'
+                    self._parse_set['cur_id'] = 5
 
                 ## Public data sets are initially thrown into the provisional
                 ## Tier IV. Tier should never be null.
                 elif group.lower() == 'public':
-                    group = '0'
-                    cur = 4
+                    self._parse_set['gs_groups'] = '0'
+                    self._parse_set['cur_id'] = 4
 
-                else:  # private
-                    group = '-1'
-                    cur = 5
+                ## Private
+                else:
+                    self._parse_set['gs_groups'] = '-1'
+                    self._parse_set['cur_id'] = 5
 
             ## Lines beginning with '~' are ontology annotations (OPTIONAL)
             elif lns[i][:2] == '~ ':
-                annotations.append(lns[i][1:].strip())
+                self._parse_set['annotations'].append(lns[i][1:].strip())
 
             ## If the lines are tab separated, we assume it's the gene data that
             ## will become part of the geneset_values
             elif len(lns[i].split('\t')) == 2:
 
                 ## First we check to see if all the required data was specified
-                if ((not abbr) or (not name) or (not desc) or (not stype) or
-                    (not spec) or (not gene)):
+                if not self.__check_parsed_set():
 
                     err = 'One or more of the required fields are missing.'
                     ## Otherwise this string will get appended a bajillion times
@@ -514,8 +519,7 @@ class BatchReader(object):
                 else:
                     lns[i] = lns[i].split()
 
-                    gsvals.append((lns[i][0], lns[i][1]))
-
+                    self._parse_set['values'].append((lns[i][0], lns[i][1]))
 
             ## Lines beginning with '#' are comments
             elif lns[i][:1] == '#':
@@ -528,13 +532,15 @@ class BatchReader(object):
             ## Who knows what the fuck this line is, just skip it
             else:
                 self.warns.append(
-                    'LINE %s: Skipping unknown identifiers' % (i + 1)
+                    'LINE %s: Skipping line with unknown identifiers (%s)' % 
+                    ((i + 1), lns[i])
                 )
 
         ## awwww shit, we're finally finished! Make the final parsed geneset.
-        gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype,
-                               thresh, gene, gsvals)
-        self.genesets.append(gs)
+        #gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype,
+        #                       thresh, gene, gsvals)
+        #self.genesets.append(gs)
+        self.genesets.append(self._parse_set)
 
     def __create_geneset_file(self, genes):
         """
@@ -687,21 +693,6 @@ class BatchReader(object):
         ## Geneset post-processing: PubMed retrieval, gene -> ode_gene_id 
         ## mapping, and attribution mapping
         for gs in self.genesets:
-            ## If a PMID was provided, we get the info from NCBI
-            if gs['pub_id']:
-                pub = get_pubmed_info(gs['pub_id'])
-
-                if not pub:
-                    gs['pub_id'] = None
-                    gs['pub'] = None
-
-                else:
-                    #gs['pub_id'] = db.insert_publication(pub)
-                    gs['pub'] = pub
-
-            else:
-                gs['pub_id'] = None
-                gs['pub'] = None
 
             if gs['at_id']:
                 gs['at_id'] = attributions.get(gs['at_id'], None)
@@ -718,6 +709,33 @@ class BatchReader(object):
 
         #return added
         return self.genesets
+
+    def get_geneset_pubmeds(self):
+        """
+        """
+
+        if not self._pub_map:
+            self._pub_map = db.get_publication_mapping()
+
+        found = filter(lambda g: g['pmid'] in self._pub_map, self.genesets)
+        not_found = filter(
+            lambda g: g['pmid'] not in self._pub_map, self.genesets
+        )
+
+        for gs in found:
+            gs['pub_id'] = self._pub_map[gs['pmid']]
+            gs['pub'] = gs['pmid']
+
+        pubs = get_pubmed_articles(map(lambda g: g['pmid'], self.genesets))
+
+        for gs in self.genesets:
+            if gs['pmid'] not in pubs:
+                gs['pub_id'] = None
+                gs['pub'] = None
+
+            else:
+                gs['pub_id'] = None
+                gs['pub'] = pubs[gs['pmid']]
 
     def insert_genesets(self, genesets=None):
         """

@@ -713,6 +713,26 @@ def get_publication(pmid):
         else:
             return 0
 
+def get_publication_mapping():
+    """
+    Returns a mapping of PMID -> pub_id for all publications in the DB.
+
+    returns
+        a dict mapping PMIDs -> pub_ids
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT DISTINCT ON  (pub_pubmed) pub_pubmed, pub_id
+            FROM                production.publication
+            ORDER BY            pub_pubmed, pub_id;
+            '''
+        )
+
+        return associate(cursor)
+
 def get_publication_pmid(pub_id):
     """
     Returns the PMID associated with a GW publication ID.
