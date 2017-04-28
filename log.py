@@ -151,7 +151,7 @@ class Log(object):
             if self.prefix == 'level' or not self.prefix:
                 os += '<%s> ' % level
 
-            else self.prefix:
+            else:
                 os += '%s ' % self.prefix
 
             os += '%s' % s
