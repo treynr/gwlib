@@ -174,6 +174,9 @@ class BatchReader(object):
         self._parse_set = {}
         self._pmid_cache = {}
         self._pub_map = None
+        ## Cache of symbol mappings sp_id -> gdb_id -> ode_ref -> ode_gene_id
+        self._symbol_cache = dd(lambda: dd(int))
+        self._annotation_cache = dd(int)
 
     def __read_file(self, fp=None):
         """
@@ -284,6 +287,10 @@ class BatchReader(object):
 
         if 'pmid' not in self._parse_set:
             self._parse_set['pmid'] = ''
+
+        ## For later...
+        if 'geneset_values' not in self._parse_set:
+            self._parse_set['geneset_values'] = []
 
         self._parse_set['gs_name'] = ''
         self._parse_set['gs_description'] = ''
@@ -562,8 +569,129 @@ class BatchReader(object):
 
         return db.insert_file(len(conts), conts, '')
 
+    def __map_ontology_annotations(self, gs):
+        """
+        """
+
+        gs['ont_ids'] = []
+
+        for anno in gs['annotations']:
+            if self._annotation_cache[anno]:
+                gs['ont_ids'].append(self._annotation_cache[anno])
+
+            else:
+                ont_id = db.get_annotation_by_ref(anno)
+
+                if ont_id:
+                    gs['ont_ids'].append(ont_id)
+
+                    self._annotation_cache[anno] = ont_id
+
+                else:
+                    self.warns.append(
+                        'The ontology term %s is missing from GW' % anno
+                    )
+
+    def __map_gene_identifiers(self, gs):
+        """
+        think about refactoring this piece of shit.
+        """
+
+        gene_refs = map(lambda x: x[0], gs['values'])
+        gene_type = gs['gs_gene_id_type']
+        sp_id = gs['sp_id']
+
+        ## Check to see if we have cached copies of these references
+        if self._symbol_cache[sp_id][gene_type]:
+            pass
+
+        ## Negative numbers indicate normal gene types (found in genedb) while
+        ## positive numbers indicate expression platforms and more work :(
+        elif gs['gs_gene_id_type'] < 0:
+            ref2ode = db.get_gene_ids_by_spid_type(sp_id, gene_type)
+
+            self._symbol_cache[sp_id][gene_type] = dd(int, ref2ode)
+
+        else:
+            ref2prbid = db.get_platform_probes(gene_type, gene_refs)
+            prbid2ode = db.get_probe2gene(ref2prbid.values())
+
+            ## Just throw everything in the same dict, shouldn't matter since
+            ## the refs will be strings and the prb_ids will be ints
+            self._symbol_cache[sp_id][gene_type] = dd(int)
+            self._symbol_cache[sp_id][gene_type].update(ref2prbid)
+            self._symbol_cache[sp_id][gene_type].update(prbid2ode)
+
+        ref2ode = self._symbol_cache[sp_id][gene_type]
+
+        ## duplicate detection
+        dups = dd(str)
+        total = 0
+
+        for ref, value in gs['values']:
+
+            ## Platform handling
+            if gs['gs_gene_id_type'] > 0:
+                prb_id = ref2ode[ref]
+                odes = ref2ode[prbid]
+
+                if not prbid or not odes:
+                    self.warns.append('No gene/locus data exists for %s' % ref)
+                    continue
+
+                ## Yeah one probe reference may be associated with more than
+                ## one gene/ode_gene_id, it's fucking weird
+                for ode in odes:
+                    ## Check for duplicate ode_gene_ids, otherwise postgres bitches
+                    if not dups[ode]:
+                        dups[ode] = ref
+
+                    else:
+                        self.warns.append(
+                            '%s and %s are duplicates, only %s was added'
+                            % (ref, dups[ode], dups[ode])
+                        )
+                        continue
+
+                    gs['geneset_values'].append((ref, ode, value))
+
+            ## Not platform stuff
+            else:
+
+                ## Case insensitive symbol identification
+                refl = ref.lower()
+
+                if not ref2ode[refl]:
+                    self.warns.append('No gene/locus exists data for %s' % ref)
+                    continue
+
+                ode = ref2ode[refl]
+
+                ## Check for duplicate ode_gene_ids, otherwise postgres bitches
+                if not dups[ode]:
+                    dups[ode] = ref
+
+                else:
+                    self.warns.append(
+                        '%s and %s are duplicates, only %s was added'
+                        % (ref, dups[ode], dups[ode])
+                    )
+                    continue
+
+                gs['geneset_values'].append((ref, ode, value))
+
+        return len(gs['geneset_values'])
 
     def __create_geneset_values(self, gs):
+        """
+        """
+
+        for ref, ode, value in gs['geneset_values']:
+            db.insert_geneset_value(
+                gs['gs_id'], ode, value, ref, gs['gs_threshold']
+            )
+
+    def __create_geneset_values2(self, gs):
         """
         Maps the given reference IDs to ode_gene_ids and inserts them into the
         geneset_value table.
@@ -690,12 +818,16 @@ class BatchReader(object):
             if abbrev:
                 attributions[abbrev.lower()] = at_id
 
-        ## Geneset post-processing: PubMed retrieval, gene -> ode_gene_id 
-        ## mapping, and attribution mapping
+        ## Geneset post-processing: mapping gene -> ode_gene_ids, attributions,
+        ## and annotations
         for gs in self.genesets:
+
+            gs['gs_count'] = self.__map_gene_identifiers(gs)
 
             if gs['at_id']:
                 gs['at_id'] = attributions.get(gs['at_id'], None)
+
+            self.__map_ontology_annotations(gs)
 
             #gs['file_id'] = self.__create_geneset_file(gs['geneset_values'])
             #gs['gs_id'] = db.insert_geneset(gs)
@@ -748,16 +880,16 @@ class BatchReader(object):
 
         for gs in genesets:
 
-            if gs['pub']:
+            if not gs['pub_id'] and gs['pub']:
                 gs['pub_id'] = db.insert_publication(pub)
 
-            gs['file_id'] = self.__create_geneset_file(gs['geneset_values'])
+            gs['file_id'] = self.__create_geneset_file(gs['values'])
             gs['gs_id'] = db.insert_geneset(gs)
-            gsv_count = self.__create_geneset_values(gs)
+            self.__create_geneset_values(gs)
 
             ## Update gs_count if some geneset_values were found to be invalid
-            if gsv_count != len(gs['geneset_values']):
-                db.update_geneset_count(gs['gs_id'], gsv_count)
+            #if gsv_count != len(gs['geneset_values']):
+            #    db.update_geneset_count(gs['gs_id'], gsv_count)
 
             ids.append(gs['gs_id'])
 
