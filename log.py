@@ -6,6 +6,7 @@
 #
 
 import sys
+import datetime as dt
 
 class Colors(object):
     """
@@ -50,7 +51,7 @@ class Log(object):
     WARN = 'WARNING'
     ERROR = 'ERROR'
 
-    def __init__(self, both=False, file='', on=True, prefix=''):
+    def __init__(self, both=False, file='', on=True, prefix='', time=True):
         """
         Initialize a logging object.
 
@@ -74,6 +75,7 @@ class Log(object):
         self.file = file
         self.on = on
         self.prefix = prefix
+        self.time = time
 
         if file:
             self.fh = open(file, 'w')
@@ -100,6 +102,35 @@ class Log(object):
 
         return lookup.get(level)
 
+    def __get_timestamp(self):
+        """
+        """
+
+        now = dt.datetime.now()
+        year = str(now.year)
+        month = str(now.month)
+        day = str(now.day)
+        hour = str(now.hour)
+        minute = str(now.minute)
+        second = str(now.second)
+
+        if len(month) == 1:
+            month = '0' + month
+
+        if len(day) == 1:
+            day = '0' + day
+
+        if len(hour) == 1:
+            hour = '0' + hour
+
+        if len(minute) == 1:
+            minute = '0' + minute
+
+        if len(second) == 1:
+            second = '0' + second
+
+        return '.'.join([year, month, day, hour, minute, second])
+
     def __write_file(self, level, s):
         """
         Internal function for writing text to a file.
@@ -112,15 +143,20 @@ class Log(object):
         """
 
         if self.on and self.fh:
-            if self.prefix:
-                if self.prefix == 'level':
-                    print >> self.fh, '<%s> %s' % (level, s)
+            os = ''
 
-                else:
-                    print >> self.fh, '%s %s' % (self.prefix, s)
+            if self.time:
+                os += '[%s] ' % self.__get_timestamp()
 
-            else:
-                print >> self.fh, '<%s> %s' % (level, s)
+            if self.prefix == 'level' or not self.prefix:
+                os += '<%s> ' % level
+
+            else self.prefix:
+                os += '%s ' % self.prefix
+
+            os += '%s' % s
+
+            print >> self.fh, os
 
     def __write_std(self, level, s):
         """
