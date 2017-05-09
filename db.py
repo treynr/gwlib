@@ -1358,14 +1358,14 @@ def insert_publication(pub):
             '''
             INSERT INTO publication
 
-                (pub_id, pub_authors, pub_title, pub_abstract, pub_journal,
+                (pub_authors, pub_title, pub_abstract, pub_journal,
                 pub_volume, pub_pages, pub_month, pub_year, pub_pubmed)
 
             VALUES
                 
-                (%(pub_id)s, %(pub_authors)s, %(pub_title)s, %(pub_abstract)s, 
+                (%(pub_authors)s, %(pub_title)s, %(pub_abstract)s, 
                 %(pub_journal)s, %(pub_volume)s, %(pub_pages)s, %(pub_month)s, 
-                %(pub_year)s, %(pub_pubmed))
+                %(pub_year)s, %(pub_pubmed)s)
 
             RETURNING pub_id;
             ''', 
@@ -1602,6 +1602,29 @@ def insert_ontology_relation(left, right, relation):
                 (%s, %s, %s);
             ''', 
                 (left, right, relation)
+        )
+
+def insert_geneset_ontology(gs_id, ont_id, ref_type):
+    """
+    Annotates a gene set with an ontology term.
+
+    arguments
+        gs_id:      gs_id to annotate
+        ont_id:     ont_id of the ontology term
+        ref_type:   the type of annotation (string that varies in value)
+                    e.g. "GeneWeaver Primary Manual" or "GW Primary Inferred"
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.geneset_ontology
+                (gs_id, ont_id, gso_ref_type)
+            VALUES
+                (%s, %s, %s);
+            ''', 
+                (gs_id, ont_id, ref_type)
         )
 
         ## UPDATES ##

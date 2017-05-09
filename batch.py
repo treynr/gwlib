@@ -12,7 +12,7 @@
 ## multisets because regular sets remove duplicates, requires python 2.7
 from collections import Counter as mset
 from collections import defaultdict as dd
-from copy import copy
+from copy import deepcopy
 import datetime
 import json
 import random
@@ -283,14 +283,19 @@ class BatchReader(object):
         """
 
         if 'values' in self._parse_set and self._parse_set['values']:
-            self.genesets.append(copy(self._parse_set))
+            #if self._parse_set['gs_name'].find('5,201') != -1:
+            #    print self.genesets[-1]
+            #    print self._parse_set
+            #    print self._parse_set['gs_name']
+            #    print self._parse_set['pmid']
+            self.genesets.append(deepcopy(self._parse_set))
 
         if 'pmid' not in self._parse_set:
             self._parse_set['pmid'] = ''
 
         ## For later...
-        if 'geneset_values' not in self._parse_set:
-            self._parse_set['geneset_values'] = []
+        #if 'geneset_values' not in self._parse_set:
+        #    self._parse_set['geneset_values'] = []
 
         self._parse_set['gs_name'] = ''
         self._parse_set['gs_description'] = ''
@@ -403,6 +408,9 @@ class BatchReader(object):
             #
             ## Lines beginning with '!' are score types (REQUIRED)
             elif lns[i][:1] == '!':
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
+
                 ttype, threshold = self.__parse_score_type(lns[i][1:].strip())
 
                 ## An error ocurred 
@@ -415,6 +423,9 @@ class BatchReader(object):
 
             ## Lines beginning with '@' are species types (REQUIRED)
             elif lns[i][:1] == '@':
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
+
                 spec = lns[i][1:].strip()
 
                 if spec.lower() not in species.keys():
@@ -428,6 +439,9 @@ class BatchReader(object):
 
             ## Lines beginning with '%' are gene ID types (REQUIRED)
             elif lns[i][:1] == '%':
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
+
                 gene = lns[i][1:].strip()
 
                 ## If a microarray platform is specified, the best possible 
@@ -484,10 +498,16 @@ class BatchReader(object):
 
             ## Lines beginning with 'P ' are PubMed IDs (OPTIONAL)
             elif (lns[i][:2] == 'P ') and (len(lns[i].split('\t')) == 1):
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
+
                 self._parse_set['pmid'] = lns[i][1:].strip()
 
             ## Lines beginning with 'A' are groups, default is private (OPTIONAL)
             elif lns[i][:2] == 'A ' and (len(lns[i].split('\t')) == 1):
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
+
                 group = lns[i][1:].strip()
 
                 ## If the user gives something other than private/public,
@@ -509,6 +529,9 @@ class BatchReader(object):
 
             ## Lines beginning with '~' are ontology annotations (OPTIONAL)
             elif lns[i][:2] == '~ ':
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
+
                 self._parse_set['annotations'].append(lns[i][1:].strip())
 
             ## If the lines are tab separated, we assume it's the gene data that
@@ -524,7 +547,7 @@ class BatchReader(object):
                         self.errors.append(err)
 
                 else:
-                    lns[i] = lns[i].split()
+                    lns[i] = lns[i].split('\t')
 
                     self._parse_set['values'].append((lns[i][0], lns[i][1]))
 
@@ -600,6 +623,7 @@ class BatchReader(object):
         gene_refs = map(lambda x: x[0], gs['values'])
         gene_type = gs['gs_gene_id_type']
         sp_id = gs['sp_id']
+        gs['geneset_values'] = []
 
         ## Check to see if we have cached copies of these references
         if self._symbol_cache[sp_id][gene_type]:
@@ -687,9 +711,14 @@ class BatchReader(object):
         """
 
         for ref, ode, value in gs['geneset_values']:
-            db.insert_geneset_value(
-                gs['gs_id'], ode, value, ref, gs['gs_threshold']
-            )
+            try:
+                db.insert_geneset_value(
+                    gs['gs_id'], ode, value, ref, gs['gs_threshold']
+                )
+            except Exception as e:
+                print e
+                print gs
+                exit()
 
     def __create_geneset_values2(self, gs):
         """
@@ -825,7 +854,7 @@ class BatchReader(object):
             gs['gs_count'] = self.__map_gene_identifiers(gs)
 
             if gs['at_id']:
-                gs['at_id'] = attributions.get(gs['at_id'], None)
+                gs['gs_attribution'] = attributions.get(gs['at_id'], None)
 
             self.__map_ontology_annotations(gs)
 
@@ -880,8 +909,17 @@ class BatchReader(object):
 
         for gs in genesets:
 
+            if not gs['gs_count']:
+
+                self.errors.append((
+                    'No genes in the set %s mapped to GW identifiers so it '
+                    'was not uploaded'
+                ) % gs['gs_name'])
+
+                continue
+
             if not gs['pub_id'] and gs['pub']:
-                gs['pub_id'] = db.insert_publication(pub)
+                gs['pub_id'] = db.insert_publication(gs['pub'])
 
             gs['file_id'] = self.__create_geneset_file(gs['values'])
             gs['gs_id'] = db.insert_geneset(gs)
@@ -890,6 +928,13 @@ class BatchReader(object):
             ## Update gs_count if some geneset_values were found to be invalid
             #if gsv_count != len(gs['geneset_values']):
             #    db.update_geneset_count(gs['gs_id'], gsv_count)
+
+            ## Add ontology annotations if they exist
+            if 'ont_ids' in gs:
+                for ont_id in gs['ont_ids']:
+                    db.insert_geneset_ontology(
+                        gs['gs_id'], ont_id, 'GeneWeaver Primary Annotation'
+                    )
 
             ids.append(gs['gs_id'])
 
