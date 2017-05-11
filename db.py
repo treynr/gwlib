@@ -385,6 +385,59 @@ def get_gene_ids_by_species(refs, sp_id):
 
         return associate(cursor)
 
+def get_gene_ids_by_spid_type(sp_id, gdb_id):
+    """
+    Exactly like get_gene_ids() above but filters results by species and
+    gene type.
+
+    :type refs: list/tuple
+    :arg refs: external DB reference IDs
+
+    :type sp_id: int
+    :arg sp_id: GW species ID
+
+    :ret dict: mapping of ode_ref_ids to ode_gene_ids
+    """
+
+    ## There is an issue with gene symbols. Some species have duplicate symbols
+    ## with different ode_gene_ids. One is the correct entry, the other is an
+    ## entry for another gene with the same symbol (incorrectly attributed).
+    ## One e.g. is the mouse Ccr4 gene. So, when symbols are searched for the
+    ## ode_pref tag MUST be used.
+    gene_types = get_short_gene_types()
+
+    if gene_types['symbol'] == gdb_id:
+        use_pref = True
+
+    else:
+        use_pref = False
+
+    with PooledCursor() as cursor:
+
+        if use_pref:
+            cursor.execute(
+                '''
+                SELECT  lower(ode_ref_id), ode_gene_id
+                FROM    extsrc.gene
+                WHERE   sp_id = %s AND 
+                        gdb_id = %s AND
+                        ode_pref = 't'; AND
+                ''', 
+                    (sp_id, gdb_id)
+            )
+
+        else:
+            cursor.execute(
+                '''
+                SELECT  lower(ode_ref_id), ode_gene_id
+                FROM    extsrc.gene
+                WHERE   sp_id = %s;
+                ''', 
+                    (sp_id,)
+            )
+
+        return associate(cursor)
+
 def get_species_genes(sp_id):
     """
     Similar to the above get_gene_ids() but an ode_ref_id -> ode_gene_id
@@ -712,6 +765,26 @@ def get_publication(pmid):
 
         else:
             return 0
+
+def get_publication_mapping():
+    """
+    Returns a mapping of PMID -> pub_id for all publications in the DB.
+
+    returns
+        a dict mapping PMIDs -> pub_ids
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT DISTINCT ON  (pub_pubmed) pub_pubmed, pub_id
+            FROM                production.publication
+            ORDER BY            pub_pubmed, pub_id;
+            '''
+        )
+
+        return associate(cursor)
 
 def get_publication_pmid(pub_id):
     """
@@ -1052,6 +1125,58 @@ def get_genesets_by_project(pj_ids):
 
         return associate_duplicate(cursor)
 
+def get_annotation_by_refs(ont_refs):
+    """
+    Maps ontology reference IDs (e.g. GO:0123456, MP:0123456) to the internal
+    ontology IDs used by GW.
+
+    returns
+        a mapping of ont_ref_id -> ont_id
+    """
+
+    if type(ont_refs) == list:
+        ont_refs = tuple(ont_refs)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  ont_ref_id, ont_id
+            FROM    extsrc.ontology
+            WHERE   ont_ref_id IN %s
+            ''',
+                (ont_refs,)
+        )
+
+        return associate(cursor)
+
+def get_annotation_by_ref(ont_ref):
+    """
+    Returns the internal ontology ID used by GW for a single ontology reference
+    ID.
+
+    returns
+        an ont_id
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  ont_id
+            FROM    extsrc.ontology
+            WHERE   ont_ref_id = %s
+            ''',
+                (ont_ref,)
+        )
+
+        result = cursor.fetchone()
+
+        if not result:
+            return None
+
+        return result[0]
+
         ## INSERTS ##
         #############
 
@@ -1218,14 +1343,14 @@ def insert_publication(pub):
     :ret int: a GW publication ID (pub_id)
     """
 
-    if 'pub_pubmed' not in pub:
-        pub['pub_pubmed'] = None
+    #if 'pub_pubmed' not in pub:
+    #    pub['pub_pubmed'] = None
 
-    else:
-        pub_id = get_publication(pub['pub_pubmed'])
+    #else:
+    #    pub_id = get_publication(pub['pub_pubmed'])
 
-        if pub_id != 0:
-            return pub_id
+    #    if pub_id != 0:
+    #        return pub_id
 
     with PooledCursor() as cursor:
 
@@ -1233,14 +1358,14 @@ def insert_publication(pub):
             '''
             INSERT INTO publication
 
-                (pub_id, pub_authors, pub_title, pub_abstract, pub_journal,
+                (pub_authors, pub_title, pub_abstract, pub_journal,
                 pub_volume, pub_pages, pub_month, pub_year, pub_pubmed)
 
             VALUES
                 
-                (%(pub_id)s, %(pub_authors)s, %(pub_title)s, %(pub_abstract)s, 
+                (%(pub_authors)s, %(pub_title)s, %(pub_abstract)s, 
                 %(pub_journal)s, %(pub_volume)s, %(pub_pages)s, %(pub_month)s, 
-                %(pub_year)s, %(pub_pubmed))
+                %(pub_year)s, %(pub_pubmed)s)
 
             RETURNING pub_id;
             ''', 
@@ -1477,6 +1602,29 @@ def insert_ontology_relation(left, right, relation):
                 (%s, %s, %s);
             ''', 
                 (left, right, relation)
+        )
+
+def insert_geneset_ontology(gs_id, ont_id, ref_type):
+    """
+    Annotates a gene set with an ontology term.
+
+    arguments
+        gs_id:      gs_id to annotate
+        ont_id:     ont_id of the ontology term
+        ref_type:   the type of annotation (string that varies in value)
+                    e.g. "GeneWeaver Primary Manual" or "GW Primary Inferred"
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.geneset_ontology
+                (gs_id, ont_id, gso_ref_type)
+            VALUES
+                (%s, %s, %s);
+            ''', 
+                (gs_id, ont_id, ref_type)
         )
 
         ## UPDATES ##
