@@ -157,7 +157,7 @@ def listify(cursor):
 
 def tuplify(thing):
     """
-    Converts a list or scalor value into a tuple.
+    Converts a list, list like object or scalar value into a tuple.
 
     :type thing: something
     :arg thing: the thing being converted
@@ -165,7 +165,7 @@ def tuplify(thing):
     :ret list: tupled value
     """
 
-    if type(thing) == list:
+    if type(thing) == list or type(thing) == set:
         return tuple(thing)
 
     elif type(thing) == tuple:
@@ -1124,6 +1124,46 @@ def get_genesets_by_project(pj_ids):
         )
 
         return associate_duplicate(cursor)
+
+def get_geneset_annotations(gs_ids):
+    """
+    Returns the set of ontology annotations for each given gs_id.
+
+    arguments
+        gs_ids: list of gs_ids to retrieve annotations for
+
+    returns
+        a dict mapping gs_ids to a list of tuples containing the ont_id and
+        ont_ref_id.
+            e.g. {123456: (7890, 'GO:1234567')}
+    """
+
+    gs_ids = tuplify(gs_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT      go.gs_id, go.ont_id, o.ont_ref_id
+            FROM        extsrc.geneset_ontology AS go
+            INNER JOIN  extsrc.ontology AS o
+            ON          go.ont_id = o.ont_id
+            WHERE       gs_id IN %s;
+            ''',
+                (gs_ids,)
+        )
+
+        gs2ann = {}
+
+        for row in cursor:
+            gs_id = row[0]
+
+            if gs_id in gs2ann:
+                gs2ann[gs_id].append(tuple(row[1:]))
+            else:
+                gs2ann[gs_id] = [tuple(row[1:])]
+
+        return gs2ann
 
 def get_annotation_by_refs(ont_refs):
     """
