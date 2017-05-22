@@ -196,3 +196,39 @@ def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
 
     return gs
 
+def manipulate_path(path, pre='', post='', ext='', delim='-'):
+    """
+    Takes a filepath and modifies it based on user provided parameters.
+
+    arguments
+        path:   the path being modified
+        pre:    adds a prefix string to the filename of the given path
+                e.g. 
+                    path = /some/file.txt, prefix = 'pre' 
+                    -> /some/pre-file.txt
+        post:   adds a postfix string to the filename of the given path
+                e.g. 
+                    path = /some/file.txt, prefix = 'post' 
+                    -> /some/file-post.txt
+        ext:    if the file is lacking an extension, this specifies the
+                extension to add
+        delim:  the delimiter to use when pre/postfixing strings
+    """
+
+    path_dir, path_base = os.path.split(path)
+    path_base, path_ext = os.path.splitext(path_base)
+
+    if pre:
+        path_base = pre + delim + path_base
+
+    if post:
+        path_base = path_base + delim + post
+
+    if not path_ext and ext:
+        if ext[0] != '.':
+            ext = '.' + ext
+
+        path_ext = ext
+
+    return os.path.join(path_dir, path_base) + path_ext
+
