@@ -118,7 +118,7 @@ def parse_generic_file(fp, delim='\t'):
 
 def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
                  gene_type, gene_vals, at_id=None, usr_id=0, cur_id=5, 
-                 file_id=0, pmid=None):
+                 file_id=0, pmid=None, annos=[]):
     """
     Given a shitload of arguments, this function returns a dictionary
     representation of a single geneset. Each key is a different column found
@@ -168,6 +168,102 @@ def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
 
     gs = {}
 
+    ## If the geneset isn't private, neither should the group be
+    if cur_id != 5 and grps.find('-1'):
+        grps = grps.split(',')
+        grps = map(lambda x: '0' if x == '-1' else x, grps)
+        grps = ','.join(grps)
+
+    gs['gs_name'] = name
+    gs['gs_abbreviation'] = abbrev
+    gs['gs_description'] = desc
+    gs['sp_id'] = int(sp_id)
+    gs['gs_groups'] = grps
+    gs['pub_id'] = pub_id
+    gs['pmid'] = pmid
+    gs['gs_threshold_type'] = int(score_type)
+    gs['gs_threshold'] = thresh
+    gs['gs_gene_id_type'] = int(gene_type)
+    gs['usr_id'] = int(usr_id)
+    ## Not a column in the geneset table; but these are processed later since
+    ## each geneset_value requires a gs_id
+    gs['geneset_values'] = gene_vals
+    gs['at_id'] = at_id
+
+    ## Other fields we can fill out
+    gs['gs_count'] = len(gene_vals)
+    gs['cur_id'] = cur_id
+
+    ## Ontology annotations
+    gs['annotations'] = annos
+
+    return gs
+
+def make_geneset2(gs):
+    """
+    Converts the fields in the given geneset dictionary into proper column
+    names for the geneset table. Attempts to map casually named fields to
+    proper column names and substitute missing fields with sensible defaults.
+
+    arguments
+        gs: gene set dict object
+
+    returns
+        an altered dict 
+    """
+
+    geneset = {}
+
+
+    if 'tier' in gs:
+        geneset['cur_id'] = int(gs['tier'])
+    elif 'cur_id' in gs:
+        geneset['cur_id'] = int(gs['cur_id'])
+
+    if 'name' in gs:
+        geneset['gs_name'] = gs['name']
+    elif 'gs_name' in gs:
+        geneset['gs_name'] = gs['gs_name']
+
+    if 'description' in gs:
+        geneset['gs_description'] = gs['description']
+    elif 'gs_description' in gs:
+        geneset['gs_description'] = gs['gs_description']
+
+    if 'abbreviation' in gs:
+        geneset['gs_abbreviation'] = gs['abbreviation']
+    elif 'gs_abbreviation' in gs:
+        geneset['gs_abbreviation'] = gs['gs_abbreviation']
+
+    if 'species' in gs:
+        geneset['sp_id'] = int(gs['species'])
+    elif 'sp_id' in gs:
+        geneset['sp_id'] = int(gs['cur_id'])
+
+    if 'tier' in gs:
+        geneset['cur_id'] = int(gs['tier'])
+    elif 'cur_id' in gs:
+        geneset['cur_id'] = int(gs['cur_id'])
+
+    if 'tier' in gs:
+        geneset['cur_id'] = int(gs['tier'])
+    elif 'cur_id' in gs:
+        geneset['cur_id'] = int(gs['cur_id'])
+
+    if 'tier' in gs:
+        geneset['cur_id'] = int(gs['tier'])
+    elif 'cur_id' in gs:
+        geneset['cur_id'] = int(gs['cur_id'])
+
+    if 'tier' in gs:
+        geneset['cur_id'] = int(gs['tier'])
+    elif 'cur_id' in gs:
+        geneset['cur_id'] = int(gs['cur_id'])
+
+    if 'tier' in gs:
+        geneset['cur_id'] = int(gs['tier'])
+    elif 'cur_id' in gs:
+        geneset['cur_id'] = int(gs['cur_id'])
     ## If the geneset isn't private, neither should the group be
     if cur_id != 5 and grps.find('-1'):
         grps = grps.split(',')
