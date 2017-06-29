@@ -30,10 +30,10 @@ def get_pubmed_info(pmid):
     """
     Retrieves PubMed article metadata for a given PMID.
 
-    arguments:
+    arguments
         pmid: an int PubMed ID
 
-    returns:
+    returns
         a dict where each key corresponds to a column in the publication table.
     """
     ## Sumarry info includes everything but the abstract
@@ -107,17 +107,17 @@ def make_digrams(s):
     """
     Recursively creates an exhaustive list of digrams from the given string.
 
-    arguments:
+    arguments
         s: string to generate digrams with
 
-    returns:
+    returns
         a list of digram strings.
     """
 
     if len(s) <= 2:
         return [s]
 
-    b = makeDigrams(s[1:])
+    b = make_digrams(s[1:])
     b.insert(0, s[:2])
 
     return b
@@ -133,16 +133,16 @@ def calculate_str_similarity(s1, s2):
     sim(s1, s2) = (2 * intersection(digrams(s1), digrams(s2)) /
                    |digrams(s1) + digrams(s2)|
 
-    arguments:
+    arguments
         s1: string #1
         s2: string #2
 
-    returns:
+    returns
         a float indicating the percent similarity between two strings
     """
 
-    sd1 = makeDigrams(s1)
-    sd2 = makeDigrams(s2)
+    sd1 = make_digrams(s1)
+    sd2 = make_digrams(s2)
     intersect = list((mset(sd1) & mset(sd2)).elements())
 
     return (2 * len(intersect)) / float(len(sd1) + len(sd2))
@@ -154,7 +154,7 @@ class BatchReader(object):
     """
     Class used to read and parse batch geneset files.
 
-    attributes:
+    public
         filepath:   string indicating the location of a batch file
         genesets:   list of dicts representing the parsed genesets, each dict
                     has fields corresponding to columns in the geneset table
@@ -162,6 +162,15 @@ class BatchReader(object):
                     parsing
         warns:      list of strings indicating non-crit errors found during 
                     parsing
+
+    private
+        _parse_set:         the gene set currently being parsed
+        _pub_map:           PMID -> pub_id mapping
+        _symbol_cache:      a series of nested dicts used to map species
+                            specific gene symbols to GW identifiers. The 
+                            structure is: 
+                                sp_id -> gdb_id -> ode_ref_id -> ode_gene_id
+        _annotation_cache:  mapping of ontology term IDs -> ont_ids
     """
 
     def __init__(self, filepath):
@@ -171,9 +180,7 @@ class BatchReader(object):
         self.errors = []
         self.warns = []
         self._parse_set = {}
-        self._pmid_cache = {}
         self._pub_map = None
-        ## Cache of symbol mappings sp_id -> gdb_id -> ode_ref -> ode_gene_id
         self._symbol_cache = dd(lambda: dd(int))
         self._annotation_cache = dd(int)
 
@@ -187,6 +194,44 @@ class BatchReader(object):
 
         with open(fp, 'r') as fl:
             return fl.read().split('\n')
+
+    def __reset_parsed_set(self):
+        """
+        Clears and resets the fields of the gene set currently being parsed. If
+        the parsed set contains gene values we can assume it is complete (this
+        assumption is checked later) and store it in the list of parsed sets.
+        """
+
+        if 'values' in self._parse_set and self._parse_set['values']:
+            self.genesets.append(deepcopy(self._parse_set))
+
+        if 'pmid' not in self._parse_set:
+            self._parse_set['pmid'] = ''
+
+        self._parse_set['gs_name'] = ''
+        self._parse_set['gs_description'] = ''
+        self._parse_set['gs_abbreviation'] = ''
+        self._parse_set['values'] = []
+        self._parse_set['annotations'] = []
+
+    def __check_parsed_set(self):
+        """
+        Checks to see if all the required fields are filled out for the gene
+        set currently being parsed.
+
+        returns
+            true if all required fields are filled out otherwise false
+        """
+
+        if not self._parse_set['gs_name'] or\
+           not self._parse_set['gs_description'] or\
+           not self._parse_set['gs_abbreviation'] or\
+           'gs_gene_id_type' not in self._parse_set or\
+           'gs_threshold_type' not in self._parse_set or\
+           'sp_id' not in self._parse_set:
+               return False
+
+        return True
 
     def __parse_score_type(self, s):
         """
@@ -210,10 +255,10 @@ class BatchReader(object):
             Correlation = 4
             Effect = 5
 
-        arguments:
+        arguments
             s: string containing score type and possibly threshold value(s)
 
-        returns:
+        returns
             a tuple containing the threshold type and threshold value. 
                 i.e. (gs_threshold_type, gs_threshold)
         """
@@ -282,43 +327,70 @@ class BatchReader(object):
 
         return (stype, thresh)
 
-    def __reset_parsed_set(self):
+    def __parse_gene_type(self, gtype, platforms, gene_types):
         """
-        Clears and resets the fields of the gene set currently being parsed. If
-        the parsed set contains gene values we can assume it is complete (this
-        assumption is checked later) and store it in the list of parsed sets.
-        """
+        Parses and determines the gene type the user has provided. If the gene
+        type is a microarray, this will attempt to find a matching platform.
+        Otherwise it will use regular gene types from the genedb table.
 
-        if 'values' in self._parse_set and self._parse_set['values']:
-            self.genesets.append(deepcopy(self._parse_set))
-
-        if 'pmid' not in self._parse_set:
-            self._parse_set['pmid'] = ''
-
-        self._parse_set['gs_name'] = ''
-        self._parse_set['gs_description'] = ''
-        self._parse_set['gs_abbreviation'] = ''
-        self._parse_set['values'] = []
-        self._parse_set['annotations'] = []
-
-    def __check_parsed_set(self):
-        """
-        Checks to see if all the required fields are filled out for the gene
-        set currently being parsed.
+        arguments
+            gtype:      the gene type string being parsed
+            platforms:  dict mapping platform names -> gene type ids (gdb_id)
+            gene_types: dict mapping regular gene type names -> gene type ids
 
         returns
-            true if all required fields are filled out otherwise false
+            an gdb_id (integer) or None if no gene type could be parsed/found
         """
 
-        if not self._parse_set['gs_name'] or\
-           not self._parse_set['gs_description'] or\
-           not self._parse_set['gs_abbreviation'] or\
-           'gs_gene_id_type' not in self._parse_set or\
-           'gs_threshold_type' not in self._parse_set or\
-           'sp_id' not in self._parse_set:
-               return False
+        ## If a microarray platform is specified, we use string
+        ## similarity to find the best possible platform in our DB. The
+        ## best match above a threshold is used. This has to be done
+        ## since naming conventions for the same platform can vary.
+        ## All other gene types are easier to handle; they are 
+        ## retrieved from the DB and their ID types are negated. 
+        if gtype.lower().find('microarray') != -1:
+            ## Remove 'microarray' text
+            gtype = gtype[len('microarray'):].strip()
+            original = gtype
 
-        return True
+            ## Determine the closest microarry platform match above a 70%
+            ## similarity threshold.
+            best = 0.70
+
+            for plat, pid in platforms.items():
+                sim = calculate_str_similarity(plat.lower(), original.lower())
+
+                if sim > best:
+                    best = sim
+                    gtype = plat
+
+            ## Convert to the parsed gene ID type to an actual ID. 
+            ## gene will now be an integer
+            gtype = platforms.get(gtype, 'unknown')
+
+            if type(gtype) != int:
+                self.errors.append('%s is an invalid platform' % original)
+
+            else:
+                return gtype
+
+        ## Otherwise the user specified one of the gene types, not a
+        ## microarray platform
+        ## :IMPORTANT: Gene ID representation is fucking ass backwards.
+        ## Expression platforms have positive (+) gs_gene_id_types 
+        ## while all other types (e.g. symbols) should have negative 
+        ## (-) integer ID types despite their gdb_ids being positive.
+        else:
+            gtype = gtype.lower()
+
+            if gtype not in gene_types.keys():
+                self.errors.append('%s is an invalid gene type' % gtype)
+
+            else:
+                ## Convert to a negative integer (gdb_id)
+                return -gene_types[gtype]
+
+        return None
 
     def __parse_batch_syntax(self, lns):
         """
@@ -327,7 +399,7 @@ class BatchReader(object):
         The results (gene set objects) and any errors or warnings are stored in
         their respective class attributes. 
 
-        arguments:
+        arguments
             lns: list of strings, one for each line in the batch file
         """
 
@@ -449,60 +521,16 @@ class BatchReader(object):
                     self.__reset_parsed_set()
 
                 gene = lns[i][1:].strip()
+                gene = self.__parse_gene_type(gene, platforms, gene_types)
 
-                ## If a microarray platform is specified, we use string
-                ## similarity to find the best possible platform in our DB. The
-                ## best match above a threshold is used. This has to be done
-                ## since naming conventions for the same platform can vary.
-                ## All other gene types are easier to handle; they are 
-                ## retrieved from the DB and their ID types are negated. 
-                if gene.lower().find('microarray') != -1:
-                    ## Remove 'microarray' text
-                    gene = gene[len('microarray'):].strip()
-                    original = gene
+                ## An error ocurred 
+                if not gene:
+                    ## Appends the line number to the last error which should
+                    ## be the error indicating an invalid gene type
+                    self.errors[-1] = 'LINE %s: %s' % (i + 1, self.errors[-1])
 
-                    ## Determine the closest microarry platform match above a 70%
-                    ## similarity threshold.
-                    best = 0.70
-
-                    for plat, pid in platforms.items():
-                        sim = calc_str_similarity(plat.lower(), original.lower())
-
-                        if sim > best:
-                            best = sim
-                            gene = plat
-
-                    ## Convert to the parsed gene ID type to an actual ID. 
-                    ## gene will now be an integer
-                    gene = platforms.get(gene, 'unknown')
-
-                    if type(gene) != int:
-                        self.errors.append(
-                            'LINE %s: %s is an invalid platform' % 
-                            (i + 1, original)
-                        )
-
-                    else:
-                        self._parse_set['gs_gene_id_type'] = gene
-
-                ## Otherwise the user specified one of the gene types, not a
-                ## microarray platform
-                ## :IMPORTANT: Gene ID representation is fucking ass backwards.
-                ## Expression platforms have positive (+) gs_gene_id_types 
-                ## while all other types (e.g. symbols) should have negative 
-                ## (-) integer ID types despite their gdb_ids being positive.
                 else:
-                    gene = gene.lower()
-
-                    if gene not in gene_types.keys():
-                        self.errors.append(
-                            'LINE %s: %s is an invalid gene type' % 
-                            (i + 1, gene)
-                        )
-
-                    else:
-                        ## Convert to a negative integer (gdb_id)
-                        self._parse_set['gs_gene_id_type'] = -gene_types[gene]
+                    self._parse_set['gs_gene_id_type'] = gene
                             
 
             ## Lines beginning with 'P ' are PubMed IDs (OPTIONAL)
@@ -587,11 +615,11 @@ class BatchReader(object):
         Modifies the geneset_values into the proper format for storage in the file
         table and inserts the result.
 
-        arguments:
+        arguments
             genes: a list of tuples representing gene set values
                    e.g. [('Mobp', 0.001), ('Daxx', 0.2)]
 
-        returns:
+        returns
             the file_id (int) of the newly inserted file
         """
 
@@ -639,11 +667,11 @@ class BatchReader(object):
         the user uploaded symbol, the ode_gene_id, and the value.
             e.g. [('mobp', 1318, 0.03), ...]
 
-        arguments:
+        arguments
             gs: a dict representing a geneset. Contains fields with the same
                 columns as the geneset table
 
-        returns:
+        returns
             an int indicating the total number of geneset_values inserted into
             the DB.
         """
@@ -664,7 +692,7 @@ class BatchReader(object):
         elif gs['gs_gene_id_type'] < 0:
             ## A mapping of (symbols) ode_ref_ids -> ode_gene_ids. The
             ## ode_ref_ids returned by this function have all been lower cased.
-            ref2ode = db.get_gene_ids_by_spid_type(sp_id, gene_type)
+            ref2ode = db.get_gene_ids_by_spid_type(sp_id, -gene_type)
 
             self._symbol_cache[sp_id][gene_type] = dd(int, ref2ode)
 
@@ -693,9 +721,9 @@ class BatchReader(object):
             ## Platform handling
             if gs['gs_gene_id_type'] > 0:
                 prb_id = ref2ode[ref]
-                odes = ref2ode[prbid]
+                odes = ref2ode[prb_id]
 
-                if not prbid or not odes:
+                if not prb_id or not odes:
                     self.warns.append('No gene/locus data exists for %s' % ref)
                     continue
 
@@ -776,10 +804,10 @@ class BatchReader(object):
         """
         Parses a batch file to completion. 
 
-        arguments:
+        arguments
             fp: a string, the filepath to a batch file
 
-        returns:
+        returns
             A list of gene set objects (dicts) with properly filled out fields,
             ready for insertion into the GW DB.
         """
