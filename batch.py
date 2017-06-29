@@ -284,22 +284,16 @@ class BatchReader(object):
 
     def __reset_parsed_set(self):
         """
+        Clears and resets the fields of the gene set currently being parsed. If
+        the parsed set contains gene values we can assume it is complete (this
+        assumption is checked later) and store it in the list of parsed sets.
         """
 
         if 'values' in self._parse_set and self._parse_set['values']:
-            #if self._parse_set['gs_name'].find('5,201') != -1:
-            #    print self.genesets[-1]
-            #    print self._parse_set
-            #    print self._parse_set['gs_name']
-            #    print self._parse_set['pmid']
             self.genesets.append(deepcopy(self._parse_set))
 
         if 'pmid' not in self._parse_set:
             self._parse_set['pmid'] = ''
-
-        ## For later...
-        #if 'geneset_values' not in self._parse_set:
-        #    self._parse_set['geneset_values'] = []
 
         self._parse_set['gs_name'] = ''
         self._parse_set['gs_description'] = ''
@@ -309,6 +303,11 @@ class BatchReader(object):
 
     def __check_parsed_set(self):
         """
+        Checks to see if all the required fields are filled out for the gene
+        set currently being parsed.
+
+        returns
+            true if all required fields are filled out otherwise false
         """
 
         if not self._parse_set['gs_name'] or\
@@ -583,13 +582,13 @@ class BatchReader(object):
         ## awwww shit, we're finally finished! Make the final parsed geneset.
         self.genesets.append(self._parse_set)
 
-    def __create_geneset_file(self, genes):
+    def __insert_geneset_file(self, genes):
         """
         Modifies the geneset_values into the proper format for storage in the file
         table and inserts the result.
 
         arguments:
-            genes: a list of tuples representing geneset values
+            genes: a list of tuples representing gene set values
                    e.g. [('Mobp', 0.001), ('Daxx', 0.2)]
 
         returns:
@@ -598,7 +597,7 @@ class BatchReader(object):
 
         conts = ''
 
-        ## Geneset values should be a list of tuples (symbol, pval)
+        ## Gene set values should be a list of tuples (symbol, value)
         for tup in genes:
             conts += '%s\t%s\n' % (tup[0], tup[1])
 
@@ -606,6 +605,9 @@ class BatchReader(object):
 
     def __map_ontology_annotations(self, gs):
         """
+        If a gene set has ontology annotations, we map the ontology term IDs to
+        the internal IDs used by GW (ont_ids) and save them in the gene set
+        object.
         """
 
         gs['ont_ids'] = []
@@ -631,7 +633,19 @@ class BatchReader(object):
 
     def __map_gene_identifiers(self, gs):
         """
-        think about refactoring this piece of shit.
+        Maps the user provided gene symbols (ode_ref_ids) to ode_gene_ids.
+        The mapped genes are added to the gene set object in the 
+        'geneset_values' key. This added key is a list of triplets containing
+        the user uploaded symbol, the ode_gene_id, and the value.
+            e.g. [('mobp', 1318, 0.03), ...]
+
+        arguments:
+            gs: a dict representing a geneset. Contains fields with the same
+                columns as the geneset table
+
+        returns:
+            an int indicating the total number of geneset_values inserted into
+            the DB.
         """
 
         ## Isolate gene symbols (ode_ref_ids)
@@ -730,7 +744,7 @@ class BatchReader(object):
 
         return len(gs['geneset_values'])
 
-    def __create_geneset_values(self, gs):
+    def __insert_geneset_values(self, gs):
         """
         """
 
@@ -744,103 +758,19 @@ class BatchReader(object):
                 print gs
                 exit()
 
-    def __create_geneset_values2(self, gs):
+    def __insert_annotations(self, gs):
         """
-        Maps the given reference IDs to ode_gene_ids and inserts them into the
-        geneset_value table.
+        Inserts gene set ontology annotations into the DB.
 
-        arguments:
-            gs: a dict representing a geneset. Contains fields with the same
-                columns as the geneset table
-
-        returns:
-            an int indicating the total number of geneset_values inserted into
-            the DB.
+        arguments
+            gs: gene set object
         """
 
-        ## Geneset values should be a list of tuples (symbol, pval). Here we
-        ## isolate the symbols (ode_ref_ids)
-        symbols = filter(lambda x: not not x, gs['geneset_values'])
-        symbols = map(lambda x: x[0], symbols)
-
-        ## Negative numbers indicate normal gene types (found in genedb) while
-        ## positive numbers indicate expression platforms and more work :(
-        if gs['gs_gene_id_type'] < 0:
-            sym2ode = db.get_gene_ids_by_species(symbols, gs['sp_id'])
-
-        else:
-            ## Retrieve a mapping of (symbols) prb_ref_ids -> prb_ids for the
-            ## given platform
-            sym2probe = db.get_platform_probes(gs['gs_gene_id_type'], symbols)
-            prb_ids = []
-
-            for sym in symbols:
-                prb_ids.append(sym2probe[sym])
-
-            ## We then have to map all of the prb_ids -> ode_gene_ids
-            prb_ids = list(set(prb_ids))
-            prb2odes = db.get_probe2gene(prbids)
-
-        ## duplicate detection
-        dups = dd(str)
-        total = 0
-
-        for sym, value in gs['geneset_values']:
-
-            ## Platform handling
-            if gs['gs_gene_id_type'] > 0:
-                prbid = sym2probe[sym]
-                odes = prb2odes[prbid]
-
-                if not prbid or not odes:
-                    self.warns.append('No gene/locus data exists for %s' % sym)
-                    continue
-
-                for ode in odes:
-                    ## Check for duplicate ode_gene_ids, otherwise postgres bitches
-                    ## during value insertion
-                    if not dups[ode]:
-                        dups[ode] = sym
-
-                    else:
-                        self.warns.append((
-                            '%s is a duplicate of %s and '
-                            'was not added to the geneset' % (sym, dups[ode])
-                        ))
-                        continue
-
-                    db.insert_geneset_value(
-                        gs['gs_id'], ode, value, sym, gs['gs_threshold']
-                    )
-
-                    total += 1
-
-                continue
-
-            ## Not platform stuff
-            if not sym2ode[sym]:
-                self.warns.append('No gene/locus exists data for %s' % sym)
-                continue
-
-            ## Duplicate check again
-            if not dups[sym2ode[sym]]:
-                dups[sym2ode[sym]] = sym
-
-            else:
-                self.warns.append((
-                    '%s is a duplicate of %s and was not '
-                    'added to the geneset' % (sym, dups[ode])
-                ))
-                continue
-
-            db.insert_geneset_value(
-                gs['gs_id'], sym2ode[sym], value, sym, gs['gs_threshold']
-            )
-
-            total += 1
-
-        return total
-
+        if 'ont_ids' in gs:
+            for ont_id in set(gs['ont_ids']):
+                db.insert_geneset_ontology(
+                    gs['gs_id'], ont_id, 'GeneWeaver Primary Annotation'
+                )
 
     def parse_batch_file(self):
         """
@@ -887,17 +817,6 @@ class BatchReader(object):
 
             self.__map_ontology_annotations(gs)
 
-            #gs['file_id'] = self.__create_geneset_file(gs['geneset_values'])
-            #gs['gs_id'] = db.insert_geneset(gs)
-            #gsv_count = self.__create_geneset_values(gs)
-
-            ## Update gs_count if some geneset_values were found to be invalid
-            #if gsv_count != len(gs['geneset_values']):
-            #    db.update_geneset_count(gs['gs_id'], gsv_count)
-
-            #added.append(gs['gs_id'])
-
-        #return added
         return self.genesets
 
     def get_geneset_pubmeds(self):
@@ -950,20 +869,10 @@ class BatchReader(object):
             if not gs['pub_id'] and gs['pub']:
                 gs['pub_id'] = db.insert_publication(gs['pub'])
 
-            gs['file_id'] = self.__create_geneset_file(gs['values'])
+            gs['file_id'] = self.__insert_geneset_file(gs['values'])
             gs['gs_id'] = db.insert_geneset(gs)
-            self.__create_geneset_values(gs)
-
-            ## Update gs_count if some geneset_values were found to be invalid
-            #if gsv_count != len(gs['geneset_values']):
-            #    db.update_geneset_count(gs['gs_id'], gsv_count)
-
-            ## Add ontology annotations if they exist
-            if 'ont_ids' in gs:
-                for ont_id in gs['ont_ids']:
-                    db.insert_geneset_ontology(
-                        gs['gs_id'], ont_id, 'GeneWeaver Primary Annotation'
-                    )
+            self.__insert_geneset_values(gs)
+            self.__insert_annotations(gs)
 
             ids.append(gs['gs_id'])
 
