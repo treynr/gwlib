@@ -127,11 +127,8 @@ def calculate_str_similarity(s1, s2):
     Calculates the percent similarity between two strings. Meant to be a
     replacement for PHP's similar_text function, which old GeneWeaver uses
     to determine the right microarray platform to use.
-    Couldn't find how similar_text was implemented (just that it used some
-    algorithm in the book 'Programming Classics' by Oliver) so this function
-    was written achieve similar results. This algorithm uses digrams and 
-    their intersections to determine percent similarity. It is calculated
-    as:
+    This algorithm uses digram intersections determine percent similarity. 
+    It is calculated as:
 
     sim(s1, s2) = (2 * intersection(digrams(s1), digrams(s2)) /
                    |digrams(s1) + digrams(s2)|
@@ -157,12 +154,14 @@ class BatchReader(object):
     """
     Class used to read and parse batch geneset files.
 
-
     attributes:
-        filepath: string indicating the location of a batch file
-        genesets: list of dicts representing the parsed genesets
-        errors: list of strings indicating critical errors found during parsing
-        warns: list of strings indicating non-crit errors found during parsing
+        filepath:   string indicating the location of a batch file
+        genesets:   list of dicts representing the parsed genesets, each dict
+                    has fields corresponding to columns in the geneset table
+        errors:     list of strings indicating critical errors found during 
+                    parsing
+        warns:      list of strings indicating non-crit errors found during 
+                    parsing
     """
 
     def __init__(self, filepath):
@@ -192,17 +191,19 @@ class BatchReader(object):
     def __parse_score_type(self, s):
         """
         Attempts to parse out the score type and any threshold value
-        from a given string.
+        from the given string.
         Acceptable score types and threshold values include:
             Binary
             P-Value < 0.05
             Q-Value < 0.05
             0.40 < Correlation < 0.50
             6.0 < Effect < 22.50
+           
         The numbers listed above are only examples and can vary depending on
         geneset. If those numbers can't be parsed for some reason, default values
         (e.g. 0.05) are used. The score types are converted into a numeric
-        representation:
+        representation used by the GW DB:
+
             P-Value = 1
             Q-Value = 2
             Binary = 3
@@ -214,14 +215,13 @@ class BatchReader(object):
 
         returns:
             a tuple containing the threshold type and threshold value. 
-            E.g. (gs_threshold_type, gs_threshold)
+                i.e. (gs_threshold_type, gs_threshold)
         """
 
         ## The score type, a numeric value but currently stored as a string
         stype = ''
         ## Default theshold values
         thresh = '0.05'
-        thresh2 = '0.05'
 
         ## Binary threshold is left at the default of 1
         if s.lower() == 'binary':
@@ -229,8 +229,8 @@ class BatchReader(object):
             thresh = '1'
 
         elif s.lower().find('p-value') != -1:
-            ## Try to find the threshold, this regex is from the PHP func.
-            ## my regex: ([0-9]?\.[0-9]+)
+            ## All the regexs used in this function are taken from the
+            ## original GW1 code
             m = re.search(r"([0-9.-]{2,})", s.lower())
             stype = '1'
 
@@ -249,9 +249,11 @@ class BatchReader(object):
                 self.warns.append('Invalid threshold. Using q < 0.05.')
 
         elif s.lower().find('correlation') != -1:
-            ## This disgusting regex is from the PHP function
-            ## And it sucks. It breaks on some input, might have to change this
-            ## later.
+            ## This regex doesn't work on some input. It doesn't properly parse
+            ## integers (only floats) and you must have two threshold values 
+            ## (you can't do something like Correlation < 5.0).
+            ## Too lazy to change it though since this score type isn't widely
+            ## used.
             m = re.search(r"([0-9.-]{2,})[^0-9.-]*([0-9.-]{2,})", s.lower())
             stype = '4'
 
@@ -259,11 +261,13 @@ class BatchReader(object):
                 thresh = m.group(1) + ',' + m.group(2)
             else:
                 thresh = '-0.75,0.75'
-                self.warns.append(('Invalid threshold.' 
-                                  'Using -0.75 < Correlation < 0.75'))
+
+                self.warns.append(
+                    'Invalid threshold. Using -0.75 < Correlation < 0.75'
+                ) 
 
         elif s.lower().find('effect') != -1:
-            ## Again, PHP regex
+            ## Same comments as the correlation regex
             m = re.search(r"([0-9.-]{2,})[^0-9.-]*([0-9.-]{2,})", s.lower())
             stype = '5'
 
@@ -321,7 +325,7 @@ class BatchReader(object):
         """
         Parses a batch file according to the format listed on
         http://geneweaver.org/index.php?action=manage&cmd=batchgeneset
-        The results (parsed genesets) and any errors or warnings are stored in
+        The results (gene set objects) and any errors or warnings are stored in
         their respective class attributes. 
 
         arguments:
@@ -334,6 +338,9 @@ class BatchReader(object):
         species = db.get_species()
         platforms = db.get_platform_names()
 
+        ## Provide lower cased keys for gene types, species, and expression
+        ## platformrs. Otherwise batch files must use case sensitive fields
+        ## which would be annoying.
         for gdb_name, gdb_id in gene_types.items():
             gene_types[gdb_name.lower()] = gdb_id
 
@@ -347,7 +354,8 @@ class BatchReader(object):
             lns[i] = lns[i].strip()
 
             ## These are special (dev only) additions to the batch file that 
-            ## allow tiers, user IDs, and attributions to be specified.
+            ## allow tiers, user IDs, and attributions to be specified. These
+            ## are only used in the public resource uploader scripts.
             #
             ## Lines beginning with 'T' are Tier IDs
             if lns[i][:2] == 'T ':
@@ -374,9 +382,10 @@ class BatchReader(object):
             #
             ## Lines beginning with ':' are geneset abbreviations (REQUIRED)
             elif lns[i][:1] == ':':
-                ## This checks to see if we've already read in some geneset_values
-                ## If we have, that means we can save the geneset, clear out any
-                ## REQUIRED fields before we do more parsing, and start over
+                ## This checks to see if we've already read, parsed, and stored
+                ## some gene values. If we have, that means we can save the
+                ## currently parsed geneset, clear out any REQUIRED fields before 
+                ## we do more parsing, and begin parsing this new set.
                 if self._parse_set['values']:
                     self.__reset_parsed_set()
 
@@ -384,9 +393,6 @@ class BatchReader(object):
 
             ## Lines beginning with '=' are geneset names (REQUIRED)
             elif lns[i][:1] == '=':
-                ## This checks to see if we've already read in some geneset_values
-                ## If we have, that means we can save the geneset, clear out any
-                ## REQUIRED fields before we do more parsing, and start over
                 if self._parse_set['values']:
                     self.__reset_parsed_set()
 
@@ -394,9 +400,6 @@ class BatchReader(object):
 
             ## Lines beginning with '+' are geneset descriptions (REQUIRED)
             elif lns[i][:1] == '+':
-                ## This checks to see if we've already read in some geneset_values
-                ## If we have, that means we can save the geneset, clear out any
-                ## REQUIRED fields before we do more parsing, and start over
                 if self._parse_set['values']:
                     self.__reset_parsed_set()
 
@@ -404,7 +407,9 @@ class BatchReader(object):
                 self._parse_set['gs_description'] += ' '
 
             ## !, @, %, are required but can be omitted from later sections if
-            ## they don't differ from the first.
+            ## they don't differ from the first. Meaning, these fields can be
+            ## specified once and will apply to all gene sets in the file unless
+            ## this field is encountered again.
             #
             ## Lines beginning with '!' are score types (REQUIRED)
             elif lns[i][:1] == '!':
@@ -415,6 +420,8 @@ class BatchReader(object):
 
                 ## An error ocurred 
                 if not ttype:
+                    ## Appends the line number to the last error which should
+                    ## be the error indicating an unknown score type was used
                     self.errors[-1] = 'LINE %s: %s' % (i + 1, self.errors[-1])
 
                 else:
@@ -444,10 +451,12 @@ class BatchReader(object):
 
                 gene = lns[i][1:].strip()
 
-                ## If a microarray platform is specified, the best possible 
-                ## match above a given threshold is found and used. All other
-                ## gene types are retrieved from the DB and their ID types 
-                ## are negated. 
+                ## If a microarray platform is specified, we use string
+                ## similarity to find the best possible platform in our DB. The
+                ## best match above a threshold is used. This has to be done
+                ## since naming conventions for the same platform can vary.
+                ## All other gene types are easier to handle; they are 
+                ## retrieved from the DB and their ID types are negated. 
                 if gene.lower().find('microarray') != -1:
                     ## Remove 'microarray' text
                     gene = gene[len('microarray'):].strip()
@@ -464,7 +473,8 @@ class BatchReader(object):
                             best = sim
                             gene = plat
 
-                    ## Convert to the ID, gene will now be an integer
+                    ## Convert to the parsed gene ID type to an actual ID. 
+                    ## gene will now be an integer
                     gene = platforms.get(gene, 'unknown')
 
                     if type(gene) != int:
@@ -538,10 +548,14 @@ class BatchReader(object):
             ## will become part of the geneset_values
             elif len(lns[i].split('\t')) == 2:
 
-                ## First we check to see if all the required data was specified
+                ## Check to see if all the required data was specified, if not
+                ## this set can't get uploaded. Let the user figure out what the
+                ## hell they're missing cause telling them is too much work on
+                ## our part.
                 if not self.__check_parsed_set():
 
                     err = 'One or more of the required fields are missing.'
+
                     ## Otherwise this string will get appended a bajillion times
                     if err not in errors:
                         self.errors.append(err)
@@ -567,28 +581,26 @@ class BatchReader(object):
                 )
 
         ## awwww shit, we're finally finished! Make the final parsed geneset.
-        #gs = util.make_geneset(name, abbr, desc, spec, pub, group, stype,
-        #                       thresh, gene, gsvals)
-        #self.genesets.append(gs)
         self.genesets.append(self._parse_set)
 
     def __create_geneset_file(self, genes):
         """
-        Parses the geneset_values into the proper format for storage in the file
+        Modifies the geneset_values into the proper format for storage in the file
         table and inserts the result.
 
         arguments:
             genes: a list of tuples representing geneset values
-            e.g. [('Mobp', 0.001), ('Daxx', 0.2)]
+                   e.g. [('Mobp', 0.001), ('Daxx', 0.2)]
 
         returns:
             the file_id (int) of the newly inserted file
         """
 
         conts = ''
+
         ## Geneset values should be a list of tuples (symbol, pval)
         for tup in genes:
-            conts += (tup[0] + '\t' + tup[1] + '\n')
+            conts += '%s\t%s\n' % (tup[0], tup[1])
 
         return db.insert_file(len(conts), conts, '')
 
@@ -599,6 +611,8 @@ class BatchReader(object):
         gs['ont_ids'] = []
 
         for anno in gs['annotations']:
+
+            ## Check the cache of retrieved annotations
             if self._annotation_cache[anno]:
                 gs['ont_ids'].append(self._annotation_cache[anno])
 
@@ -620,28 +634,36 @@ class BatchReader(object):
         think about refactoring this piece of shit.
         """
 
+        ## Isolate gene symbols (ode_ref_ids)
         gene_refs = map(lambda x: x[0], gs['values'])
         gene_type = gs['gs_gene_id_type']
         sp_id = gs['sp_id']
         gs['geneset_values'] = []
 
-        ## Check to see if we have cached copies of these references
+        ## Check to see if we have cached copies of these references. If we do,
+        ## we don't have to make any DB calls or build the mapping
         if self._symbol_cache[sp_id][gene_type]:
             pass
 
         ## Negative numbers indicate normal gene types (found in genedb) while
         ## positive numbers indicate expression platforms and more work :(
         elif gs['gs_gene_id_type'] < 0:
+            ## A mapping of (symbols) ode_ref_ids -> ode_gene_ids. The
+            ## ode_ref_ids returned by this function have all been lower cased.
             ref2ode = db.get_gene_ids_by_spid_type(sp_id, gene_type)
 
             self._symbol_cache[sp_id][gene_type] = dd(int, ref2ode)
 
+        ## It's a damn expression platform :/
         else:
+            ## This is a mapping of (symbols) prb_ref_ids -> prb_ids for the
+            ## given platform
             ref2prbid = db.get_platform_probes(gene_type, gene_refs)
+            ## This is a mapping of prb_ids -> ode_gene_ids
             prbid2ode = db.get_probe2gene(ref2prbid.values())
 
             ## Just throw everything in the same dict, shouldn't matter since
-            ## the refs will be strings and the prb_ids will be ints
+            ## the prb_refs will be strings and the prb_ids will be ints
             self._symbol_cache[sp_id][gene_type] = dd(int)
             self._symbol_cache[sp_id][gene_type].update(ref2prbid)
             self._symbol_cache[sp_id][gene_type].update(prbid2ode)
@@ -664,9 +686,11 @@ class BatchReader(object):
                     continue
 
                 ## Yeah one probe reference may be associated with more than
-                ## one gene/ode_gene_id, it's fucking weird
+                ## one gene/ode_gene_id, it's fucking weird. I think this is
+                ## specific to affymetrix platforms
                 for ode in odes:
-                    ## Check for duplicate ode_gene_ids, otherwise postgres bitches
+                    ## Check for duplicate ode_gene_ids, otherwise postgres
+                    ## bitches during value insertion
                     if not dups[ode]:
                         dups[ode] = ref
 
@@ -691,7 +715,7 @@ class BatchReader(object):
 
                 ode = ref2ode[refl]
 
-                ## Check for duplicate ode_gene_ids, otherwise postgres bitches
+                ## Prevent postgres bitching again
                 if not dups[ode]:
                     dups[ode] = ref
 
@@ -726,15 +750,16 @@ class BatchReader(object):
         geneset_value table.
 
         arguments:
-            gs: a dict representing a geneset
+            gs: a dict representing a geneset. Contains fields with the same
+                columns as the geneset table
 
         returns:
             an int indicating the total number of geneset_values inserted into
             the DB.
         """
 
-        ## Geneset values should be a list of tuples (symbol, pval)
-        ## First we attempt to map them to the internal ode_gene_ids
+        ## Geneset values should be a list of tuples (symbol, pval). Here we
+        ## isolate the symbols (ode_ref_ids)
         symbols = filter(lambda x: not not x, gs['geneset_values'])
         symbols = map(lambda x: x[0], symbols)
 
@@ -744,16 +769,19 @@ class BatchReader(object):
             sym2ode = db.get_gene_ids_by_species(symbols, gs['sp_id'])
 
         else:
+            ## Retrieve a mapping of (symbols) prb_ref_ids -> prb_ids for the
+            ## given platform
             sym2probe = db.get_platform_probes(gs['gs_gene_id_type'], symbols)
             prb_ids = []
 
             for sym in symbols:
                 prb_ids.append(sym2probe[sym])
 
+            ## We then have to map all of the prb_ids -> ode_gene_ids
             prb_ids = list(set(prb_ids))
             prb2odes = db.get_probe2gene(prbids)
 
-        # duplicate detection
+        ## duplicate detection
         dups = dd(str)
         total = 0
 
@@ -770,6 +798,7 @@ class BatchReader(object):
 
                 for ode in odes:
                     ## Check for duplicate ode_gene_ids, otherwise postgres bitches
+                    ## during value insertion
                     if not dups[ode]:
                         dups[ode] = sym
 
@@ -793,7 +822,7 @@ class BatchReader(object):
                 self.warns.append('No gene/locus exists data for %s' % sym)
                 continue
 
-            ## Check for duplicate ode_gene_ids, otherwise postgres bitches
+            ## Duplicate check again
             if not dups[sym2ode[sym]]:
                 dups[sym2ode[sym]] = sym
 
