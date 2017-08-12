@@ -8,6 +8,7 @@
 from sys import argv
 import datetime as dt
 import json
+import os
 
 def chunk_list(l, n):
     """

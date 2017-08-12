@@ -1217,6 +1217,22 @@ def get_annotation_by_ref(ont_ref):
 
         return result[0]
 
+def get_user_map():
+    """
+    returns
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  usr_id, usr_email
+            FROM    usr;
+            '''
+        )
+
+        return associate(cursor)
+
         ## INSERTS ##
         #############
 
