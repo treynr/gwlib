@@ -421,7 +421,7 @@ def get_gene_ids_by_spid_type(sp_id, gdb_id):
                 FROM    extsrc.gene
                 WHERE   sp_id = %s AND 
                         gdb_id = %s AND
-                        ode_pref = 't'; AND
+                        ode_pref = 't';
                 ''', 
                     (sp_id, gdb_id)
             )
@@ -1303,25 +1303,17 @@ def insert_geneset_value(gs_id, gene_id, value, name, threshold):
     """
     Inserts a new geneset_value into the database. 
 
-    :type gs_id: long
-    :arg gs_id: gs_id the value is associated with
+    arguments
+        gs_id:      gene set ID
+        gene_id:    ode_gene_id
+        value:      value associated with this gene
+        name:       a gene name or symbol (typically an ode_ref_id)
+        threshold:  a threshold value for the gene set 
 
-    :type gene_id: long
-    :arg gene_id: ode_gene_id
-
-    :type value: int/long/float/double
-    :arg value: some numeric value associated with the gene (e.g. p-value)
-
-    :type name: str
-    :arg name: an ode_ref_id for the given ode_gene_id
-
-    :type threshold: int/long/float/double
-    :arg threshold: the threshold for the geneset associated with this value
-
-    :ret long: if insertion is successfull the gs_id for this value is returned
+    returns
+        the gs_id associated with this gene set value
     """
 
-    ## thresh will eventually specify the value for gsv_in_threshold
     threshold = 't' if value <= threshold else 'f'
 
     with PooledCursor() as cursor:
@@ -1390,23 +1382,14 @@ def insert_gene(gene_id, ref_id, gdb_id, sp_id, pref='f'):
 
 def insert_publication(pub):
     """
-    Inserts a new publication into the database. If a publication with the same
-    PMID already exists, that pub_id is returned instead.
+    Inserts a new publication into the database.
 
-    :type pub: dict
-    :arg pub: a object whose fields match all columns in the publication table
+    arguments
+        pub: a dict with fields matching the columns in the publication table
 
-    :ret int: a GW publication ID (pub_id)
+    returns
+        a pub_id
     """
-
-    #if 'pub_pubmed' not in pub:
-    #    pub['pub_pubmed'] = None
-
-    #else:
-    #    pub_id = get_publication(pub['pub_pubmed'])
-
-    #    if pub_id != 0:
-    #        return pub_id
 
     with PooledCursor() as cursor:
 
@@ -1434,17 +1417,14 @@ def insert_file(size, contents, comments):
     """
     Inserts a new file into the database. 
 
-    :type size: int
-    :arg size: file size in bytes
+    arguments
+        size:       size of the file in bytes
+        contents:   file contents which MUST be in the format:
+                        gene\tvalue\n
+        comments:   misc. comments about this file
 
-    :type contents: str
-    :arg contents: contents of the file which _MUST_ be in the format:
-        gene\tvalue\n
-
-    :type comments: str
-    :arg comments: misc. comments about this file
-
-    :ret int: a GW file ID (file_id)
+    returns
+        a file_id
     """
 
     with PooledCursor() as cursor:
