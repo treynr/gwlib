@@ -357,6 +357,10 @@ def manipulate_path(path, pre='', post='', ext='', delim='-'):
 
 def get_git_info():
     """
+    Returns the current git branch and commit hash.
+
+    returns
+        a string containing the current git branch and short seven letter hash
     """
 
     cmd_hash = ['git', 'rev-parse', '--short', 'HEAD']
