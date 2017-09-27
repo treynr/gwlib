@@ -90,6 +90,43 @@ def get_today():
 
     return year + '.' + month + '.' + day
 
+def parse_generic_format(s, delim='\t'):
+    """
+    Parses a string that uses the generic format I use for most projects. The
+    text format:
+        # denotes comments
+        blank lines are skipped
+        data is organized into columns
+        each column is tab separated
+
+    arguments
+        s:      the string being parsed
+        delim:  the column delimiter to use during parsing
+
+    returns
+        a list of lists, each inner list a single row from the file
+        e.g.
+            [
+                [col0, col1, col2],
+                [col0, col1, col2]
+            ]
+    """
+    data = []
+
+    for ln in iter(s.splitlines()):
+        ln = ln.strip()
+
+        if ln[:1] == '#':
+            continue
+        elif ln == '':
+            continue
+
+        ln = ln.split(delim)
+
+        data.append(ln)
+    
+    return data
+
 def parse_generic_file(fp, delim='\t'):
     """
     Parses a file that uses the generic format I use for most projects. The
@@ -103,19 +140,7 @@ def parse_generic_file(fp, delim='\t'):
     data = []
 
     with open(fp, 'r') as fl:
-        for ln in fl:
-            ln = ln.strip()
-
-            if ln[:1] == '#':
-                continue
-            elif ln == '':
-                continue
-
-            ln = ln.split(delim)
-
-            data.append(ln)
-    
-    return data
+        return parse_generic_format(fl.read(), delim)
 
 def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
                  gene_type, gene_vals, at_id=None, usr_id=0, cur_id=5, 
