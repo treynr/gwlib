@@ -9,6 +9,7 @@ from sys import argv
 import datetime as dt
 import json
 import os
+import subprocess
 
 def chunk_list(l, n):
     """
@@ -353,4 +354,15 @@ def manipulate_path(path, pre='', post='', ext='', delim='-'):
         path_ext = ext
 
     return os.path.join(path_dir, path_base) + path_ext
+
+def get_git_info():
+    """
+    """
+
+    cmd_hash = ['git', 'rev-parse', '--short', 'HEAD']
+    cmd_branch = ['git', 'symbolic-ref', '--short', 'HEAD']
+    git_hash = subprocess.check_output(cmd_hash).strip()
+    git_branch = subprocess.check_output(cmd_branch).strip()
+
+    return '%s@%s' % (git_branch, git_hash)
 
