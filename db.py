@@ -1217,6 +1217,80 @@ def get_annotation_by_ref(ont_ref):
 
         return result[0]
 
+def get_ontologies():
+    """
+    Returns the list of ontologies supported by GeneWeaver for use with gene 
+    set annotations.
+
+    returns
+        a list of dicts whose fields match the ontologydb table. Each entry in
+        the list is a row in the table.
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  ontdb_id, ontdb_name, ontdb_prefix, ontdb_date
+            FROM    odestatic.ontologydb;
+            '''
+        )
+
+        return dictify(cursor)
+
+def get_ontdb_id(name):
+    """
+    Retrieves the ontologydb ID for the given ontology name.
+
+    args
+        name: ontology name
+        
+    returns
+        an int ID for the corresponding ontologydb entry. None is returned if
+        the ontology name is not found in the database.
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  ontdb_id
+            FROM    odestatic.ontologydb
+            WHERE   LOWER(ontdb_name) = LOWER(%s);
+            ''',
+                (name,)
+        )
+
+        if not cursor.rowcount:
+            return None
+
+        return cursor.fetchone()[0]
+
+def get_ontology_terms_by_ontdb(ontdb_id):
+    """
+    Retrieves all ontology terms for the given ontdb_id.
+
+    args
+        ontdb_id: the ontologydb ID
+
+    returns
+        a list of dicts whose fields match the columns in the ontology table.
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  *
+            FROM    extsrc.ontology
+            WHERE   ontdb_id = %s;
+            ''',
+                (ontdb_id,)
+        )
+
+        return dictify(cursor)
+
+
 def get_user_map():
     """
     returns
@@ -1707,6 +1781,38 @@ def update_geneset_count(gs_id, gs_count):
 
         return cursor.rowcount
 
+def update_ontology_term_by_ref(ref_id, name, description, children, parents):
+    """
+    Updates an ontology term using its reference ID.
+
+    args
+        ref_id:         the ontology term reference ID
+        name:           the name of the ontology term
+        description:    a description of the term
+        children:       the number of immediate child terms this term has
+        parents:        the number of immediate parent terms this term has
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            UPDATE      extsrc.ontology
+            SET         ont_name = %s,
+                        ont_description = %s,
+                        ont_children = %s,
+                        ont_parents = %s
+            WHERE       ont_ref_id = %s
+            RETURNING   ont_id;
+            ''',
+                (name, description, children, parents, ref_id)
+        )
+
+        if cursor.rowcount == 0:
+            return None
+        
+        return cursor.fetchone()[0]
+
 def commit():
     """
     Commit any DB changes. Must be called if the connection is not set to
@@ -1741,6 +1847,33 @@ def delete_jaccard(lid, rid):
                    gs_id_right = %s;
             ''', 
                 (lid, rid)
+        )
+
+        return cursor.rowcount
+
+def delete_ontology_relations(ont_ids):
+    """
+    Deletes all ontology relations for the given set of ont_ids.
+
+    args
+        ont_ids: list of ont_ids 
+
+    returns
+        the number of rows deleted
+    """
+
+    ont_ids = tuplify(ont_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            DELETE
+            FROM   extsrc.ontology_relation
+            WHERE  left_ont_id IN %s OR
+                   right_ont_id IN %s;
+            ''', 
+                (ont_ids, ont_ids)
         )
 
         return cursor.rowcount
