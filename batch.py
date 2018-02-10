@@ -818,6 +818,11 @@ class BatchReader(object):
             if abbrev:
                 attributions[abbrev.lower()] = at_id
 
+        print self.genesets[0]['annotations']
+        print self.genesets[1]['annotations']
+        print self.genesets[0]['at_id']
+        print self.genesets[1]['at_id']
+        exit()
         ## Geneset post-processing: mapping gene -> ode_gene_ids, attributions,
         ## and annotations
         for gs in self.genesets:
@@ -892,6 +897,8 @@ class BatchReader(object):
             #    db.update_geneset_count(gs['gs_id'], gsv_count)
 
             ids.append(gs['gs_id'])
+
+        db.commit()
 
         return ids
 

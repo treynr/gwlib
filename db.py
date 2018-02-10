@@ -303,6 +303,26 @@ def get_species_by_taxid():
 
         return associate(cursor)
 
+def get_species_gene_id():
+    """
+    Returns a species name and the ID corresponding to which type of gene
+    identifiers the species uses by default.
+
+    returns
+        a dict mapping sp_name to gdb_id
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  sp_name, sp_ref_gdb_id
+            FROM    odestatic.species;
+            '''
+        )
+
+        return associate(cursor)
+
 def get_attributions():
     """
     Returns all the attributions (at_id and at_abbrev) found in the DB.
