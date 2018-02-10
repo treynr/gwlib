@@ -157,7 +157,7 @@ def listify(cursor):
 
 def tuplify(thing):
     """
-    Converts a list or scalor value into a tuple.
+    Converts a list, list like object or scalar value into a tuple.
 
     :type thing: something
     :arg thing: the thing being converted
@@ -165,7 +165,7 @@ def tuplify(thing):
     :ret list: tupled value
     """
 
-    if type(thing) == list:
+    if type(thing) == list or type(thing) == set:
         return tuple(thing)
 
     elif type(thing) == tuple:
@@ -441,7 +441,7 @@ def get_gene_ids_by_spid_type(sp_id, gdb_id):
                 FROM    extsrc.gene
                 WHERE   sp_id = %s AND 
                         gdb_id = %s AND
-                        ode_pref = 't'; AND
+                        ode_pref = 't';
                 ''', 
                     (sp_id, gdb_id)
             )
@@ -1145,6 +1145,46 @@ def get_genesets_by_project(pj_ids):
 
         return associate_duplicate(cursor)
 
+def get_geneset_annotations(gs_ids):
+    """
+    Returns the set of ontology annotations for each given gs_id.
+
+    arguments
+        gs_ids: list of gs_ids to retrieve annotations for
+
+    returns
+        a dict mapping gs_ids to a list of tuples containing the ont_id and
+        ont_ref_id.
+            e.g. {123456: (7890, 'GO:1234567')}
+    """
+
+    gs_ids = tuplify(gs_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT      go.gs_id, go.ont_id, o.ont_ref_id
+            FROM        extsrc.geneset_ontology AS go
+            INNER JOIN  extsrc.ontology AS o
+            ON          go.ont_id = o.ont_id
+            WHERE       gs_id IN %s;
+            ''',
+                (gs_ids,)
+        )
+
+        gs2ann = {}
+
+        for row in cursor:
+            gs_id = row[0]
+
+            if gs_id in gs2ann:
+                gs2ann[gs_id].append(tuple(row[1:]))
+            else:
+                gs2ann[gs_id] = [tuple(row[1:])]
+
+        return gs2ann
+
 def get_annotation_by_refs(ont_refs):
     """
     Maps ontology reference IDs (e.g. GO:0123456, MP:0123456) to the internal
@@ -1196,6 +1236,96 @@ def get_annotation_by_ref(ont_ref):
             return None
 
         return result[0]
+
+def get_ontologies():
+    """
+    Returns the list of ontologies supported by GeneWeaver for use with gene 
+    set annotations.
+
+    returns
+        a list of dicts whose fields match the ontologydb table. Each entry in
+        the list is a row in the table.
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  ontdb_id, ontdb_name, ontdb_prefix, ontdb_date
+            FROM    odestatic.ontologydb;
+            '''
+        )
+
+        return dictify(cursor)
+
+def get_ontdb_id(name):
+    """
+    Retrieves the ontologydb ID for the given ontology name.
+
+    args
+        name: ontology name
+        
+    returns
+        an int ID for the corresponding ontologydb entry. None is returned if
+        the ontology name is not found in the database.
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  ontdb_id
+            FROM    odestatic.ontologydb
+            WHERE   LOWER(ontdb_name) = LOWER(%s);
+            ''',
+                (name,)
+        )
+
+        if not cursor.rowcount:
+            return None
+
+        return cursor.fetchone()[0]
+
+def get_ontology_terms_by_ontdb(ontdb_id):
+    """
+    Retrieves all ontology terms for the given ontdb_id.
+
+    args
+        ontdb_id: the ontologydb ID
+
+    returns
+        a list of dicts whose fields match the columns in the ontology table.
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  *
+            FROM    extsrc.ontology
+            WHERE   ontdb_id = %s;
+            ''',
+                (ontdb_id,)
+        )
+
+        return dictify(cursor)
+
+
+def get_user_map():
+    """
+    returns
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  usr_id, usr_email
+            FROM    usr;
+            '''
+        )
+
+        return associate(cursor)
 
         ## INSERTS ##
         #############
@@ -1267,25 +1397,17 @@ def insert_geneset_value(gs_id, gene_id, value, name, threshold):
     """
     Inserts a new geneset_value into the database. 
 
-    :type gs_id: long
-    :arg gs_id: gs_id the value is associated with
+    arguments
+        gs_id:      gene set ID
+        gene_id:    ode_gene_id
+        value:      value associated with this gene
+        name:       a gene name or symbol (typically an ode_ref_id)
+        threshold:  a threshold value for the gene set 
 
-    :type gene_id: long
-    :arg gene_id: ode_gene_id
-
-    :type value: int/long/float/double
-    :arg value: some numeric value associated with the gene (e.g. p-value)
-
-    :type name: str
-    :arg name: an ode_ref_id for the given ode_gene_id
-
-    :type threshold: int/long/float/double
-    :arg threshold: the threshold for the geneset associated with this value
-
-    :ret long: if insertion is successfull the gs_id for this value is returned
+    returns
+        the gs_id associated with this gene set value
     """
 
-    ## thresh will eventually specify the value for gsv_in_threshold
     threshold = 't' if value <= threshold else 'f'
 
     with PooledCursor() as cursor:
@@ -1354,23 +1476,14 @@ def insert_gene(gene_id, ref_id, gdb_id, sp_id, pref='f'):
 
 def insert_publication(pub):
     """
-    Inserts a new publication into the database. If a publication with the same
-    PMID already exists, that pub_id is returned instead.
+    Inserts a new publication into the database.
 
-    :type pub: dict
-    :arg pub: a object whose fields match all columns in the publication table
+    arguments
+        pub: a dict with fields matching the columns in the publication table
 
-    :ret int: a GW publication ID (pub_id)
+    returns
+        a pub_id
     """
-
-    #if 'pub_pubmed' not in pub:
-    #    pub['pub_pubmed'] = None
-
-    #else:
-    #    pub_id = get_publication(pub['pub_pubmed'])
-
-    #    if pub_id != 0:
-    #        return pub_id
 
     with PooledCursor() as cursor:
 
@@ -1378,14 +1491,14 @@ def insert_publication(pub):
             '''
             INSERT INTO publication
 
-                (pub_id, pub_authors, pub_title, pub_abstract, pub_journal,
+                (pub_authors, pub_title, pub_abstract, pub_journal,
                 pub_volume, pub_pages, pub_month, pub_year, pub_pubmed)
 
             VALUES
                 
-                (%(pub_id)s, %(pub_authors)s, %(pub_title)s, %(pub_abstract)s, 
+                (%(pub_authors)s, %(pub_title)s, %(pub_abstract)s, 
                 %(pub_journal)s, %(pub_volume)s, %(pub_pages)s, %(pub_month)s, 
-                %(pub_year)s, %(pub_pubmed))
+                %(pub_year)s, %(pub_pubmed)s)
 
             RETURNING pub_id;
             ''', 
@@ -1398,17 +1511,14 @@ def insert_file(size, contents, comments):
     """
     Inserts a new file into the database. 
 
-    :type size: int
-    :arg size: file size in bytes
+    arguments
+        size:       size of the file in bytes
+        contents:   file contents which MUST be in the format:
+                        gene\tvalue\n
+        comments:   misc. comments about this file
 
-    :type contents: str
-    :arg contents: contents of the file which _MUST_ be in the format:
-        gene\tvalue\n
-
-    :type comments: str
-    :arg comments: misc. comments about this file
-
-    :ret int: a GW file ID (file_id)
+    returns
+        a file_id
     """
 
     with PooledCursor() as cursor:
@@ -1624,6 +1734,29 @@ def insert_ontology_relation(left, right, relation):
                 (left, right, relation)
         )
 
+def insert_geneset_ontology(gs_id, ont_id, ref_type):
+    """
+    Annotates a gene set with an ontology term.
+
+    arguments
+        gs_id:      gs_id to annotate
+        ont_id:     ont_id of the ontology term
+        ref_type:   the type of annotation (string that varies in value)
+                    e.g. "GeneWeaver Primary Manual" or "GW Primary Inferred"
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.geneset_ontology
+                (gs_id, ont_id, gso_ref_type)
+            VALUES
+                (%s, %s, %s);
+            ''', 
+                (gs_id, ont_id, ref_type)
+        )
+
         ## UPDATES ##
         #############
 
@@ -1668,6 +1801,38 @@ def update_geneset_count(gs_id, gs_count):
 
         return cursor.rowcount
 
+def update_ontology_term_by_ref(ref_id, name, description, children, parents):
+    """
+    Updates an ontology term using its reference ID.
+
+    args
+        ref_id:         the ontology term reference ID
+        name:           the name of the ontology term
+        description:    a description of the term
+        children:       the number of immediate child terms this term has
+        parents:        the number of immediate parent terms this term has
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            UPDATE      extsrc.ontology
+            SET         ont_name = %s,
+                        ont_description = %s,
+                        ont_children = %s,
+                        ont_parents = %s
+            WHERE       ont_ref_id = %s
+            RETURNING   ont_id;
+            ''',
+                (name, description, children, parents, ref_id)
+        )
+
+        if cursor.rowcount == 0:
+            return None
+        
+        return cursor.fetchone()[0]
+
 def commit():
     """
     Commit any DB changes. Must be called if the connection is not set to
@@ -1702,6 +1867,33 @@ def delete_jaccard(lid, rid):
                    gs_id_right = %s;
             ''', 
                 (lid, rid)
+        )
+
+        return cursor.rowcount
+
+def delete_ontology_relations(ont_ids):
+    """
+    Deletes all ontology relations for the given set of ont_ids.
+
+    args
+        ont_ids: list of ont_ids 
+
+    returns
+        the number of rows deleted
+    """
+
+    ont_ids = tuplify(ont_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            DELETE
+            FROM   extsrc.ontology_relation
+            WHERE  left_ont_id IN %s OR
+                   right_ont_id IN %s;
+            ''', 
+                (ont_ids, ont_ids)
         )
 
         return cursor.rowcount
