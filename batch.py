@@ -834,11 +834,6 @@ class BatchReader(object):
             if abbrev:
                 attributions[abbrev.lower()] = at_id
 
-        print self.genesets[0]['annotations']
-        print self.genesets[1]['annotations']
-        print self.genesets[0]['at_id']
-        print self.genesets[1]['at_id']
-        exit()
         ## Geneset post-processing: mapping gene -> ode_gene_ids, attributions,
         ## and annotations
         for gs in self.genesets:
@@ -909,9 +904,14 @@ class BatchReader(object):
 
             ids.append(gs['gs_id'])
 
-        db.commit()
-
         return ids
+
+    def finalize(self):
+        """
+        Commits DB changes.
+        """
+
+        db.commit()
 
 class BatchWriter(object):
     """
