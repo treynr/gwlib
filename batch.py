@@ -213,6 +213,7 @@ class BatchReader(object):
         self._parse_set['gs_abbreviation'] = ''
         self._parse_set['values'] = []
         self._parse_set['annotations'] = []
+        self._parse_set['gs_uri'] = None
 
     def __check_parsed_set(self):
         """
@@ -571,6 +572,13 @@ class BatchReader(object):
 
                 self._parse_set['annotations'].append(lns[i][1:].strip())
 
+            ## Lines beginning with '>' point to a URI (OPTIONAL)
+            elif lns[i][:2] == '> ':
+                if self._parse_set['values']:
+                    self.__reset_parsed_set()
+
+                self._parse_set['gs_uri'].append(lns[i][1:].strip())
+
             ## If the lines are tab separated, we assume it's the gene data that
             ## will become part of the geneset_values
             elif len(lns[i].split('\t')) == 2:
@@ -904,9 +912,14 @@ class BatchReader(object):
 
             ids.append(gs['gs_id'])
 
-        db.commit()
-
         return ids
+
+    def finalize(self):
+        """
+        Commits DB changes.
+        """
+
+        db.commit()
 
 class BatchWriter(object):
     """
