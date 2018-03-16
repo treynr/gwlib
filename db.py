@@ -1367,6 +1367,9 @@ def insert_geneset(gs):
     if 'gs_attribution' not in gs:
         gs['gs_attribution'] = None
 
+    if 'gs_uri' not in gs:
+        gs['gs_uri'] = None
+
     with PooledCursor() as cursor:
 
         cursor.execute(
@@ -1376,7 +1379,7 @@ def insert_geneset(gs):
                 (usr_id, file_id, gs_name, gs_abbreviation, pub_id, cur_id,
                 gs_description, sp_id, gs_count, gs_threshold_type,
                 gs_threshold, gs_groups, gs_gene_id_type, gs_created,
-                gs_attribution)
+                gs_attribution, gs_uri)
 
             VALUES
                 
@@ -1384,7 +1387,7 @@ def insert_geneset(gs):
                 %(pub_id)s, %(cur_id)s, %(gs_description)s, %(sp_id)s, 
                 %(gs_count)s, %(gs_threshold_type)s, %(gs_threshold)s, 
                 %(gs_groups)s, %(gs_gene_id_type)s, %(gs_created)s, 
-                %(gs_attribution)s)
+                %(gs_attribution)s, %(gs_uri)s)
             
             RETURNING gs_id;
             ''', 
