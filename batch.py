@@ -834,11 +834,6 @@ class BatchReader(object):
             if abbrev:
                 attributions[abbrev.lower()] = at_id
 
-        print self.genesets[0]['annotations']
-        print self.genesets[1]['annotations']
-        print self.genesets[0]['at_id']
-        print self.genesets[1]['at_id']
-        exit()
         ## Geneset post-processing: mapping gene -> ode_gene_ids, attributions,
         ## and annotations
         for gs in self.genesets:
@@ -1117,6 +1112,12 @@ class BatchWriter(object):
 
         return '\n'.join(annos)
 
+    def __format_uri(self, uri):
+        """
+        """
+
+        return '> ' + str(uri)
+
     def serialize(self, versioning=''):
         """
         Formats the list of genesets into a single batch file and outputs the
@@ -1144,6 +1145,7 @@ class BatchWriter(object):
         pub_id = None
         at_id = None
         annos = None
+        gs_uri = None
 
         for gs in self.genesets:
 
@@ -1182,6 +1184,11 @@ class BatchWriter(object):
                 annos = gs['annotations']
 
                 serial.append(self.__format_annotations(annos))
+
+            if gs['gs_uri'] and gs_uri != gs['gs_uri']:
+                gs_uri = gs['gs_uri']
+
+                serial.append(self.__format_uri(gs_uri))
 
             if not access:
                 access = True
