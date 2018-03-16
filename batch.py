@@ -1125,6 +1125,12 @@ class BatchWriter(object):
 
         return '\n'.join(annos)
 
+    def __format_uri(self, uri):
+        """
+        """
+
+        return '> ' + str(uri)
+
     def serialize(self, versioning=''):
         """
         Formats the list of genesets into a single batch file and outputs the
@@ -1152,6 +1158,7 @@ class BatchWriter(object):
         pub_id = None
         at_id = None
         annos = None
+        gs_uri = None
 
         for gs in self.genesets:
 
@@ -1190,6 +1197,11 @@ class BatchWriter(object):
                 annos = gs['annotations']
 
                 serial.append(self.__format_annotations(annos))
+
+            if gs['gs_uri'] and gs_uri != gs['gs_uri']:
+                gs_uri = gs['gs_uri']
+
+                serial.append(self.__format_uri(gs_uri))
 
             if not access:
                 access = True
