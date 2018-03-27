@@ -143,9 +143,11 @@ def parse_generic_file(fp, delim='\t'):
     with open(fp, 'r') as fl:
         return parse_generic_format(fl.read(), delim)
 
-def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
-                 gene_type, gene_vals, at_id=None, usr_id=0, cur_id=5, 
-                 file_id=0, pmid=None, annos=[]):
+def make_geneset(
+    name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
+    gene_type, gene_vals, at_id=None, usr_id=0, cur_id=5, 
+    file_id=0, pmid=None, annos=[], uri=None
+):
     """
     Given a shitload of arguments, this function returns a dictionary
     representation of a single geneset. Each key is a different column found
@@ -223,6 +225,9 @@ def make_geneset(name, abbrev, desc, sp_id, pub_id, grps, score_type, thresh,
 
     ## Ontology annotations
     gs['annotations'] = annos
+
+    ## URI to another resource
+    gs['gs_uri'] = uri
 
     return gs
 
