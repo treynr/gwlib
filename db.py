@@ -7,10 +7,15 @@
 #
 
 from collections import OrderedDict as od
+from psycopg2.extras import execute_values
 from sys import maxint
 import os
 import psycopg2
 import random
+import warnings
+
+## Ignore fucking psycopg2 warnings about some binary wheel bullshit
+warnings.filterwarnings('ignore')
 
 ## Global connection variable
 conn = None
@@ -1996,6 +2001,23 @@ def get_genome_builds():
 
         return dictify(cursor)
 
+def get_genome_builds_by_ref(build):
+    """
+    Retrieves the list of genome builds supported by GW.
+
+    returns
+        a list of objects representing rows from the genome_build table
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT gb_id, gb_ref_id FROM odestatic.genome_build WHERE gb_ref_id = %s;
+        ''', (build,))
+
+        return dictify(cursor)
+
 def get_variant_type_by_effect(effect):
     """
     Retrieves the list of genome builds supported by GW.
@@ -2045,6 +2067,90 @@ def insert_variant(var):
         )
 
         return cursor.fetchone()[0]
+
+def insert_variants_and_info(variants):
+    """
+    """
+    with PooledCursor() as cursor:
+        execute_values(cursor,
+            '''
+            INSERT INTO extsrc.variant
+                (
+                    var_ref_id, var_allelel, var_obs_alleles, var_ma, var_maf,
+                    vt_id, var_clinsig, vri_id
+                )
+            VALUES %s;
+            ''',
+            variants,
+            '''
+            (%(rsid)s, %(allele)s, %(observed)s, %(ma)s, %(maf)s, %(effect)s,
+            %(clinsig)s, 
+            (
+                INSERT INTO extsrc.variant_info 
+                    (vri_chromosome, vri_position, gb_id)
+                VALUES
+                    (%(chrom)s, %(coord)s, %(build)s)
+                RETURNING vri_id
+            ))
+            '''
+        )
+
+def insert_variants(variants):
+    """
+    """
+    with PooledCursor() as cursor:
+        execute_values(cursor,
+            '''
+            INSERT INTO extsrc.variant
+                (
+                    var_ref_id, var_allelel, var_obs_alleles, var_ma, var_maf,
+                    vt_id, var_clinsig, vri_id
+                )
+            VALUES %s;
+            ''',
+            variants,
+            '''
+            (%(rsid)s, %(allele)s, %(observed)s, %(ma)s, %(maf)s, %(effect)s,
+            %(clinsig)s, %(vri_id)s)
+            ''',
+            5000
+        )
+
+def insert_variant_infos(variants):
+    """
+    """
+    with PooledCursor() as cursor:
+        execute_values(cursor,
+            '''
+            INSERT INTO extsrc.variant_info 
+                    (vri_chromosome, vri_position, gb_id)
+            VALUES %s
+            RETURNING vri_id;
+            ''',
+            variants,
+            '''
+            (%(chrom)s, %(coord)s, %(build)s)
+            '''
+        )
+
+        return map(lambda t: t[0], cursor.fetchall())
+
+def insert_variant_info(variant):
+    """
+    """
+    with PooledCursor() as cursor:
+        cursor.execute(
+            '''
+            INSERT INTO extsrc.variant_info 
+                (vri_chromosome, vri_position, gb_id)
+            VALUES 
+                (%(chrom)s, %(coord)s, %(build)s)
+            RETURNING vri_id;
+            ''', variant
+        )
+
+        return cursor.fetchone()[0]
+
 
 def insert_variant_with_id(var):
     """
