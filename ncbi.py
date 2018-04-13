@@ -262,7 +262,7 @@ def get_pubmed_articles(pmids, asdict=True):
         
         auth_nodes = entry.find('.//AuthorList')
 
-        if len(auth_nodes):
+        if auth_nodes and len(auth_nodes):
             for auth in auth_nodes:
                 name = []
 

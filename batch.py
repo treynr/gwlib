@@ -577,7 +577,7 @@ class BatchReader(object):
                 if self._parse_set['values']:
                     self.__reset_parsed_set()
 
-                self._parse_set['gs_uri'].append(lns[i][1:].strip())
+                self._parse_set['gs_uri'] = lns[i][1:].strip()
 
             ## If the lines are tab separated, we assume it's the gene data that
             ## will become part of the geneset_values
@@ -848,8 +848,10 @@ class BatchReader(object):
 
             gs['gs_count'] = self.__map_gene_identifiers(gs)
 
-            if gs['at_id']:
+            if 'at_id' in gs and gs['at_id']:
                 gs['gs_attribution'] = attributions.get(gs['at_id'], None)
+            else:
+                gs['gs_attribution'] = None
 
             self.__map_ontology_annotations(gs)
 
@@ -871,7 +873,12 @@ class BatchReader(object):
             gs['pub_id'] = self._pub_map[gs['pmid']]
             gs['pub'] = gs['pmid']
 
-        pubs = get_pubmed_articles(map(lambda g: g['pmid'], self.genesets))
+        pubs = map(lambda g: g['pmid'], self.genesets)
+
+        if pubs:
+            pubs = get_pubmed_articles(map(lambda g: g['pmid'], self.genesets))
+        else:
+            pubs = {}
 
         for gs in self.genesets:
             if gs['pmid'] not in pubs:

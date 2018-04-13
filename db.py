@@ -675,6 +675,34 @@ def get_genesets_by_attribute(at_id, size=maxint):
 
         return listify(cursor)
 
+def get_genesets_by_attribute_species(at_id, sp_id):
+    """
+    Returns a list of normal (i.e. their status is not deleted or deprecated) 
+    geneset IDs that belong to a particular attribution group and species.
+
+    arguments
+        at_id: GeneWeaver attribution ID
+        sp_id: GeneWeaver species ID
+
+    returns
+        a list of gene set IDs matching the given criteria
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  gs_id
+            FROM    production.geneset
+            WHERE   gs_status NOT LIKE 'de%%' AND
+                    gs_attribution = %s AND
+                    sp_id = %s;
+            ''', 
+                (at_id, sp_id)
+        )
+
+        return listify(cursor)
+
 def get_geneset_values(gs_ids):
     """
     Returns all the geneset_values from the given list of genesets.
@@ -1780,6 +1808,56 @@ def update_geneset_status(gs_id, status):
             WHERE   gs_id = %s;
             ''', 
                 (status, gs_id)
+        )
+
+        return cursor.rowcount
+
+def update_geneset_date(gsid):
+    """
+    Resets the "last updated" date for a gene set to now.
+
+    arguments
+        gsid: GS ID for the gene set being changed
+
+    returns
+        the number of rows affected by the update
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            UPDATE  production.geneset
+            SET     gs_updated = NOW()
+            WHERE   gs_id = %s;
+            ''', 
+                (gsid,)
+        )
+
+        return cursor.rowcount
+
+def update_geneset_dates(gsids):
+    """
+    Resets the "last updated" date for many gene sets to now.
+
+    arguments
+        gsids: list or tuple of gsids to update
+
+    returns
+        the number of rows affected by the update
+    """
+    if type(gsids) == list:
+        gsids = tuple(gsids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            UPDATE  production.geneset
+            SET     gs_updated = NOW()
+            WHERE   gs_id IN %s;
+            ''', 
+                (gsids,)
         )
 
         return cursor.rowcount
