@@ -930,44 +930,64 @@ class BatchReader(object):
 
 class BatchWriter(object):
     """
-    Serializes geneset data into the batch geneset format. 
+    Serializes geneset data into the batch geneset format. This class is mainly
+    meant to take a gene set, as it exists in the GW DB, and convert it into
+    the batch format. However, it the error checking can be disabled to format
+    any data types/contents into a batch gene set file.
 
     attributes:
         genesets: a list of geneset dicts to serialize
     """
 
-    def __init__(self, filepath, genesets, is_dev=False):
+    def __init__(self, filepath, genesets, is_dev=False, no_map=False):
+        """
+        Initializes the BatchWriter class and retrieves GeneWeaver ID -> common
+        name associations.
+
+        arguments
+            filepath: path to the batch file output
+            genesets: gene sets to be formatted as a batch file
+            is_dev:   output hidden dev attributes/syntax  
+            no_map:   don't map input gene set features, just output them
+                      as-is to the batch file
+        """
         self.filepath = filepath
         self.genesets = genesets
         self.is_dev = is_dev
+        self.no_map = no_map
         self.errors = []
-        self.species = db.get_species()
-        self.gene_types = db.get_gene_types()
-        self.platforms = db.get_platform_names()
-        self.attributions = db.get_attributions()
 
-        ## Reverse each of the mappings
-        for sp_name, sp_id in self.species.items():
-            self.species[sp_id] = sp_name
-            del self.species[sp_name]
+        if not no_map:
+            self.species = db.get_species()
+            self.gene_types = db.get_gene_types()
+            self.platforms = db.get_platform_names()
+            self.attributions = db.get_attributions()
 
-        for gdb_name, gdb_id in self.gene_types.items():
-            self.gene_types[gdb_id] = gdb_name
-            del self.gene_types[gdb_name]
+            ## Reverse each of the mappings
+            for sp_name, sp_id in self.species.items():
+                self.species[sp_id] = sp_name
+                del self.species[sp_name]
 
-        for pf_name, pf_id in self.platforms.items():
-            self.platforms[pf_id] = pf_name
-            del self.platforms[pf_name]
+            for gdb_name, gdb_id in self.gene_types.items():
+                self.gene_types[gdb_id] = gdb_name
+                del self.gene_types[gdb_name]
 
-        for at_abbrev, at_id in self.attributions.items():
-            self.attributions[at_id] = at_abbrev
-            del self.attributions[at_abbrev]
+            for pf_name, pf_id in self.platforms.items():
+                self.platforms[pf_id] = pf_name
+                del self.platforms[pf_name]
+
+            for at_abbrev, at_id in self.attributions.items():
+                self.attributions[at_id] = at_abbrev
+                del self.attributions[at_abbrev]
 
     def __format_threshold(self, threshold_type, threshold=''):
         """
             """
 
         serial = ''
+
+        if not_map:
+            return threshold
 
         if not threshold and (threshold_type == 1 or threshold_type == 2):
             threshold = '0.05'
@@ -1005,6 +1025,9 @@ class BatchWriter(object):
         """
         """
 
+        if not_map:
+            return '@ %s' % sp_id
+
         if sp_id not in self.species:
             self.errors.append('Invalid species ID')
             return ''
@@ -1016,6 +1039,9 @@ class BatchWriter(object):
         """
 
         serial = ''
+
+        if not_map:
+            return '% %s' % gene_type
 
         ## (-) == normal gene types, (+) == expression platforms
         if gene_type < 0:
@@ -1042,7 +1068,7 @@ class BatchWriter(object):
 
         groups = groups.split(',')
 
-        if '-1' in groups and tier == 5:
+        if '-1' in groups or tier == 5:
             return 'A Private'
 
         else:
@@ -1055,7 +1081,7 @@ class BatchWriter(object):
         if pmid:
             return 'P ' + str(pmid)
 
-        elif pub_id:
+        elif pub_id and not no_map:
             pmid = db.get_publication_pmid(pub_id)
 
             if pmid:
@@ -1117,6 +1143,9 @@ class BatchWriter(object):
     def __format_attribution(self, at_id):
         """
         """
+
+        if no_map:
+            return 'D %s' % at_id
 
         if at_id not in self.attributions:
             self.errors.append('Invalid attribution ID')
