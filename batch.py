@@ -939,7 +939,7 @@ class BatchWriter(object):
         genesets: a list of geneset dicts to serialize
     """
 
-    def __init__(self, filepath, genesets, is_dev=False, no_map=False):
+    def __init__(self, filepath, genesets, is_dev=False, no_db=False):
         """
         Initializes the BatchWriter class and retrieves GeneWeaver ID -> common
         name associations.
@@ -948,16 +948,17 @@ class BatchWriter(object):
             filepath: path to the batch file output
             genesets: gene sets to be formatted as a batch file
             is_dev:   output hidden dev attributes/syntax  
-            no_map:   don't map input gene set features, just output them
-                      as-is to the batch file
+            no_db:    don't use the DB to map various DB specific IDs and table
+                      features to their plain text equivalent, just output the
+                      user given gene set values as-is to the batch file
         """
         self.filepath = filepath
         self.genesets = genesets
         self.is_dev = is_dev
-        self.no_map = no_map
+        self.no_db = no_db
         self.errors = []
 
-        if not no_map:
+        if not self.no_db:
             self.species = db.get_species()
             self.gene_types = db.get_gene_types()
             self.platforms = db.get_platform_names()
@@ -986,8 +987,8 @@ class BatchWriter(object):
 
         serial = ''
 
-        if not_map:
-            return threshold
+        if self.no_db:
+            return threshold_type
 
         if not threshold and (threshold_type == 1 or threshold_type == 2):
             threshold = '0.05'
@@ -1025,7 +1026,7 @@ class BatchWriter(object):
         """
         """
 
-        if not_map:
+        if self.no_db:
             return '@ %s' % sp_id
 
         if sp_id not in self.species:
@@ -1040,8 +1041,8 @@ class BatchWriter(object):
 
         serial = ''
 
-        if not_map:
-            return '% %s' % gene_type
+        if self.no_db:
+            return '% {0}'.format(gene_type)
 
         ## (-) == normal gene types, (+) == expression platforms
         if gene_type < 0:
@@ -1081,7 +1082,7 @@ class BatchWriter(object):
         if pmid:
             return 'P ' + str(pmid)
 
-        elif pub_id and not no_map:
+        elif pub_id and not self.no_db:
             pmid = db.get_publication_pmid(pub_id)
 
             if pmid:
@@ -1144,7 +1145,7 @@ class BatchWriter(object):
         """
         """
 
-        if no_map:
+        if self.no_db:
             return 'D %s' % at_id
 
         if at_id not in self.attributions:
@@ -1166,6 +1167,71 @@ class BatchWriter(object):
         """
 
         return '> ' + str(uri)
+
+
+    def __passes_sanity_check(self, gs):
+        """
+        Checks to make sure the required portions of gene set metadata are
+        present. Whether or not this metadata is valid is determined by the
+        __format* functions. If descriptors are missing the function sets 
+        the appropriate errors.
+        """
+
+        if 'gs_abbreviation' in gs:
+            gs_ident = gs['gs_abbreviation']
+
+        elif 'gs_name' in gs:
+            gs_ident = gs['gs_name']
+
+        else:
+            gs_ident = ''
+
+        passes = True
+
+        if 'gs_name' not in gs:
+            self.errors.append(
+                '%s input gene set is missing gs_name' % gs_ident
+            )
+
+            passes = False
+
+        if 'gs_abbreviation' not in gs:
+            self.errors.append(
+                '%s input gene set is missing gs_abbreviation' % gs_ident
+            )
+
+            passes = False
+
+        if 'gs_description' not in gs:
+            self.errors.append(
+                '%s input gene set is missing gs_description' % gs_ident
+            )
+
+            passes = False
+
+        if 'sp_id' not in gs:
+            self.errors.append(
+                '%s input gene set is missing sp_id' % gs_ident
+            )
+
+            passes = False
+
+        if 'gs_threshold_type' not in gs:
+            self.errors.append(
+                '%s input gene set is missing gs_threshold_type' % gs_ident
+            )
+
+            passes = False
+
+        if 'geneset_values' not in gs:
+            self.errors.append(
+                '%s input gene set is missing geneset_values' % gs_ident
+            )
+
+            passes = False
+
+        return passes
+
 
     def serialize(self, versioning=''):
         """
@@ -1198,16 +1264,20 @@ class BatchWriter(object):
 
         for gs in self.genesets:
 
+            if not self.__passes_sanity_check(gs):
+                continue
+
             ## General parameters are allowed to change in between geneset
             ## definitions
             if threshold_type != gs['gs_threshold_type'] or\
-               threshold != gs['gs_threshold']:
+               threshold != gs.get('gs_threshold', threshold):
 
                 threshold_type = gs['gs_threshold_type']
-                threshold = gs['gs_threshold']
+                threshold = gs.get('gs_threshold', threshold)
 
                 serial.append(
-                    self.__format_threshold(threshold_type, threshold))
+                    self.__format_threshold(threshold_type, threshold)
+                )
 
             if species != gs['sp_id']:
                 species = gs['sp_id']
@@ -1224,17 +1294,17 @@ class BatchWriter(object):
 
                 serial.append(self.__format_publication(None, pmid))
 
-            if gs['pub_id'] and pub_id != gs['pub_id']:
+            if gs.get('pub_id', None) and pub_id != gs['pub_id']:
                 pub_id = gs['pub_id']
 
                 serial.append(self.__format_publication(pub_id))
 
-            if gs['annotations'] and annos != gs['annotations']:
+            if gs.get('annotations', None) and annos != gs['annotations']:
                 annos = gs['annotations']
 
                 serial.append(self.__format_annotations(annos))
 
-            if gs['gs_uri'] and gs_uri != gs['gs_uri']:
+            if gs.get('gs_uri', None) and gs_uri != gs['gs_uri']:
                 gs_uri = gs['gs_uri']
 
                 serial.append(self.__format_uri(gs_uri))
@@ -1242,22 +1312,23 @@ class BatchWriter(object):
             if not access:
                 access = True
 
-                serial.append(
-                    self.__format_access(gs['gs_groups'], gs['cur_id']))
+                serial.append(self.__format_access(
+                    gs.get('gs_groups', ''), gs.get('cur_id', None)
+                ))
 
             ## Enable developer parameters
             if self.is_dev:
-                if tier != gs['cur_id']:
+                if gs.get('cur_id', None) and tier != gs['cur_id']:
                     tier = gs['cur_id']
 
                     serial.append(self.__format_tier(tier))
 
-                if at_id != gs['at_id']:
+                if gs.get('at_id', None) and at_id != gs['at_id']:
                     at_id = gs['at_id']
 
                     serial.append(self.__format_attribution(at_id))
 
-                if usr_id != gs['usr_id']:
+                if gs.get('usr_id', None) and usr_id != gs['usr_id']:
                     usr_id = gs['usr_id']
 
                     serial.append(self.__format_user(usr_id))
