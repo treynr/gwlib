@@ -592,7 +592,7 @@ class BatchReader(object):
                     err = 'One or more of the required fields are missing.'
 
                     ## Otherwise this string will get appended a bajillion times
-                    if err not in errors:
+                    if err not in self.errors:
                         self.errors.append(err)
 
                 else:
@@ -898,6 +898,9 @@ class BatchReader(object):
         if not genesets:
             genesets = self.genesets
 
+        if not self._pub_map:
+            self._pub_map = db.get_publication_mapping()
+
         for gs in genesets:
 
             if not gs['gs_count']:
@@ -910,7 +913,13 @@ class BatchReader(object):
                 continue
 
             if not gs['pub_id'] and gs['pub']:
-                gs['pub_id'] = db.insert_publication(gs['pub'])
+                if gs['pub']['pub_pubmed'] not in self._pub_map:
+                    gs['pub_id'] = db.insert_publication(gs['pub'])
+
+                    self._pub_map[gs['pub']] = gs['pub_id']
+
+                else:
+                    gs['pub_id'] = self._pub_map[gs['pub']['pub_pubmed']]
 
             gs['file_id'] = self.__insert_geneset_file(gs['values'])
             gs['gs_id'] = db.insert_geneset(gs)
