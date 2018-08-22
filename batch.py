@@ -356,7 +356,7 @@ class BatchReader(object):
 
             ## Determine the closest microarry platform match above a 70%
             ## similarity threshold.
-            best = 0.70
+            best = 0.65
 
             for plat, pid in platforms.items():
                 sim = calculate_str_similarity(plat.lower(), original.lower())
@@ -916,7 +916,7 @@ class BatchReader(object):
                 if gs['pub']['pub_pubmed'] not in self._pub_map:
                     gs['pub_id'] = db.insert_publication(gs['pub'])
 
-                    self._pub_map[gs['pub']] = gs['pub_id']
+                    self._pub_map[gs['pub']['pub_pubmed']] = gs['pub_id']
 
                 else:
                     gs['pub_id'] = self._pub_map[gs['pub']['pub_pubmed']]
