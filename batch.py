@@ -725,7 +725,6 @@ class BatchReader(object):
         dups = dd(str)
         total = 0
 
-        print gs['gs_name']
         for ref, value in gs['values']:
 
             ## Platform handling
@@ -733,10 +732,6 @@ class BatchReader(object):
                 prb_id = ref2ode[ref]
                 odes = ref2ode[prb_id]
 
-                print '--'
-                print ref
-                print prb_id
-                print odes
                 if not prb_id or not odes:
                     self.warns.append('No gene/locus data exists for %s' % ref)
                     continue
