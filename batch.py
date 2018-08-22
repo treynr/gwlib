@@ -708,7 +708,8 @@ class BatchReader(object):
         else:
             ## This is a mapping of (symbols) prb_ref_ids -> prb_ids for the
             ## given platform
-            ref2prbid = db.get_platform_probes(gene_type, gene_refs)
+            #ref2prbid = db.get_platform_probes(gene_type, gene_refs)
+            ref2prbid = db.get_all_platform_probes(gene_type)
             ## This is a mapping of prb_ids -> ode_gene_ids
             prbid2ode = db.get_probe2gene(ref2prbid.values())
 
@@ -724,6 +725,7 @@ class BatchReader(object):
         dups = dd(str)
         total = 0
 
+        print gs['gs_name']
         for ref, value in gs['values']:
 
             ## Platform handling
@@ -731,6 +733,10 @@ class BatchReader(object):
                 prb_id = ref2ode[ref]
                 odes = ref2ode[prb_id]
 
+                print '--'
+                print ref
+                print prb_id
+                print odes
                 if not prb_id or not odes:
                     self.warns.append('No gene/locus data exists for %s' % ref)
                     continue
