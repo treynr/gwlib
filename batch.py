@@ -181,7 +181,7 @@ class BatchReader(object):
         self.warns = []
         self._parse_set = {}
         self._pub_map = None
-        self._symbol_cache = dd(lambda: dd(int))
+        self._symbol_cache = dd(lambda: dd(lambda: dd(int)))
         self._annotation_cache = dd(int)
 
     def __read_file(self, fp=None):
@@ -692,17 +692,35 @@ class BatchReader(object):
 
         ## Check to see if we have cached copies of these references. If we do,
         ## we don't have to make any DB calls or build the mapping
-        if self._symbol_cache[sp_id][gene_type]:
-            pass
+        #if self._symbol_cache[sp_id][gene_type]:
+        #    pass
 
         ## Negative numbers indicate normal gene types (found in genedb) while
         ## positive numbers indicate expression platforms and more work :(
-        elif gs['gs_gene_id_type'] < 0:
-            ## A mapping of (symbols) ode_ref_ids -> ode_gene_ids. The
-            ## ode_ref_ids returned by this function have all been lower cased.
-            ref2ode = db.get_gene_ids_by_spid_type(sp_id, -gene_type)
+        if gs['gs_gene_id_type'] < 0:
 
-            self._symbol_cache[sp_id][gene_type] = dd(int, ref2ode)
+            #print self._symbol_cache
+            #print self._symbol_cache[sp_id]
+            #print self._symbol_cache[sp_id][gene_type]
+            ## Check to see if we have IDs for these refs in the cache
+            miss = set(gene_refs) - set(self._symbol_cache[sp_id][gene_type].keys())
+
+            ## Some are missing, so we need to get them from the DB
+            if len(miss) > 0:
+                ## A mapping of (symbols) ode_ref_ids -> ode_gene_ids. The
+                ## ode_ref_ids returned by this function have all been lower 
+                ## cased.
+                #ref2ode = db.get_gene_ids_by_spid_type(sp_id, -gene_type)
+                #ref2ode = db.get_gene_ids_by_refs(gene_refs, sp_id, -gene_type)
+
+                ## Variants are handled using a slightly different function
+                #if -gene_type == db.get_variant_gene_type():
+                #    ref2ode = db.get_variant_odes_by_refs(gene_refs, sp_id, -gene_type)
+                #else:
+                ref2ode = db.get_gene_ids_by_refs(gene_refs, sp_id, -gene_type)
+
+                #self._symbol_cache[sp_id][gene_type] = dd(int, ref2ode)
+                self._symbol_cache[sp_id][gene_type].update(ref2ode)
 
         ## It's a damn expression platform :/
         else:

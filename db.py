@@ -410,6 +410,46 @@ def get_gene_ids_by_species(refs, sp_id):
 
         return associate(cursor)
 
+def get_gene_ids_by_refs(refs, sp_id=None, gdb_id=None):
+    """
+    """
+
+    refs = tuple(map(str, refs))
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  ode_ref_id, ode_gene_id
+            FROM    extsrc.gene
+            WHERE   ode_ref_id IN %(refs)s AND
+                    CASE 
+                        WHEN %(spid)s IS NOT NULL AND %(gdbid)s IS NOT NULL
+                        THEN sp_id = %(spid)s AND gdb_id = %(gdbid)s
+
+                        WHEN %(spid)s IS NOT NULL
+                        THEN sp_id = %(spid)s 
+
+                        WHEN %(gdbid)s IS NOT NULL 
+                        THEN gdb_id = %(gdbid)s
+
+                        ELSE true
+                    END;
+            ''', {'refs': refs, 'spid': sp_id, 'gdbid': gdb_id}
+        )
+
+        return associate(cursor)
+
+        #else:
+        #    cursor.execute(
+        #        '''
+        #        SELECT  lower(ode_ref_id), ode_gene_id
+        #        FROM    extsrc.gene
+        #        WHERE   sp_id = %s;
+        #        ''', 
+        #            (sp_id,)
+        #    )
+
 def get_gene_ids_by_spid_type(sp_id, gdb_id):
     """
     Exactly like get_gene_ids() above but filters results by species and
@@ -1987,6 +2027,26 @@ def delete_ontology_relations(ont_ids):
     ## VARIANT SCHEMA ADDITIONS ##
     ##############################
 
+def get_variant_gene_type():
+    """
+    Returns the ID for the variant gene type.
+    None is returned if the variant gene type can't be found.
+    """
+
+    with PooledCursor() as cursor:
+        cursor.execute(
+            '''
+            SELECT gdb_id FROM extsrc.gene WHERE gdb_name = 'Variant';
+            '''
+        )
+        
+        result = cursor.fetchone()
+
+        if not result:
+            return None
+
+        return result[0]
+
 def get_genome_builds():
     """
     Retrieves the list of genome builds supported by GW.
@@ -2037,6 +2097,62 @@ def get_variant_type_by_effect(effect):
                 (effect,))
 
         return dictify(cursor)
+
+def get_variants_by_refs(refs, build):
+    """
+    Retrieves a mapping of var_ref_id -> var_id using the given set of variant
+    references.
+    """
+
+    refs = tuple(map(str, refs))
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT     v.var_ref_id, v.var_id
+            FROM       extsrc.variant v
+            INNER JOIN extsrc.variant_info vi
+            USING      (vri_id)
+            WHERE      vi.gb_id = (
+                            SELECT gb_id 
+                            FROM   odestatic.genome_build 
+                            WHERE  gb_ref_id = %s
+                        ) AND
+                        v.var_ref_id IN %s;
+            ''', (build, refs)
+        )
+
+        return associate(cursor)
+
+def get_variant_odes_by_refs(refs, build):
+    """
+    Returns ode_gene_ids for a set of variants using the given variant
+    references. Maps variant reference IDs (rsID) to internal GW variant IDs
+    (var_id), then maps each var_id to the relevant ode_gene_id.
+    """
+
+    refs = tuple(map(str, refs))
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT     v.var_ref_id, g.ode_gene_id
+            FROM       extsrc.variant v
+            INNER JOIN extsrc.variant_info vi
+            USING      (vri_id)
+            INNER JOIN odestatic.genome_build gb
+            USING      (gb_id)
+            INNER JOIN extsrc.gene g
+            ON         v.var_id :: varchar = g.ode_ref_id
+            WHERE      gb.gb_ref_id = %s AND
+                       g.sp_id = gb.sp_id AND
+                       v.var_ref_id IN %s;
+            ''', (build, refs)
+        )
+
+        return associate(cursor)
 
 def insert_variant(var):
     """
@@ -2184,15 +2300,16 @@ if __name__ == '__main__':
 
     ## Simple tests
     ## Selections
-    print get_species()
-    print get_attributions()
-    print get_gene_ids(['Daxx', 'Mobp', 'Ccr4'])
-    print get_gene_ids_by_species(['Daxx', 'Mobp', 'Ccr4'], 1)
-    print get_gene_refs([83882, 85988])
-    print get_gene_refs_by_type([83882, 85988], 7)
-    print get_preferred_gene_refs([83882, 85988])
-    print get_genesets_by_tier(tiers=[3], size=10)
-    print get_genesets_by_attribute(11, size=2)
-    print get_geneset_values([720])
-    print get_gene_homologs([135283, 135642])
+    #print get_species()
+    #print get_attributions()
+    #print get_gene_ids(['Daxx', 'Mobp', 'Ccr4'])
+    #print get_gene_ids_by_species(['Daxx', 'Mobp', 'Ccr4'], 1)
+    #print get_gene_refs([83882, 85988])
+    #print get_gene_refs_by_type([83882, 85988], 7)
+    #print get_preferred_gene_refs([83882, 85988])
+    #print get_genesets_by_tier(tiers=[3], size=10)
+    #print get_genesets_by_attribute(11, size=2)
+    #print get_geneset_values([720])
+    #print get_gene_homologs([135283, 135642])
+    pass
 
