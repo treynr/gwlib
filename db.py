@@ -2036,7 +2036,7 @@ def get_variant_gene_type():
     with PooledCursor() as cursor:
         cursor.execute(
             '''
-            SELECT gdb_id FROM extsrc.gene WHERE gdb_name = 'Variant';
+            SELECT gdb_id FROM odestatic.genedb WHERE gdb_name = 'Variant';
             '''
         )
         
@@ -2132,7 +2132,21 @@ def get_variant_odes_by_refs(refs, build):
     (var_id), then maps each var_id to the relevant ode_gene_id.
     """
 
-    refs = tuple(map(str, refs))
+    new_refs = []
+
+    ## Throw out potentially bad variant IDs by trying to convert the reference
+    ## ID to an integer. We store only store the integer portion of the rsID so
+    ## this will fail for non-reference SNPs
+    for r in refs:
+        try:
+            int(r)
+
+            new_refs.append(r)
+
+        except ValueError:
+            pass
+
+    refs = tuple(map(str, new_refs))
 
     with PooledCursor() as cursor:
 

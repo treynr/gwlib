@@ -516,6 +516,13 @@ class BatchReader(object):
                     ## Convert to sp_id
                     self._parse_set['sp_id'] = species[spec.lower()]
 
+            ## Lines beginning with '$' specify a genome build (REQUIRED)
+            elif lns[i][:2] == '$ ':
+                if self._parse_set.get('genome_build', None):
+                    self.__reset_parsed_set()
+
+                self._parse_set['genome_build'] = lns[i][1:].strip()
+
             ## Lines beginning with '%' are gene ID types (REQUIRED)
             elif lns[i][:1] == '%':
                 if self._parse_set['values']:
@@ -714,10 +721,34 @@ class BatchReader(object):
                 #ref2ode = db.get_gene_ids_by_refs(gene_refs, sp_id, -gene_type)
 
                 ## Variants are handled using a slightly different function
-                #if -gene_type == db.get_variant_gene_type():
-                #    ref2ode = db.get_variant_odes_by_refs(gene_refs, sp_id, -gene_type)
-                #else:
-                ref2ode = db.get_gene_ids_by_refs(gene_refs, sp_id, -gene_type)
+                if -gene_type == db.get_variant_gene_type():
+                    if not gs.get('genome_build', None):
+                        self.errors.append(
+                            'Variant gene sets require a genome build.'
+                        )
+
+                        return 0
+
+                    ## Modify gene references to remove the rs prefix if it
+                    ## exists
+                    for i in range(len(gs['values'])):
+                        gene, value = gs['values'][i]
+                        gene = gene.lstrip('rs')
+
+                        gs['values'][i] = (gene, value)
+
+                    gene_refs = map(lambda x: x[0], gs['values'])
+
+                    ## Should check to see if the genome build is valid...
+                    ref2ode = db.get_variant_odes_by_refs(gene_refs, gs['genome_build'])
+
+                    ## The variant ode retrieval function returns variant 
+                    ## references as integers, we convert them back to strings
+                    ref2ode = dict(
+                        map(lambda t: (str(t[0]), t[1]), ref2ode.items())
+                    )
+                else:
+                    ref2ode = db.get_gene_ids_by_refs(gene_refs, sp_id, -gene_type)
 
                 #self._symbol_cache[sp_id][gene_type] = dd(int, ref2ode)
                 self._symbol_cache[sp_id][gene_type].update(ref2ode)
