@@ -1,9 +1,9 @@
 #!/usr/bin/env python2
 
-## file:    db.py
-## desc:    Contains all the important functions for accessing and querying the
-##          GeneWeaver DB.
-## auth:    TR
+## file: db.py
+## desc: Contains all the important functions for accessing and querying the
+##       GeneWeaver DB.
+## auth: TR
 #
 
 from collections import OrderedDict as od
@@ -42,7 +42,7 @@ class PooledCursor(object):
     def __enter__(self):
         self.cursor = self.connection.cursor()
 
-        self.cursor.execute('SET search_path = extsrc,odestatic,production;')
+        self.cursor.execute('SET search_path = curation,extsrc,odestatic,production;')
 
         return self.cursor
 
