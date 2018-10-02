@@ -440,17 +440,7 @@ def get_gene_ids_by_refs(refs, sp_id=None, gdb_id=None):
 
         return associate(cursor)
 
-        #else:
-        #    cursor.execute(
-        #        '''
-        #        SELECT  lower(ode_ref_id), ode_gene_id
-        #        FROM    extsrc.gene
-        #        WHERE   sp_id = %s;
-        #        ''', 
-        #            (sp_id,)
-        #    )
-
-def get_gene_ids_by_spid_type(sp_id, gdb_id):
+def get_gene_ids_by_spid_type(sp_id=None, gdb_id=None):
     """
     Exactly like get_gene_ids() above but filters results by species and
     gene type.
@@ -464,42 +454,48 @@ def get_gene_ids_by_spid_type(sp_id, gdb_id):
     :ret dict: mapping of ode_ref_ids to ode_gene_ids
     """
 
-    ## There is an issue with gene symbols. Some species have duplicate symbols
-    ## with different ode_gene_ids. One is the correct entry, the other is an
-    ## entry for another gene with the same symbol (incorrectly attributed).
-    ## One e.g. is the mouse Ccr4 gene. So, when symbols are searched for the
-    ## ode_pref tag MUST be used.
-    gene_types = get_short_gene_types()
-
-    if gene_types['symbol'] == gdb_id:
-        use_pref = True
-
-    else:
-        use_pref = False
+    if not sp_id and not gdb_id:
+        return {}
 
     with PooledCursor() as cursor:
-
-        if use_pref:
-            cursor.execute(
-                '''
-                SELECT  lower(ode_ref_id), ode_gene_id
-                FROM    extsrc.gene
-                WHERE   sp_id = %s AND 
-                        gdb_id = %s AND
-                        ode_pref = 't';
-                ''', 
-                    (sp_id, gdb_id)
+        cursor.execute(
+            '''
+            WITH symbol_type AS (
+                SELECT gdb_id 
+                FROM   odestatic.genedb 
+                WHERE  gdb_name = 'Gene Symbol'
+                LIMIT  1
             )
+            SELECT  ode_ref_id, ode_gene_id
+            FROM    extsrc.gene
+            WHERE   
+                    CASE 
+                        WHEN %(spid)s IS NOT NULL AND %(gdbid)s IS NOT NULL
+                        THEN sp_id = %(spid)s AND gdb_id = %(gdbid)s
 
-        else:
-            cursor.execute(
-                '''
-                SELECT  lower(ode_ref_id), ode_gene_id
-                FROM    extsrc.gene
-                WHERE   sp_id = %s;
-                ''', 
-                    (sp_id,)
-            )
+                        WHEN %(spid)s IS NOT NULL
+                        THEN sp_id = %(spid)s 
+
+                        WHEN %(gdbid)s IS NOT NULL 
+                        THEN gdb_id = %(gdbid)s
+
+                        ELSE true
+                    END AND
+                    CASE
+                        --
+                        -- We have to use ode_pref when gene symbol types are
+                        -- specified. Some species have genes with duplicate
+                        -- symbols (synonyms) that are no longer used but still
+                        -- exist. w/out ode_pref, we retrieve incorrect genes.
+                        -- For an e.g. see the mouse Ccr4 gene.
+                        --
+                        WHEN %(gdbid)s = (SELECT * FROM symbol_type)
+                        THEN ode_pref = true
+
+                        ELSE true
+                    END;
+            ''', {'spid': sp_id, 'gdbid': gdb_id}
+        )
 
         return associate(cursor)
 
@@ -759,7 +755,7 @@ def get_geneset_values(gs_ids):
     """
 
     if type(gs_ids) == list:
-            gs_ids = tuple(gs_ids)
+        gs_ids = tuple(gs_ids)
 
     with PooledCursor() as cursor:
 
@@ -908,6 +904,36 @@ def get_publication_pmid(pub_id):
 
         else:
             return 0
+
+def get_geneset_pmids(gs_ids):
+    """
+    Returns a mapping of GS IDs -> PMIDs if a publication entry exists for the given
+    gene set. 
+
+    arguments
+        gs_ids: list of gene set IDs to retrieve PMIDs for
+
+    returns
+        a dict that maps the GS ID to the PMID. If a GS ID doesn't have an associated 
+        publication, then it will be missing from the returned dict.
+    """
+
+    gs_ids = tuple(gs_ids)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT      g.gs_id, p.pub_pubmed
+            FROM        production.publication p
+            INNER JOIN  production.geneset g
+            USING       (pub_id)
+            WHERE       gs_id IN %s;
+            ''',
+                (gs_ids,)
+        )
+
+        return associate(cursor)
 
 def get_geneset_metadata(gs_ids):
     """
@@ -1117,6 +1143,27 @@ def get_all_platform_probes(pf_id):
         )
 
         return associate(cursor)
+
+def get_all_platform_odes(pf_id):
+    """
+    Returns a list of ode_gene_ids that belong to a particular platform.
+    This function chains several identifier types to produce the final list of
+    ode_gene_ids: prb_ref_id -> prb_id -> ode_gene_id
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT      ode_gene_id
+            FROM        odestatic.probe p
+            INNER JOIN  extsrc.probe2gene p2g
+            USING       (prb_id)
+            WHERE       pf_id = %s;
+            ''', (pf_id,)
+        )
+
+        return listify(cursor)
 
 def get_probe2gene(prb_ids):
     """
@@ -2164,6 +2211,46 @@ def get_variant_odes_by_refs(refs, build):
                        g.sp_id = gb.sp_id AND
                        v.var_ref_id IN %s;
             ''', (build, refs)
+        )
+
+        return associate(cursor)
+
+def get_variant_refs_by_odes(odes, build):
+    """
+    Returns the reference IDs (rsID) for the given ode_gene_ids that represents a
+    variant.
+    Maps ode_gene_ids to the internal GW variant IDs (var_id) then to the
+    variant reference.
+
+    arguments
+        odes: ode_gene_id list
+        build: string specifying the genome build to use (e.g. hg38)
+
+        returns
+            a mapping of ode_gene_ids to variant reference IDs. If a var_ref_id
+            could not be found for a given ode_gene_id, it will be missing from
+            the list of returned associations. Similarly, if the genome build
+            given is incorrect, no mapping will be returned.
+    """
+
+    odes = tuple(odes)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT     g.ode_gene_id, v.var_ref_id
+            FROM       extsrc.gene g
+            INNER JOIN extsrc.variant v
+            ON         v.var_id = g.ode_ref_id :: BIGINT
+            INNER JOIN extsrc.variant_info vi
+            USING      (vri_id)
+            INNER JOIN odestatic.genome_build gb
+            USING      (gb_id)
+            WHERE      gb.gb_ref_id = %s AND
+                       g.sp_id = gb.sp_id AND
+                       g.ode_gene_id IN %s;
+            ''', (build, odes)
         )
 
         return associate(cursor)
