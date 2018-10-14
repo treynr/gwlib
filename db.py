@@ -14,9 +14,6 @@ import psycopg2
 import random
 import warnings
 
-## Ignore fucking psycopg2 warnings about some binary wheel bullshit
-warnings.filterwarnings('ignore')
-
 ## Global connection variable
 conn = None
 
@@ -237,7 +234,7 @@ def associate_duplicate(cursor):
             if row[0] in d:
                 d[row[0]].extend(list(row[1:]))
             else:
-                d[row[0]] = list(row[1:])
+                d[row[0]] = [list(row[1:])]
 
     return d
 
@@ -630,6 +627,38 @@ def get_preferred_gene_refs(gene_ids):
 
         return associate(cursor)
 
+def get_preferred_gene_refs_from_homology(hom_ids, sp_id=2):
+    """
+    Returns a mapping of hom_id -> gene symbol using the given list of hom_ids and
+    species. Defaults to a species ID of 2 which is usually human on almost all GW
+    instances.
+
+    arguments
+        hom_ids: an iterator type containing the list of homology IDs
+        sp_id    the species ID
+
+    returns
+        a dict mapping hom_id -> gene symbol
+    """
+
+    hom_ids = tuple(list(hom_ids))
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT     hom_id, ode_ref_id
+            FROM       extsrc.homology h
+            INNER JOIN extsrc.gene g
+            USING      (ode_gene_id)
+            WHERE      h.hom_id IN %s AND
+                       g.sp_id = %s AND
+                       g.ode_pref;
+            ''', (hom_ids, sp_id)
+        )
+
+        return associate(cursor)
+
 def get_genesets(gs_ids):
     """
     Returns a list of genesets for the given list of gs_ids.
@@ -789,7 +818,8 @@ def get_gene_homologs(gene_ids):
             '''
             SELECT  ode_gene_id, hom_id
             FROM    extsrc.homology
-            WHERE   ode_gene_id IN %s;
+            WHERE   ode_gene_id IN %s AND
+                    hom_source_name NOT LIKE 'Variant%%';
             ''', 
                 (gene_ids,)
         )
@@ -2254,6 +2284,74 @@ def get_variant_refs_by_odes(odes, build):
         )
 
         return associate(cursor)
+
+def roll_up_variants_from_odes(odes):
+    """
+    Rolls the given list of variants up to the gene level.
+
+    arguments
+        odes:  a list of variant ode_gene_ids
+        build: string specifying the genome build to use (e.g. hg38)
+
+    returns
+        a mapping of variant ode_gene_ids to gene ode_gene_ids. If the variant is not
+        found in a gene, or no mapping exists, then it will be missing from the dict of
+        returned associations. Similarly, if the genome build given is incorrect, no 
+        mapping will be returned.
+    """
+
+    odes = tuple(odes)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT DISTINCT ON (hom_source_id, ode_gene_id) 
+                   hom_source_id, ode_gene_id, hom_source_name
+            FROM   extsrc.homology h
+            WHERE  hom_source_id IN %s AND
+                   hom_source_name LIKE 'Variant%';
+            '''
+
+        return associate_duplicate(cursor)
+
+def is_variant_set(gsids):
+    """
+    Determines if the given gene set is a variant set.
+    """
+
+    if hasattr(gsids, '__iter__'):
+        gsids = tuple(gsids)
+    else:
+        gsids = (gsids,)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            WITH variant_ids AS (
+                SELECT gdb_id FROM odestatic.genedb WHERE gdb_name IILKE 'variant'
+            )
+            SELECT   gs_id
+                     CASE
+                        -- We must check that the id type is negative otherwise we could
+                        -- inadvertently match against expression platforms
+                        --
+                        WHEN g.gs_gene_id_type < 0 AND
+                             gdb.gdb_id IN (SELECT * FROM variant_ids) THEN TRUE
+                        ELSE FALSE
+                      END
+            FROM      production.geneset g
+            --
+            -- We must left join because expression platforms are not found in the genedb table
+            --
+            LEFT JOIN odestatic.genedb gdb
+            ON        gdb.gdb_id = @g.gs_gene_id_type
+            WHERE     g.gs_id IN %s;
+            '''
+
+        return associate(cursor)
+
 
 def insert_variant(var):
     """

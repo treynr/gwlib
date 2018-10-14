@@ -8,6 +8,10 @@
 
 from os import path
 import ConfigParser
+import warnings
+
+## This warning is fucking annoying
+warnings.filterwarnings('ignore', category=UserWarning, module='psycopg2')
 
 from batch import BatchReader
 from batch import BatchWriter
