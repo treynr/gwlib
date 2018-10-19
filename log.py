@@ -188,10 +188,10 @@ class Log(object):
 
         ## Errors are always printed!
         if level == self.ERROR:
-            print pstr
+            print >> sys.stderr, pstr
         
         elif self.on and not self.fh or (self.fh and self.both):
-            print pstr
+            print >> sys.stderr, pstr
 
     def debug(self, s):
         """

@@ -167,14 +167,10 @@ def tuplify(thing):
     :ret list: tupled value
     """
 
-    if type(thing) == list or type(thing) == set:
+    if hasattr(thing, '__iter__'):
         return tuple(thing)
 
-    elif type(thing) == tuple:
-        return thing
-
-    else:
-        return (thing,)
+    return (thing,)
 
 def associate(cursor):
     """
@@ -2285,9 +2281,10 @@ def get_variant_refs_by_odes(odes, build):
 
         return associate(cursor)
 
-def roll_up_variants_from_odes(odes):
+def roll_up_variants_from_odes(odes, mapping=('Variant',)):
     """
-    Rolls the given list of variants up to the gene level.
+    Rolls the given list of variants up to the gene level using the given variant mapping
+    type.
 
     arguments
         odes:  a list of variant ode_gene_ids
@@ -2300,39 +2297,45 @@ def roll_up_variants_from_odes(odes):
         mapping will be returned.
     """
 
-    odes = tuple(odes)
+    odes = tuplify(odes)
+    mapping = tuplify(mapping)
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
             SELECT DISTINCT ON (hom_source_id, ode_gene_id) 
-                   hom_source_id, ode_gene_id, hom_source_name
+                   hom_source_id, ode_gene_id
             FROM   extsrc.homology h
             WHERE  hom_source_id IN %s AND
-                   hom_source_name LIKE 'Variant%';
-            '''
+                   hom_source_name IN %s;
+            ''', (odes, mapping)
+        )
 
         return associate_duplicate(cursor)
 
 def is_variant_set(gsids):
     """
-    Determines if the given gene set is a variant set.
+    Determines if the given gene sets are variant sets.
+
+    arguments
+        gsids: an iterable containing a series of GS IDs
+
+    returns
+        a GSID-bool bijection, as a dict, where the bool is true if the set is a variant
+        set and false otherwise.
     """
 
-    if hasattr(gsids, '__iter__'):
-        gsids = tuple(gsids)
-    else:
-        gsids = (gsids,)
+    gsids = tuplify(gsids)
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
             WITH variant_ids AS (
-                SELECT gdb_id FROM odestatic.genedb WHERE gdb_name IILKE 'variant'
+                SELECT gdb_id FROM odestatic.genedb WHERE gdb_name ILIKE 'variant'
             )
-            SELECT   gs_id
+            SELECT   gs_id,
                      CASE
                         -- We must check that the id type is negative otherwise we could
                         -- inadvertently match against expression platforms
@@ -2348,7 +2351,8 @@ def is_variant_set(gsids):
             LEFT JOIN odestatic.genedb gdb
             ON        gdb.gdb_id = @g.gs_gene_id_type
             WHERE     g.gs_id IN %s;
-            '''
+            ''', (gsids,)
+        )
 
         return associate(cursor)
 
