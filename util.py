@@ -375,3 +375,26 @@ def get_git_info():
 
     return '%s@%s' % (git_branch, git_hash)
 
+def make_export_header(exe, version):
+    """
+    Generates a list of strings that can be joined together to serve as a small,
+    commented header for data that is output. The header includes date of export, script
+    arguments and metadata to aid with reproducibility.
+
+    arguments
+        exe:     the name of the script
+        version: the version of the script
+    """
+
+    return [
+        '## {} v. {} ({})'.format(exe, version, get_git_info()),
+        '## {}'.format(make_export_tag()),
+        '## last updated {}'.format(get_today()),
+        '#'
+    ]
+
+def make_version(major, minor, patch):
+    """
+    """
+
+    return '{}.{}.{}'.format(major, minor, patch)
