@@ -795,7 +795,7 @@ def get_geneset_values(gs_ids):
 
         return dictify(cursor)
 
-def get_gene_homologs(gene_ids):
+def get_gene_homologs(gene_ids, hom_source='Homologene'):
     """
     Returns all homology IDs for the given list of gene IDs.
 
@@ -815,9 +815,9 @@ def get_gene_homologs(gene_ids):
             SELECT  ode_gene_id, hom_id
             FROM    extsrc.homology
             WHERE   ode_gene_id IN %s AND
-                    hom_source_name NOT LIKE 'Variant%%';
+                    hom_source_name = %s;
             ''', 
-                (gene_ids,)
+                (gene_ids, hom_source)
         )
 
         return associate(cursor)
