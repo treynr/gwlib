@@ -1,57 +1,62 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
-## file:    log.py
-## desc:    Simple output logging class.
-## auth:    TR
+## file: log.py
+## desc: Simple output logging class.
+## auth: TR
 #
 
+from collections import namedtuple
 import sys
 import datetime as dt
+import itertools as it
+import logging
 
-class Colors(object):
-    """
-    Instantiates available terminal colors if we're attached to a TTY.
-    """
+Colors = namedtuple(
+    'Colors', 
+    'green red white yellow ltgreen ltred ltwhite ltyellow bold normal'
+)
+Colors.__new__.__defaults__ = ('',) * 10
 
-    def __init__(self):
+if sys.stdin.isatty():
 
-        if sys.stdin.isatty():
-            self.green      = '\033[32m'
-            self.red        = '\033[31m'
-            self.white      = '\033[37m'
-            self.yellow     = '\033[33m'
-            self.ltgreen    = '\033[92m'
-            self.ltred      = '\033[91m'
-            self.ltwhite    = '\033[97m'
-            self.ltyellow   = '\033[93m'
+    colors = Colors(
+        '\033[32m',
+        '\033[31m',
+        '\033[37m',
+        '\033[33m',
+        '\033[92m',
+        '\033[91m',
+        '\033[97m',
+        '\033[93m',
+        '\033[1m',
+        '\033[0m'
+    )
 
-            self.bold   = '\033[1m'
-            self.normal = '\033[0m'
+else:
+    colors = Colors()
 
-        else:
-            self.green      = ''
-            self.red        = ''
-            self.white      = ''
-            self.yellow     = ''
-            self.ltgreen    = ''
-            self.ltred      = ''
-            self.ltwhite    = ''
-            self.ltyellow   = ''
+class ConsoleFilter(logging.Filter):
 
-            self.bold   = ''
-            self.normal = ''
+    def filter(self, record):
+
+        ## I don't think I should be doing this but whatever lol
+        if record.levelno == 10: 
+            record.msg = '{}{}'.format(colors.ltwhite, record.msg)
+        elif record.levelno == 20:
+            record.msg = '{}{}'.format(colors.ltgreen, record.msg)
+        elif record.levelno == 30:
+            record.msg = '{}{}'.format(colors.ltyellow, record.msg)
+        elif record.levelno == 40:
+            record.msg = '{}{}'.format(colors.ltred, record.msg)
+
+        return True
 
 class Log(object):
     """
-    Basic class for logging to to a file and/or stdout.
+    Basic logging class that encapsulates python's logging classes and functions.
     """
 
-    DEBUG = 'DEBUG'
-    INFO = 'INFO'
-    WARN = 'WARNING'
-    ERROR = 'ERROR'
-
-    def __init__(self, both=False, file='', on=True, prefix='', time=True):
+    def __init__(self, console=True, filename='', name='log', on=True, cfmt='', ffmt=''):
         """
         Initialize a logging object.
 
@@ -70,128 +75,30 @@ class Log(object):
                      will be added to output strings
         """
 
-        self.color = Colors()
-        self.both = both
-        self.file = file
-        self.on = on
-        self.prefix = prefix
-        self.time = time
+        self.color = colors
+        self.filename = filename
+        self.cfmt = cfmt
+        self.ffmt = ffmt
+        self.logger = logging.getLogger(name)
 
-        if file:
-            self.fh = open(file, 'w')
+        self.logger.setLevel(logging.DEBUG)
 
-        else:
-            self.fh = None
-    
-    def __del__(self):
-        
-        if self.fh:
-            self.fh.close()
+        if console:
+            conlog = logging.StreamHandler()
 
-    def __to_color(self, level):
-        """
-        Converts a log level into a color.
-        """
+            conlog.setLevel(logging.DEBUG)
+            conlog.setFormatter(logging.Formatter(cfmt if cfmt else '%(message)s'))
+            conlog.addFilter(ConsoleFilter())
 
-        lookup = {
-            self.DEBUG: self.color.ltwhite,
-            self.INFO: self.color.ltgreen,
-            self.WARN: self.color.ltyellow,
-            self.ERROR: self.color.ltred
-        }
+            self.logger.addHandler(conlog)
 
-        return lookup.get(level)
+        if filename:
+            filelog = logging.StreamHandler()
 
-    def __get_timestamp(self):
-        """
-        """
+            filelog.setLevel(logging.INFO)
+            filelog.setFormatter(logging.Formatter(ffmt if ffmt else '%(message)s'))
 
-        now = dt.datetime.now()
-        year = str(now.year)
-        month = str(now.month)
-        day = str(now.day)
-        hour = str(now.hour)
-        minute = str(now.minute)
-        second = str(now.second)
-
-        if len(month) == 1:
-            month = '0' + month
-
-        if len(day) == 1:
-            day = '0' + day
-
-        if len(hour) == 1:
-            hour = '0' + hour
-
-        if len(minute) == 1:
-            minute = '0' + minute
-
-        if len(second) == 1:
-            second = '0' + second
-
-        return '.'.join([year, month, day, hour, minute, second])
-
-    def __write_file(self, level, s):
-        """
-        Internal function for writing text to a file.
-
-        :type level: str 
-        :arg level: log level
-
-        :type s: str 
-        :arg s: text being logged
-        """
-
-        ## Automatically removes my usual stdout logging prefixes
-        if len(s) > 3 and s[0] == '[' and s[2] == ']':
-            s = s[3:].strip()
-
-        if self.on and self.fh:
-            os = ''
-
-            if self.time:
-                os += '[%s] ' % self.__get_timestamp()
-
-            #if self.prefix == 'level' or not self.prefix:
-            os += '<%s> ' % level
-
-            if self.prefix:
-                os += '%s ' % self.prefix
-
-            os += '%s' % s
-
-            print >> self.fh, os
-
-    def __write_std(self, level, s):
-        """
-        Internal function for writing text to stdout.
-
-        :type color: str 
-        :arg color: color escape sequence generated from a Colors object
-
-        :type s: str 
-        :arg s: text being logged
-        """
-
-        color = self.__to_color(level)
-        norm_color = self.color.normal
-
-        if self.prefix:
-            if self.prefix == 'level':
-                pstr = '%s<%s> %s%s' % (color, level, s, norm_color)
-
-            else:
-                pstr = '%s%s %s%s' % (color, self.prefix, s, norm_color)
-
-        else:
-            pstr = '%s%s%s' % (color, s, self.color.normal)
-
-        ## Errors are always printed!
-        if level == self.ERROR:
-            print >> sys.stderr, pstr
-        
-        elif self.on and not self.fh or (self.fh and self.both):
-            print >> sys.stderr, pstr
+            self.logger.addHandler(filelog)
 
     def debug(self, s):
         """
@@ -201,8 +108,7 @@ class Log(object):
         :arg s: text being logged
         """
 
-        self.__write_file(self.DEBUG, s)
-        self.__write_std(self.DEBUG, s)
+        self.logger.debug(s)
 
     def info(self, s):
         """
@@ -212,8 +118,7 @@ class Log(object):
         :arg s: text being logged
         """
 
-        self.__write_file(self.INFO, s)
-        self.__write_std(self.INFO, s)
+        self.logger.info(s)
 
     def warn(self, s):
         """
@@ -223,8 +128,7 @@ class Log(object):
         :arg s: text being logged
         """
 
-        self.__write_file(self.WARN, s)
-        self.__write_std(self.WARN, s)
+        self.logger.warn(s)
 
     def error(self, s):
         """
@@ -235,14 +139,7 @@ class Log(object):
         :arg s: text being logged
         """
 
-        self.__write_file(self.ERROR, s)
-        self.__write_std(self.ERROR, s)
-
-    def log_to_file(self, s, level):
-        """
-        """
-
-        self.__write_file(level, s)
+        self.logger.error(s)
 
     def turn_on(self, on=True):
         """
@@ -255,27 +152,14 @@ class Log(object):
         else:
             self.on = on
 
-    def set_prefix(self, prefix=''):
-        """
-        Sets an output prefix.
-        """
-
-        self.prefix = prefix
-
 if __name__ == "__main__":
     log = Log()
 
-    log.info("log.py -- Let's do some logging!")
+    log.info("log.py -- Logs and stuff")
     log.info('')
     log.debug('DEBUG\t| For debugging and developer messages')
     log.info('INFO\t| For general user messages')
     log.warn('WARNING\t| Things went wrong and you should probably know about it')
     log.error('ERROR\t| OH SHIT')
-
-    log.info('')
-    log.set_prefix('<+>')
-    log.info('User defined prefix')
-    log.set_prefix('level')
-    log.info('Log level prefix')
 
 
