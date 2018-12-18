@@ -7,7 +7,6 @@
 
 from collections import namedtuple
 import sys
-import datetime as dt
 import itertools as it
 import logging
 
@@ -17,6 +16,7 @@ Colors = namedtuple(
 )
 Colors.__new__.__defaults__ = ('',) * 10
 
+## Check if the user is running this from a terminal
 if sys.stdin.isatty():
 
     colors = Colors(
@@ -36,6 +36,10 @@ else:
     colors = Colors()
 
 class ConsoleFilter(logging.Filter):
+    """
+    Logging filter attached to the console handler. All this does is color messages based
+    on the log level.
+    """
 
     def filter(self, record):
 
@@ -60,22 +64,16 @@ class Log(object):
         """
         Initialize a logging object.
 
-        :type both: bool
-        :arg both: if true logs to both stdout and a file
+        arguments
+            console:  boolean indicating if console logging is turned on or off
+            filename: filepath to log to, if none is given file logging is turned off
+            name:     the name of the logging instance
+            on:       deprecated
+            cfmt:     format string for the console logginng handler
+            ffmt:     format string for the file logging handler
 
-        :type file: str
-        :arg file: filepath to a log file
-
-        :type on: bool
-        :arg on: if true logging is turned on, prints to stdout and/or a file
-
-        :type prefix: str
-        :arg prefix: prefix the given string to the beginning of all output. A
-                     special string can be given, 'level', and the log level 
-                     will be added to output strings
         """
 
-        self.color = colors
         self.filename = filename
         self.cfmt = cfmt
         self.ffmt = ffmt
@@ -102,41 +100,28 @@ class Log(object):
 
     def debug(self, s):
         """
-        Log output at the DEBUG level.
-
-        :type s: str
-        :arg s: text being logged
+        Log the given string (s) at the DEBUG level.
         """
 
         self.logger.debug(s)
 
     def info(self, s):
         """
-        Log output at the INFO level.
-
-        :type s: str
-        :arg s: text being logged
+        Log the given string (s) at the INFO level.
         """
 
         self.logger.info(s)
 
     def warn(self, s):
         """
-        Log output at the WARN level.
-
-        :type s: str
-        :arg s: text being logged
+        Log the given string (s) at the WARN level.
         """
 
         self.logger.warn(s)
 
     def error(self, s):
         """
-        Log output at the ERROR level.This is the only output that is active 
-        even when logging is turned off (errors are important dood).
-
-        :type s: str
-        :arg s: text being logged
+        Log the given string (s) at the ERROR level.
         """
 
         self.logger.error(s)
