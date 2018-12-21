@@ -17,17 +17,15 @@ import warnings
 ## Global connection variable
 conn = None
 
-        ## CLASSES ##
-        #############
-
 class PooledCursor(object):
     """
-    Modeled after the PooledCursor object in GeneWeaver's source code.
-    Encapsulates psycopg2 connections and cursors so they can be used with
-    python features that are unsupported in older versions of psycopg2.
+    Small class that encapsulates psycopg2's connection and cursor objects.
+    On instantiation the class will create a new DB connection if one doesn't exist and
+    creates a new cursor when entered (e.g. using in a with statement).
     """
 
     def __init__(self, new_conn=None):
+
         if not new_conn:
             global conn
         else:
@@ -37,6 +35,7 @@ class PooledCursor(object):
         self.cursor = None
 
     def __enter__(self):
+
         self.cursor = self.connection.cursor()
 
         self.cursor.execute('SET search_path = curation,extsrc,odestatic,production;')
@@ -44,28 +43,15 @@ class PooledCursor(object):
         return self.cursor
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+
         if self.cursor:
             self.cursor.close()
 
             self.cursor = None
 
 
-## This file attempts to follow psycopg best practices, outlined in its FAQ: 
-## http://initd.org/psycopg/docs/faq.html
-## A few notable designs:
-#
-## New cursors are generated for every query to minimize caching and client
-## side memory usage. Using cursors in a with statement should automatically
-## call their destructors.
-#
-## The config can set connections to autocommit mode in order to avoid
-## littering the postgres server with "idle in transaction" sessions. Commit()
-## should be called after every statement (including SELECTs) but this is
-## doesn't work well for dry runs and testing.
-#
-
-        ## HELPERS ##
-        #############
+## These are helper functions used to modify the results of a query and return the
+## results as convenient objects
 
 def asciify(s):
     """
@@ -73,12 +59,13 @@ def asciify(s):
     forcibly converts it to ASCII. Any conversion errors are ignored during the
     process. If the given argument isn't a string, the function does nothing.
 
-    :type s: str
-    :arg s: string being converted to ASCII
+    arguments
+        s: string being converted
+
+    returns
+        a string that has potentially been converted to ASCII
     """
 
-    #return s.encode('ascii', 'ignore') if isinstance(s, basestring) else s
-    #return s.encode('utf-8', 'ignore') if isinstance(s, basestring) else s
     if isinstance(s, basestring):
         return s.decode('utf-8').encode('utf-8', 'ignore')
 
@@ -91,7 +78,7 @@ def dictify(cursor, ordered=False):
     query.
 
     arguments
-        cursor: an active psycopg cursor
+        cursor:  an active psycopg cursor
         ordered: a boolean indicating whether to use a regular or ordered dict
 
     returns
@@ -122,7 +109,7 @@ def dictify_and_map(cursor):
     of sp_name -> {sp_name, sp_id, sp_taxid}
 
     arguments
-        cursor: an active psycopg cursor
+        cursor:  an active psycopg cursor
         ordered: a boolean indicating whether to use a regular or ordered dict
 
     returns
@@ -149,10 +136,11 @@ def listify(cursor):
     Converts each cursor row into a list. Only the first tuple member is saved
     to the list.
 
-    :type cursor: object
-    :arg cursor: the psycopg cursor
+    arguments
+        cursor: an active psycopg cursor
 
-    :ret list: the results of the SQL query
+    returns
+        a list containing the query results
     """
 
     return map(lambda t: t[0], cursor.fetchall())
@@ -161,10 +149,11 @@ def tuplify(thing):
     """
     Converts a list, list like object or scalar value into a tuple.
 
-    :type thing: something
-    :arg thing: the thing being converted
+    arguments
+        thing: some object being converted into a tuple
 
-    :ret list: tupled value
+    returns
+        a tuple
     """
 
     if hasattr(thing, '__iter__'):
@@ -179,10 +168,11 @@ def associate(cursor):
     dictify, this does not use column names and generates a single dict from
     all returned rows. Be careful since duplicates are overwritten.
 
-    :type cursor: object
-    :arg cursor: the psycopg cursor
+    arguments
+        cursor: an active psycopg cursor
 
-    :ret dict: mapping of tuple element #1 to the rest
+    returns
+        mapping of tuple element #1 to the rest
     """
 
     d = {}
@@ -241,15 +231,15 @@ def commit():
 
     conn.commit()
 
-        ## SELECTS ##
-        #############
+## These are the query wrappers
 
 def get_species():
     """
     Returns a species name and ID mapping for all the species currently 
     supported by GW.
 
-    :ret dict: mapping of sp_names to sp_ids
+    returns
+        a mapping of sp_names to sp_ids
     """
 
     with PooledCursor() as cursor:
@@ -263,7 +253,7 @@ def get_species():
 
         return associate(cursor)
 
-def get_species2():
+def get_species_with_taxid():
     """
     Returns a species name and column mapping for all the species currently 
     supported by GW.
@@ -287,7 +277,8 @@ def get_species_by_taxid():
     """
     Returns a mapping of species taxids (NCBI taxonomy ID) to their sp_id.
 
-    :ret dict: mapping of sp_taxids to sp_ids
+    returns
+        a mapping of sp_taxids to sp_ids
     """
 
     with PooledCursor() as cursor:
@@ -324,8 +315,10 @@ def get_species_gene_id():
 def get_attributions():
     """
     Returns all the attributions (at_id and at_abbrev) found in the DB.
+    These represent third party data resources integrated into GeneWeaver.
 
-    :ret dict: mapping of abbreviations to IDs
+    returns
+        mapping of attribution abbreviations to IDs
     """
 
     with PooledCursor() as cursor:
@@ -339,118 +332,32 @@ def get_attributions():
 
         return associate(cursor)
 
-def get_gene_ids(refs, sp_id=None):
+def get_gene_ids(refs, sp_id=None, gdb_id=None):
     """
     Given a set of external reference IDs, this returns a mapping of 
-    ode_ref_ids to ode_gene_ids. An optional species id list can be provided to
-    limit gene results by species.
+    reference gene identifiers to the IDs used internally by GeneWeaver (ode_gene_id). 
+    An optional species id can be provided to limit gene results by species.
+    An optional gene identifier type can be provided to limit mapping by ID type (useful
+    when identifiers from different resources overlap).
 
     Reference IDs are always strings (even if they're numeric) and should be
     properly capitalized. If duplicate references exist in the DB (unlikely)
-    then they are overwritten in the return dict. The returned ode_gene_ids are
-    longs.
+    then they are overwritten in the return dict. Reference IDs can be any valid
+    identifier supported by GeneWeaver (e.g. Ensembl, NCBI Gene, MGI, HGNC, etc.).
 
-    :type refs: list/tuple
-    :arg refs: external DB reference IDs
+    arguments
+        refs:   a list of reference identifiers to convert
+        sp_id:  an optional species identifier used to limit the ID mapping process
+        gdb_id: an optional gene type identifier used to limit the ID mapping process
 
-    :ret dict: mapping of ode_ref_ids to ode_gene_ids
+    returns
+        a 1:1 mapping of reference identifiers to GW IDs
     """
 
-    if type(refs) == list:
-        refs = tuple(refs)
+    refs = tuplify(refs)
 
     with PooledCursor() as cursor:
 
-        cursor.execute(
-            '''
-            SELECT  ode_ref_id, ode_gene_id
-            FROM    extsrc.gene
-            WHERE   ode_ref_id IN %s;
-            ''', 
-                (refs,)
-        )
-
-        return associate(cursor)
-
-def get_gene_ids_by_species(refs, sp_id):
-    """
-    Exactly like get_gene_ids() above but allows for a species ID to be given
-    and the results limited by species.
-
-    :type refs: list/tuple
-    :arg refs: external DB reference IDs
-
-    :type sp_id: int
-    :arg sp_id: GW species ID
-
-    :ret dict: mapping of ode_ref_ids to ode_gene_ids
-    """
-
-    if type(refs) == list:
-        refs = tuple(refs)
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  ode_ref_id, ode_gene_id
-            FROM    extsrc.gene
-            WHERE   sp_id = %s AND 
-                    ode_ref_id IN %s;
-            ''', 
-                (sp_id, refs)
-        )
-
-        return associate(cursor)
-
-def get_gene_ids_by_refs(refs, sp_id=None, gdb_id=None):
-    """
-    """
-
-    refs = tuple(map(str, refs))
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  ode_ref_id, ode_gene_id
-            FROM    extsrc.gene
-            WHERE   ode_ref_id IN %(refs)s AND
-                    CASE 
-                        WHEN %(spid)s IS NOT NULL AND %(gdbid)s IS NOT NULL
-                        THEN sp_id = %(spid)s AND gdb_id = %(gdbid)s
-
-                        WHEN %(spid)s IS NOT NULL
-                        THEN sp_id = %(spid)s 
-
-                        WHEN %(gdbid)s IS NOT NULL 
-                        THEN gdb_id = %(gdbid)s
-
-                        ELSE true
-                    END;
-            ''', {'refs': refs, 'spid': sp_id, 'gdbid': gdb_id}
-        )
-
-        return associate(cursor)
-
-def get_gene_ids_by_spid_type(sp_id=None, gdb_id=None):
-    """
-    Exactly like get_gene_ids() above but filters results by species and
-    gene type.
-
-    :type refs: list/tuple
-    :arg refs: external DB reference IDs
-
-    :type sp_id: int
-    :arg sp_id: GW species ID
-
-    :ret dict: mapping of ode_ref_ids to ode_gene_ids
-    """
-
-    if not sp_id and not gdb_id:
-        return {}
-
-    with PooledCursor() as cursor:
         cursor.execute(
             '''
             WITH symbol_type AS (
@@ -461,7 +368,7 @@ def get_gene_ids_by_spid_type(sp_id=None, gdb_id=None):
             )
             SELECT  ode_ref_id, ode_gene_id
             FROM    extsrc.gene
-            WHERE   
+            WHERE   ode_ref_id IN %(refs)s AND
                     CASE 
                         WHEN %(spid)s IS NOT NULL AND %(gdbid)s IS NOT NULL
                         THEN sp_id = %(spid)s AND gdb_id = %(gdbid)s
@@ -487,21 +394,22 @@ def get_gene_ids_by_spid_type(sp_id=None, gdb_id=None):
 
                         ELSE true
                     END;
-            ''', {'spid': sp_id, 'gdbid': gdb_id}
+            ''', {'refs': refs, 'spid': sp_id, 'gdbid': gdb_id}
         )
 
         return associate(cursor)
 
 def get_species_genes(sp_id):
     """
-    Similar to the above get_gene_ids() but an ode_ref_id -> ode_gene_id
-    mapping for all genes for the given species.
+    Similar to the above get_gene_ids() but returns a reference to GW ID mapping for all
+    genes for the given species (as a warning, this will be a lot of data).
+    This query does not include genomic variants.
 
     arguments
-        sp_id: species ID
+        sp_id: species identifier
 
     returns
-        a dict mapping of ode_ref_id -> ode_gene_id
+        a 1:1 mapping of reference identifiers to GW IDs
     """
 
     with PooledCursor() as cursor:
@@ -510,26 +418,32 @@ def get_species_genes(sp_id):
             '''
             SELECT  ode_ref_id, ode_gene_id
             FROM    extsrc.gene
-            WHERE   sp_id = %s;
-            ''', 
-                (sp_id,)
+            WHERE   sp_id = %s AND
+                    gdb_id NOT IN (
+                        SELECT gdb_id FROM odestatic.genedb WHERE gdb_name = 'Variant'
+                    );
+            ''', (sp_id,)
         )
 
         return associate(cursor)
 
-def get_gene_refs(gene_ids):
+def get_gene_refs(genes, type_id=None):
     """
-    Retrieves external reference IDs for the given list of ode_gene_ids. The
-    inverse of get_gene_ids().
+    The inverse of the get_gene_refs() function. For the given list of internal GW gene
+    identifiers, this function returns a mapping of internal to external 
+    (e.g. MGI, HGNC, Ensembl) reference identifiers.
+    The mapping is 1:N since many external references may exist for a single, condensed
+    GW identifier.
 
-    :type gene_ids: list/tuple
-    :arg gene_ids: internal GeneWeaver gene IDs (ode_gene_id)
+    arguments
+        genes:   a list of internal GW gene identifiers (ode_gene_id)
+        type_id: an optional gene type ID to limit the mapping to a specific gene type
 
-    :ret dict: mapping of ode_gene_ids to a list of its reference IDs
+    returns
+        a 1:N mapping of GW IDs to reference identifiers
     """
 
-    if type(gene_ids) == list:
-        gene_ids = tuple(gene_ids)
+    genes = tuplify(genes)
 
     with PooledCursor() as cursor:
 
@@ -537,77 +451,30 @@ def get_gene_refs(gene_ids):
             '''
             SELECT  ode_gene_id, ode_ref_id
             FROM    extsrc.gene
-            WHERE   ode_gene_id IN %s;
-            ''', 
-                (gene_ids,)
+            WHERE   ode_gene_id IN %(genes)s AND
+                    CASE 
+                        WHEN %(id_type)s IS NOT NULL THEN gdb_id = %(id_type)s
+                        ELSE true
+                    END;
+            ''', {'genes': genes, 'id_type': id_type}
         )
 
-        maplist = dictify(cursor)
-        mapping = {}
+        return associate_duplicate(cursor)
 
-        for d in maplist:
-            if d['ode_gene_id'] in mapping:
-                mapping[d['ode_gene_id']].append(d['ode_ref_id'])
-
-            else:
-                mapping[d['ode_gene_id']] = [d['ode_ref_id']]
-
-        return mapping
-
-def get_gene_refs_by_type(gene_ids, gene_id_type):
-    """
-    Exactly like get_gene_refs() but allows for retrieval by specific gene ID
-    types.
-
-    :type gene_ids: list/tuple
-    :arg gene_ids: internal GeneWeaver gene IDs (ode_gene_id)
-
-    :type gene_id_type: int
-    :arg gene_ids: gene ID type to retrieve
-
-    :ret dict: mapping of ode_gene_ids to its ref ID of a specific type
-    """
-
-    if type(gene_ids) == list:
-        gene_ids = tuple(gene_ids)
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  ode_gene_id, ode_ref_id
-            FROM    extsrc.gene
-            WHERE   gdb_id = %s AND 
-                    ode_gene_id IN %s;
-            ''', 
-                (gene_id_type, gene_ids)
-        )
-
-        maplist = dictify(cursor)
-        mapping = {}
-
-        for d in maplist:
-            if d['ode_gene_id'] in mapping:
-                mapping[d['ode_gene_id']].append(d['ode_ref_id'])
-
-            else:
-                mapping[d['ode_gene_id']] = [d['ode_ref_id']]
-
-        return mapping
-
-def get_preferred_gene_refs(gene_ids):
+def get_preferred_gene_refs(genes):
     """
     Exactly like get_gene_refs() but only retrieves preferred ode_ref_ids.
-    There _should_ only be one preferred ID.
+    There _should_ only be one preferred ID and it _should_ always be the gene symbol
+    type.
 
-    :type gene_ids: list/tuple
-    :arg gene_ids: internal GeneWeaver gene IDs (ode_gene_id)
+    arguments
+        genes: a list of internal GW gene identifiers (ode_gene_id)
 
-    :ret dict: mapping of ode_gene_ids to its ref ID of a specific type
+    returns
+        a 1:1 mapping of GW IDs to reference identifiers
     """
 
-    if type(gene_ids) == list:
-        gene_ids = tuple(gene_ids)
+    genes = tuplify(genes)
 
     with PooledCursor() as cursor:
 
@@ -615,14 +482,16 @@ def get_preferred_gene_refs(gene_ids):
             '''
             SELECT  ode_gene_id, ode_ref_id
             FROM    extsrc.gene
-            WHERE   ode_pref = 't' AND
+            WHERE   ode_pref = TRUE AND
                     ode_gene_id IN %s;
             ''', 
-                (gene_ids,)
+                (genes,)
         )
 
         return associate(cursor)
 
+## Reminder to delete this function. Don't remember writing it but don't wanna remove it
+## just yet in case doing so breaks something.
 def get_preferred_gene_refs_from_homology(hom_ids, sp_id=2):
     """
     Returns a mapping of hom_id -> gene symbol using the given list of hom_ids and
@@ -657,17 +526,16 @@ def get_preferred_gene_refs_from_homology(hom_ids, sp_id=2):
 
 def get_genesets(gs_ids):
     """
-    Returns a list of genesets for the given list of gs_ids.
+    Returns a list of gene set metadata for the given list of gene set IDs.
 
     arguments
-        gs_ids: a list of gs_ids (long)
+        gs_ids: a list of gs_ids
 
     returns
         a list of geneset objects that contain all columns in the geneset table
     """
 
-    if type(gs_ids) == list:
-        gs_ids = tuple(gs_ids)
+    gs_ids = tuplify(gs_ids)
 
     with PooledCursor() as cursor:
 
@@ -676,82 +544,62 @@ def get_genesets(gs_ids):
             SELECT  *
             FROM    production.geneset
             WHERE   gs_id IN %s;
-            ''', 
-                (gs_ids,)
+            ''', (gs_ids,)
         )
 
         return dictify(cursor, ordered=True)
 
-def get_genesets_by_tier(tiers=[1,2,3,4,5], size=maxint):
+def get_geneset_ids_by_tier(tiers=[1,2,3,4,5], size=0, sp_id=0):
     """
     Returns a list of normal (i.e. their status is not deleted or deprecated) 
-    geneset IDs that belong in a particular tier or set of tiers. Also allows
-    the user to retrieve genesets under a particular size.
-
-    :type tiers: list
-    :arg tiers: tiers to retrieve genesets from
-
-    :type size: int
-    :arg size: geneset size (gs_count) to use as a filter
-    """
-
-    if type(tiers) == list:
-        tiers = tuple(tiers)
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  gs_id
-            FROM    production.geneset
-            WHERE   gs_status NOT LIKE 'de%%' AND
-                    cur_id IN %s AND
-                    gs_count < %s;
-            ''', 
-                (tiers, size)
-        )
-
-        return listify(cursor)
-
-def get_genesets_by_attribute(at_id, size=maxint):
-    """
-    Returns a list of normal (i.e. their status is not deleted or deprecated) 
-    geneset IDs that belong to a particular attribution group. Also allows
-    the user to retrieve genesets under a particular size.
-
-    :type at_id: int
-    :arg at_id: GeneWeaver attribution ID 
-
-    :type size: int
-    :arg size: geneset size (gs_count) to use a filter
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  gs_id
-            FROM    production.geneset
-            WHERE   gs_status NOT LIKE 'de%%' AND
-                    gs_attribution = %s AND
-                    gs_count < %s;
-            ''', 
-                (at_id, size)
-        )
-
-        return listify(cursor)
-
-def get_genesets_by_attribute_species(at_id, sp_id):
-    """
-    Returns a list of normal (i.e. their status is not deleted or deprecated) 
-    geneset IDs that belong to a particular attribution group and species.
+    gene set IDs that belong in a particular tier or set of tiers. Allows filtering of
+    returned sets based on size and species.
 
     arguments
-        at_id: GeneWeaver attribution ID
-        sp_id: GeneWeaver species ID
+        tiers: a list of curation tiers
+        size:  indicates the maximum size a set should be during retrieval
+        sp_id: species identifier
 
     returns
-        a list of gene set IDs matching the given criteria
+        a list of gene set IDs
+    """
+
+    tiers = tuplify(tiers)
+
+    with PooledCursor() as cursor:
+
+        cursor.execute(
+            '''
+            SELECT  gs_id
+            FROM    production.geneset
+            WHERE   gs_status NOT LIKE 'de%%' AND
+                    cur_id IN %(tiers)s AND
+                    CASE 
+                        WHEN %(size)s > 0 THEN gs_count < %(size)s
+                        ELSE true
+                    END AND
+                    CASE 
+                        WHEN %(sp_id)s > 0 THEN sp_id = %(sp_id)s
+                        ELSE true
+                    END;
+            ''', {'tiers':tiers, 'size': size, 'sp_id': sp_id}
+        )
+
+        return listify(cursor)
+
+def get_geneset_ids_by_attribute(attrib, size=0, sp_id=0):
+    """
+    Returns a list of normal (i.e. their status is not deleted or deprecated) 
+    geneset IDs that belong to a particular attribution group. Allows filtering of
+    returned sets based on size and species.
+
+    arguments
+        attrib: GW attribution ID
+        size:   indicates the maximum size a set should be during retrieval
+        sp_id: species identifier
+
+    returns
+        a list of gene set IDs
     """
 
     with PooledCursor() as cursor:
@@ -761,26 +609,32 @@ def get_genesets_by_attribute_species(at_id, sp_id):
             SELECT  gs_id
             FROM    production.geneset
             WHERE   gs_status NOT LIKE 'de%%' AND
-                    gs_attribution = %s AND
-                    sp_id = %s;
-            ''', 
-                (at_id, sp_id)
+                    gs_attribution = %(attrib)s AND
+                    CASE 
+                        WHEN %(size)s > 0 THEN gs_count < %(size)s
+                        ELSE true
+                    END AND
+                    CASE 
+                        WHEN %(sp_id)s > 0 THEN sp_id = %(sp_id)s
+                        ELSE true
+                    END;
+            ''', {'attrib': attrib, 'size': size, 'sp_id': sp_id}
         )
 
         return listify(cursor)
 
 def get_geneset_values(gs_ids):
     """
-    Returns all the geneset_values from the given list of genesets.
+    Returns all gene set values (genes and scores) for the given list of gene set IDs.
 
-    :type gs_ids: list
-    :arg gs_ids: geneset IDs
+    arguments
+        gs_ids: a list of gs_ids
 
-    :ret list: geneset_value objects containing column names as keys
+    returns
+        a list of dicts, each dict contains the gene set id, gene id, and gene score
     """
 
-    if type(gs_ids) == list:
-        gs_ids = tuple(gs_ids)
+    gs_ids = tuplify(gs_ids)
 
     with PooledCursor() as cursor:
 
@@ -789,24 +643,26 @@ def get_geneset_values(gs_ids):
             SELECT  gs_id, ode_gene_id, gsv_value
             FROM    extsrc.geneset_value
             WHERE   gs_id IN %s;
-            ''', 
-                (gs_ids,)
+            ''', (gs_ids,)
         )
 
         return dictify(cursor)
 
-def get_gene_homologs(gene_ids, hom_source='Homologene'):
+def get_gene_homologs(genes, hom_source='Homologene'):
     """
     Returns all homology IDs for the given list of gene IDs.
 
-    :type gene_ids: list
-    :arg gene_ids: ode_gene_ids
+    arguments
+        genes:  list of internal GeneWeaver gene identifiers
+        source: the homology mapping data source to use 
 
-    :ret dict: mapping of ode_gene_ids to homology IDs (hom_id)
+    returns
+        a 1:1 mapping of gene identifiers to homology identifiers
+
+    TODO: might want to consider making this return a 1:N mapping
     """
 
-    if type(gene_ids) == list:
-        gene_ids = tuple(gene_ids)
+    genes = tuplify(genes)
 
     with PooledCursor() as cursor:
 
@@ -816,12 +672,12 @@ def get_gene_homologs(gene_ids, hom_source='Homologene'):
             FROM    extsrc.homology
             WHERE   ode_gene_id IN %s AND
                     hom_source_name = %s;
-            ''', 
-                (gene_ids, hom_source)
+            ''', (gene_ids, hom_source)
         )
 
         return associate(cursor)
 
+## Idk why this is here but can probably be removed?
 def get_homolog_species(hom_ids):
     """
     Returns all the species associated with a given hom_id.
@@ -853,10 +709,11 @@ def get_publication(pmid):
     """
     Returns the GW publication ID associated with the gived PubMed ID.
 
-    :type pmid: int
-    :arg pmid: a PubMed ID
+    arguments
+        pmid: PubMed ID
 
-    :ret int: a GW pub_id, or 0 if one doesn't exist
+    returns
+        a GW publication ID or None one doesn't exist
     """
 
     with PooledCursor() as cursor:
@@ -869,18 +726,15 @@ def get_publication(pmid):
             FROM        production.publication
             WHERE       pub_pubmed = %s
             ORDER BY    pub_id ASC;
-            ''',
-                (pmid,)
+            ''', (pmid,)
+                
         )
 
         result = cursor.fetchone()
 
-        if result:
-            return result[0]
+        return result[0] if result else None
 
-        else:
-            return 0
-
+## I think this can be deleted
 def get_publication_mapping():
     """
     Returns a mapping of PMID -> pub_id for all publications in the DB.
@@ -909,39 +763,35 @@ def get_publication_pmid(pub_id):
         pub_id: int publication ID
 
     returns:
-        a string representing the article's PMID
+        a string representing the article's PMID or None if one doesn't exist
     """
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
-            SELECT      pub_pubmed
-            FROM        production.publication
-            WHERE       pub_id = %s;
-            ''',
-                (pub_id,)
+            SELECT pub_pubmed
+            FROM   production.publication
+            WHERE  pub_id = %s;
+            ''', (pub_id,)
+                
         )
 
         result = cursor.fetchone()
 
-        if result:
-            return result[0]
-
-        else:
-            return 0
+        return result[0] if result else None
 
 def get_geneset_pmids(gs_ids):
     """
-    Returns a mapping of GS IDs -> PMIDs if a publication entry exists for the given
-    gene set. 
+    Returns a 1:1 mapping of gene set identifiers to the PubMed IDs they are associated
+    with.
 
     arguments
         gs_ids: list of gene set IDs to retrieve PMIDs for
 
     returns
         a dict that maps the GS ID to the PMID. If a GS ID doesn't have an associated 
-        publication, then it will be missing from the returned dict.
+        publication, then it will be missing from results.
     """
 
     gs_ids = tuple(gs_ids)
@@ -955,8 +805,8 @@ def get_geneset_pmids(gs_ids):
             INNER JOIN  production.geneset g
             USING       (pub_id)
             WHERE       gs_id IN %s;
-            ''',
-                (gs_ids,)
+            ''', (gs_ids,)
+                
         )
 
         return associate(cursor)
@@ -966,13 +816,14 @@ def get_geneset_metadata(gs_ids):
     Returns names, descriptions, and abbreviations for each geneset in the
     provided list.
 
-    :type gs_ids: list
-    :arg gs_ids: geneset IDs
+    arguments
+        gs_ids: list of gene set IDs to retrieve PMIDs for
 
-    :ret list: dicts with column names as keys
+    returns
+        a list of dicts containing gene set IDs, names, descriptions, and abbreviations
     """
-    if type(gs_ids) == list:
-        gs_ids = tuple(gs_ids)
+
+    gs_ids = tuplify(gs_ids)
 
     with PooledCursor() as cursor:
 
@@ -987,14 +838,11 @@ def get_geneset_metadata(gs_ids):
 
         return dictify(cursor)
 
+## Might get rid of this
 def get_geneset_size(gs_ids):
     """
     Returns geneset sizes for the given genesets.
 
-    :type gs_ids: list
-    :arg gs_ids: geneset IDs
-
-    :ret dict: mapping of gs_id to size (gs_count)
     """
     if type(gs_ids) == list:
         gs_ids = tuple(gs_ids)
@@ -1012,6 +860,7 @@ def get_geneset_size(gs_ids):
 
         return associate(cursor)
 
+## and get rid of this
 def get_geneset_species(gs_ids):
     """
     Returns geneset species IDs for the given genesets.
@@ -1039,57 +888,47 @@ def get_geneset_species(gs_ids):
 
         return associate(cursor)
 
-def get_gene_types():
+def get_gene_types(short=False):
     """
-    Returns a mapping of gene type names to their IDs.
+    Returns a 1:1 mapping of gene type names to their associated type identifier.
+    If short is true, returns "short names" which are condensed or abbreviated names.
 
-    :ret dict: mapping of gdb_name -> gdb_id
-    """
+    arguments
+        short: optional argument to return short names
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  gdb_name, gdb_id
-            FROM    odestatic.genedb;
-            '''
-        )
-
-        return associate(cursor)
-
-def get_short_gene_types():
-    """
-    Returns a mapping of gene type short names to their IDs.
-
-    :ret dict: mapping of gdb_shortname -> gdb_id
+    returns
+        a 1:1 mapping of type names to type IDs
     """
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
-            SELECT  gdb_shortname, gdb_id
+            SELECT  CASE WHEN %s THEN gdb_shortname ELSE gdb_name END, 
+                    gdb_id
             FROM    odestatic.genedb;
-            '''
+            ''', (short,)
         )
 
         return associate(cursor)
 
 def get_platforms():
     """
-    Returns the list of supported microarray platforms as objects containing
-    any and all information associated with a particular platform.
+    Returns the list of GW supported microarray platform and gene expression 
+    technologies.
 
     returns
-        a list of objects whose keys match the platform table
+        a list of objects whose keys match the platform table. These attributes include
+        the unique platform identifier, the platform name, a condensed name, and the GEO
+        GPL identifier.
     """
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
-            SELECT  pf_id, pf_name, pf_shortname, pf_gpl_id
-            FROM    odestatic.platform;
+            SELECT pf_id, pf_name, pf_shortname, pf_gpl_id
+            FROM   odestatic.platform;
             '''
         )
 
@@ -1097,18 +936,19 @@ def get_platforms():
 
 def get_platform_names():
     """
-    Returns the list of supported microarray platforms as a mapping of platform
-    names -> IDs.
+    Returns the list of GW supported microarray platform and gene expression 
+    technologies.
 
-    :ret dict: mapping of pf_name -> pf_id
+    returns
+        1:1 mapping of platform names to identifiers. 
     """
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
-            SELECT  pf_name, pf_id
-            FROM    odestatic.platform;
+            SELECT pf_name, pf_id
+            FROM   odestatic.platform;
             '''
         )
 
@@ -1116,45 +956,43 @@ def get_platform_names():
 
 def get_platform_probes(pf_id, refs):
     """
-    Returns a mapping of probe names (prb_ref_ids from a particular microarray
-    platform) to their IDs.
+    Retrieves internal GW probe identifiers for the given list probe reference
+    identifiers. Requires a platform ID since some expression platforms reuse probe
+    references.
 
-    :type pf_id: int
-    :arg pf_id: platform ID
+    arguments
+        pf_id: platform identifier
+        refs:  list of probe reference identifiers belonging to a platform
 
-    :type refs: list
-    :arg refs: list of probe references/names
-
-    :ret dict: mapping of pf_id -> prb_ref_id
+    returns
+        a 1:1 mapping of probe references to GW probe identifiers for the given platform
     """
 
-    if type(refs) == list:
-        refs = tuple(refs)
+    refs = tuplify(refs)
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
-            SELECT  prb_ref_id, prb_id
-            FROM    odestatic.probe
-            WHERE   pf_id = %s AND
-                    prb_ref_id IN %s;
-            ''',
-                (pf_id, refs)
+            SELECT prb_ref_id, prb_id
+            FROM   odestatic.probe
+            WHERE  pf_id = %s AND
+                   prb_ref_id IN %s;
+            ''', (pf_id, refs)
         )
 
         return associate(cursor)
 
 def get_all_platform_probes(pf_id):
     """
-    Returns a mapping of all current probe names (prb_ref_ids) to their IDs for
-    a particular platform.
+    Returns all the probe reference identifiers (these are provided by the manufacturer
+    and stored in the GW DB) for the given platform.
 
     arguments
         pf_id: platform ID
 
     returns
-        a dict maping of prb_id -> prb_ref_id
+        a list of probe references
     """
 
     with PooledCursor() as cursor:
@@ -1164,17 +1002,21 @@ def get_all_platform_probes(pf_id):
             SELECT  prb_ref_id, prb_id
             FROM    odestatic.probe
             WHERE   pf_id = %s;
-            ''',
-                (pf_id,)
+            ''', (pf_id,)
         )
 
-        return associate(cursor)
+        return listify(cursor)
 
-def get_all_platform_odes(pf_id):
+## Idk if this is ever used anywhere
+def get_all_platform_genes(pf_id):
     """
-    Returns a list of ode_gene_ids that belong to a particular platform.
-    This function chains several identifier types to produce the final list of
-    ode_gene_ids: prb_ref_id -> prb_id -> ode_gene_id
+    For the given platform, retrieves the genes each probe is supposed to map to.
+
+    arguments
+        pf_id: platform ID
+
+    returns
+        the list of genes targeted by all probes for the given platform
     """
 
     with PooledCursor() as cursor:
@@ -1193,17 +1035,18 @@ def get_all_platform_odes(pf_id):
 
 def get_probe2gene(prb_ids):
     """
-    Returns a mapping of prb_ids -> ode_gene_ids for the given set of prb_ids.
+    For the given list of GW probe identifiers, retrieves the genes each probe is 
+    supposed to map to. Retrieves a 1:N mapping since some platforms map a single probe
+    to multiple genes.
 
     arguments
         prb_ids: a list of probe IDs
 
     returns
-        a dict mapping of prb_id -> prb_ref_id
+        a 1:N mapping of probe IDs to genes (ode_gene_ids)
     """
 
-    if type(prb_ids) == list:
-        prb_ids = tuple(prb_ids)
+    prb_ids = tuplify(prb_ids)
 
     with PooledCursor() as cursor:
 
@@ -1212,11 +1055,9 @@ def get_probe2gene(prb_ids):
             SELECT  prb_id, ode_gene_id
             FROM    extsrc.probe2gene
             WHERE   prb_id in %s;
-            ''',
-                (prb_ids,)
+            ''', (prb_ids,)
         )
 
-        #return associate(cursor)
         return associate_duplicate(cursor)
 
 def get_group_by_name(name):
@@ -1237,17 +1078,13 @@ def get_group_by_name(name):
             SELECT  grp_id
             FROM    production.grp
             WHERE   grp_name = %s
-            ''',
-                (name,)
+            ''', (name,)
+                
         )
 
-        result = listify(cursor)
+        return result[0] if result else None
 
-        if not result:  
-            return None
-
-        return result[0]
-
+## I think I can delete this
 def get_projects():
     """
     Returns all projects in the DB.
@@ -1271,12 +1108,14 @@ def get_genesets_by_project(pj_ids):
     """
     Returns all genesets associated with the given project IDs.
 
+    arguments
+        pj_ids: a list of project IDs
+
     returns
-        a mapping of pj_id -> gs_ids
+        a 1:N mapping of project IDs to gene set IDs
     """
 
-    if type(pj_ids) == list:
-        pj_ids = tuple(pj_ids)
+    pj_ids = tuplify(pj_ids)
 
     with PooledCursor() as cursor:
 
@@ -1285,22 +1124,24 @@ def get_genesets_by_project(pj_ids):
             SELECT  pj_id, gs_id
             FROM    production.project2geneset
             WHERE   pj_id IN %s;
-            ''',
-                (pj_ids,)
+            ''', (pj_ids,)
         )
 
         return associate_duplicate(cursor)
 
 def get_geneset_annotations(gs_ids):
     """
-    Returns the set of ontology annotations for each given gs_id.
+    Returns the set of ontology annotations for each given gene set.
 
     arguments
-        gs_ids: list of gs_ids to retrieve annotations for
+        gs_ids: list of gene set ids to retrieve annotations for
 
     returns
-        a dict mapping gs_ids to a list of tuples containing the ont_id and
-        ont_ref_id.
+        a 1:N mapping of gene set IDs to ontology annotations.
+        The value of each key in the returned dict is a list of tuples.
+        Each tuple comprises a single annotation and contains two elements:
+        1, an internal GW ID which represents an ontology term (ont_id);
+        2, the external ontology term id used by the source ontology.
             e.g. {123456: (7890, 'GO:1234567')}
     """
 
@@ -1313,10 +1154,9 @@ def get_geneset_annotations(gs_ids):
             SELECT      go.gs_id, go.ont_id, o.ont_ref_id
             FROM        extsrc.geneset_ontology AS go
             INNER JOIN  extsrc.ontology AS o
-            ON          go.ont_id = o.ont_id
+            ON          USING (ont_id)
             WHERE       gs_id IN %s;
-            ''',
-                (gs_ids,)
+            ''', (gs_ids,)
         )
 
         gs2ann = {}
@@ -1337,51 +1177,22 @@ def get_annotation_by_refs(ont_refs):
     ontology IDs used by GW.
 
     returns
-        a mapping of ont_ref_id -> ont_id
+        a 1:1 mapping of ontology term references to GW ontology IDs
     """
 
-    if type(ont_refs) == list:
-        ont_refs = tuple(ont_refs)
+    ont_refs = tuplify(ont_refs)
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
-            SELECT  ont_ref_id, ont_id
-            FROM    extsrc.ontology
-            WHERE   ont_ref_id IN %s
-            ''',
-                (ont_refs,)
+            SELECT ont_ref_id, ont_id
+            FROM   extsrc.ontology
+            WHERE  ont_ref_id IN %s
+            ''', (ont_refs,)
         )
 
         return associate(cursor)
-
-def get_annotation_by_ref(ont_ref):
-    """
-    Returns the internal ontology ID used by GW for a single ontology reference
-    ID.
-
-    returns
-        an ont_id
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  ont_id
-            FROM    extsrc.ontology
-            WHERE   ont_ref_id = %s
-            ''',
-                (ont_ref,)
-        )
-
-        result = cursor.fetchone()
-
-        if not result:
-            return None
-
-        return result[0]
 
 def get_ontologies():
     """
@@ -1397,8 +1208,8 @@ def get_ontologies():
 
         cursor.execute(
             '''
-            SELECT  ontdb_id, ontdb_name, ontdb_prefix, ontdb_date
-            FROM    odestatic.ontologydb;
+            SELECT ontdb_id, ontdb_name, ontdb_prefix, ontdb_date
+            FROM   odestatic.ontologydb;
             '''
         )
 
@@ -1420,24 +1231,21 @@ def get_ontdb_id(name):
 
         cursor.execute(
             '''
-            SELECT  ontdb_id
-            FROM    odestatic.ontologydb
-            WHERE   LOWER(ontdb_name) = LOWER(%s);
-            ''',
-                (name,)
+            SELECT ontdb_id
+            FROM   odestatic.ontologydb
+            WHERE  LOWER(ontdb_name) = LOWER(%s);
+            ''', (name,)
+                
         )
 
-        if not cursor.rowcount:
-            return None
-
-        return cursor.fetchone()[0]
+        return None if not cursor.rowcount else cursor.fetchone()[0]
 
 def get_ontology_terms_by_ontdb(ontdb_id):
     """
-    Retrieves all ontology terms for the given ontdb_id.
+    Retrieves all ontology terms associated with the given ontology.
 
     args
-        ontdb_id: the ontologydb ID
+        ontdb_id: the ID representing an ontology
 
     returns
         a list of dicts whose fields match the columns in the ontology table.
@@ -1447,31 +1255,14 @@ def get_ontology_terms_by_ontdb(ontdb_id):
 
         cursor.execute(
             '''
-            SELECT  *
-            FROM    extsrc.ontology
-            WHERE   ontdb_id = %s;
-            ''',
-                (ontdb_id,)
+            SELECT *
+            FROM   extsrc.ontology
+            WHERE  ontdb_id = %s;
+            ''', (ontdb_id,)
         )
 
         return dictify(cursor)
 
-
-def get_user_map():
-    """
-    returns
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  usr_id, usr_email
-            FROM    usr;
-            '''
-        )
-
-        return associate(cursor)
 
         ## INSERTS ##
         #############
