@@ -50,8 +50,8 @@ class PooledCursor(object):
             self.cursor = None
 
 
-## These are helper functions used to modify the results of a query and return the
-## results as convenient objects
+        ## UTILITY ##
+        #############
 
 def asciify(s):
     """
@@ -231,7 +231,8 @@ def commit():
 
     conn.commit()
 
-## These are the query wrappers
+        ## SELECTIONS ##
+        ################
 
 def get_species():
     """
@@ -351,7 +352,7 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
         gdb_id: an optional gene type identifier used to limit the ID mapping process
 
     returns
-        a 1:1 mapping of reference identifiers to GW IDs
+        a bijection of reference identifiers to GW IDs
     """
 
     refs = tuplify(refs)
@@ -409,7 +410,7 @@ def get_species_genes(sp_id):
         sp_id: species identifier
 
     returns
-        a 1:1 mapping of reference identifiers to GW IDs
+        a bijection of reference identifiers to GW IDs
     """
 
     with PooledCursor() as cursor:
@@ -471,7 +472,7 @@ def get_preferred_gene_refs(genes):
         genes: a list of internal GW gene identifiers (ode_gene_id)
 
     returns
-        a 1:1 mapping of GW IDs to reference identifiers
+        a bijection of GW IDs to reference identifiers
     """
 
     genes = tuplify(genes)
@@ -657,7 +658,7 @@ def get_gene_homologs(genes, hom_source='Homologene'):
         source: the homology mapping data source to use 
 
     returns
-        a 1:1 mapping of gene identifiers to homology identifiers
+        a bijection of gene identifiers to homology identifiers
 
     TODO: might want to consider making this return a 1:N mapping
     """
@@ -783,7 +784,7 @@ def get_publication_pmid(pub_id):
 
 def get_geneset_pmids(gs_ids):
     """
-    Returns a 1:1 mapping of gene set identifiers to the PubMed IDs they are associated
+    Returns a bijection of gene set identifiers to the PubMed IDs they are associated
     with.
 
     arguments
@@ -890,14 +891,14 @@ def get_geneset_species(gs_ids):
 
 def get_gene_types(short=False):
     """
-    Returns a 1:1 mapping of gene type names to their associated type identifier.
+    Returns a bijection of gene type names to their associated type identifier.
     If short is true, returns "short names" which are condensed or abbreviated names.
 
     arguments
         short: optional argument to return short names
 
     returns
-        a 1:1 mapping of type names to type IDs
+        a bijection of type names to type IDs
     """
 
     with PooledCursor() as cursor:
@@ -940,7 +941,7 @@ def get_platform_names():
     technologies.
 
     returns
-        1:1 mapping of platform names to identifiers. 
+        a bijection of platform names to identifiers. 
     """
 
     with PooledCursor() as cursor:
@@ -965,7 +966,7 @@ def get_platform_probes(pf_id, refs):
         refs:  list of probe reference identifiers belonging to a platform
 
     returns
-        a 1:1 mapping of probe references to GW probe identifiers for the given platform
+        a bijection of probe references to GW probe identifiers for the given platform
     """
 
     refs = tuplify(refs)
@@ -1177,7 +1178,7 @@ def get_annotation_by_refs(ont_refs):
     ontology IDs used by GW.
 
     returns
-        a 1:1 mapping of ontology term references to GW ontology IDs
+        a bijection of ontology term references to GW ontology IDs
     """
 
     ont_refs = tuplify(ont_refs)
@@ -1264,8 +1265,8 @@ def get_ontology_terms_by_ontdb(ontdb_id):
         return dictify(cursor)
 
 
-        ## INSERTS ##
-        #############
+        ## INSERTIONS ##
+        ################
 
 def insert_geneset(gs):
     """
@@ -1700,33 +1701,14 @@ def insert_geneset_ontology(gs_id, ont_id, ref_type):
         ## UPDATES ##
         #############
 
-def update_geneset_status(gs_id, status):
+def update_geneset_status(gsid, status='normal'):
     """
     Update the status of a geneset. The only statuses currently used are
     'normal', 'deleted', and 'deprecated'.
 
-    :ret int: the number of rows affected by the update
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            UPDATE  production.geneset
-            SET     gs_status = %s
-            WHERE   gs_id = %s;
-            ''', 
-                (status, gs_id)
-        )
-
-        return cursor.rowcount
-
-def update_geneset_date(gsid):
-    """
-    Resets the "last updated" date for a gene set to now.
-
     arguments
-        gsid: GS ID for the gene set being changed
+        gsid:   gene set ID
+        status: gene set status
 
     returns
         the number of rows affected by the update
@@ -1736,11 +1718,10 @@ def update_geneset_date(gsid):
 
         cursor.execute(
             '''
-            UPDATE  production.geneset
-            SET     gs_updated = NOW()
-            WHERE   gs_id = %s;
-            ''', 
-                (gsid,)
+            UPDATE production.geneset
+            SET    gs_status = %s
+            WHERE  gs_id = %s;
+            ''', (status, gsid)
         )
 
         return cursor.rowcount
@@ -1750,86 +1731,94 @@ def update_geneset_dates(gsids):
     Resets the "last updated" date for many gene sets to now.
 
     arguments
-        gsids: list or tuple of gsids to update
+        gsids: list of gsids to update
 
     returns
         the number of rows affected by the update
     """
-    if type(gsids) == list:
-        gsids = tuple(gsids)
+
+    gsids = tuplify(gsids)
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
-            UPDATE  production.geneset
-            SET     gs_updated = NOW()
-            WHERE   gs_id IN %s;
-            ''', 
-                (gsids,)
+            UPDATE production.geneset
+            SET    gs_updated = NOW()
+            WHERE  gs_id IN %s;
+            ''', (gsids,)
         )
 
         return cursor.rowcount
 
-def update_geneset_count(gs_id, gs_count):
+def update_geneset_size(gsid, size):
     """
     Update the size of a geneset.
 
-    :ret int: the number of rows affected by the update
+    arguments
+        gsid: gene set ID 
+        size: new size of the gene set
+
+    returns
+        the number of rows affected by the update
     """
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
-            UPDATE  production.geneset
-            SET     gs_count = %s
-            WHERE   gs_id = %s;
-            ''', 
-                (gs_count, gs_id)
+            UPDATE production.geneset
+            SET    gs_count = %s
+            WHERE  gs_id = %s;
+            ''', (size, gsid)
         )
 
         return cursor.rowcount
 
 def update_ontology_term_by_ref(ref_id, name, description, children, parents):
     """
-    Updates an ontology term using its reference ID.
+    Updates an ontology term using its reference identifier. The reference identifier
+    is supplied by the ontology resource (e.g. GO:12345, MP:000123).
 
     args
-        ref_id:         the ontology term reference ID
-        name:           the name of the ontology term
-        description:    a description of the term
-        children:       the number of immediate child terms this term has
-        parents:        the number of immediate parent terms this term has
+        ref_id:      the ontology term reference ID
+        name:        the name of the ontology term
+        description: a description of the term
+        children:    the number of immediate child terms this term has
+        parents:     the number of immediate parent terms this term has
+
+    returns
+        the internal GW ontology ID of the term that was updated
     """
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
-            UPDATE      extsrc.ontology
-            SET         ont_name = %s,
-                        ont_description = %s,
-                        ont_children = %s,
-                        ont_parents = %s
-            WHERE       ont_ref_id = %s
-            RETURNING   ont_id;
-            ''',
-                (name, description, children, parents, ref_id)
-        )
+            UPDATE    extsrc.ontology
+            SET       ont_name = CASE WHEN %(name)s 
+                                 THEN %(name)s 
+                                 ELSE ont_name,
+                      ont_description = CASE WHEN %(description)s 
+                                        THEN %(description)s ELSE 
+                                        ont_description,
+                      ont_children = CASE WHEN %(children)s 
+                                        THEN %(children)s ELSE 
+                                        ont_children,
+                      ont_parents = CASE WHEN %(parents)s 
+                                        THEN %(parents)s ELSE 
+                                        ont_parents,
+            WHERE     ont_ref_id = %(ref_id)s
+            RETURNING ont_id;
+            ''', {
+                    'name': name, 
+                    'description': description, 
+                    'children': children, 
+                    'parents': parents, 
+                    'ref_id': ref_id
+        })
 
-        if cursor.rowcount == 0:
-            return None
-        
-        return cursor.fetchone()[0]
-
-def commit():
-    """
-    Commit any DB changes. Must be called if the connection is not set to
-    autocommit.
-    """
-
-    conn.commit()
+        return None if not cursor.rowcount else cursor.fetchone()[0]
 
 
     ## DELETES ##
@@ -1837,13 +1826,15 @@ def commit():
 
 def delete_jaccard(lid, rid):
     """
-    Deletes an entry from the jaccard table.
+    Deletes an entry from the jaccard cache tabletable.
 
     arguments
         lid: left gs_id
         rid: right gs_id
     """
 
+    ## There's a table constrait specifying that the left ID should be smaller than the
+    ## right ID
     if lid >= rid:
         lid, rid = rid, lid
 
@@ -1888,12 +1879,12 @@ def delete_ontology_relations(ont_ids):
 
         return cursor.rowcount
 
-    ## VARIANT SCHEMA ADDITIONS ##
-    ##############################
+    ## VARIANT RELATED ##
+    #####################
 
 def get_variant_gene_type():
     """
-    Returns the ID for the variant gene type.
+    Returns the gene type ID for the variant gene type.
     None is returned if the variant gene type can't be found.
     """
 
@@ -1904,12 +1895,7 @@ def get_variant_gene_type():
             '''
         )
         
-        result = cursor.fetchone()
-
-        if not result:
-            return None
-
-        return result[0]
+        return None if not cursor.rowcount else cursor.fetchone()[0]
 
 def get_genome_builds():
     """
@@ -1927,27 +1913,27 @@ def get_genome_builds():
 
 def get_genome_builds_by_ref(build):
     """
-    Retrieves the list of genome builds supported by GW.
+    Retrieves the genome build ID for the given genome build reference identifier.
 
     returns
-        a list of objects representing rows from the genome_build table
+        a gb_id or None if no ID exists for the given reference
     """
 
     with PooledCursor() as cursor:
 
         cursor.execute(
             '''
-            SELECT gb_id, gb_ref_id FROM odestatic.genome_build WHERE gb_ref_id = %s;
-        ''', (build,))
+            SELECT gb_id
+            FROM   odestatic.genome_build 
+            WHERE  gb_ref_id = %s;
+            ''', (build,)
+        )
 
-        return dictify(cursor)
+        return None if not cursor.rowcount else cursor.fetchone()[0]
 
+## I'm not sure if this is needed
 def get_variant_type_by_effect(effect):
     """
-    Retrieves the list of genome builds supported by GW.
-
-    returns
-        a list of objects representing rows from the genome_build table
     """
 
     with PooledCursor() as cursor:
@@ -1964,11 +1950,22 @@ def get_variant_type_by_effect(effect):
 
 def get_variants_by_refs(refs, build):
     """
-    Retrieves a mapping of var_ref_id -> var_id using the given set of variant
-    references.
+    Retrieves a 1:1 mapping of variant reference identifiers--which are canonical
+    reference SNPs (rsIDs)--and internal GW variant IDs.
+
+    arguments
+        refs:  a list of reference SNP identifiers
+        build: genome build
+
+    returns
+        a bijection of reference IDs to GW variant IDs
     """
 
-    refs = tuple(map(str, refs))
+    ## Reference SNPs are prefixed with 'rs', we remove these if they exist
+    refs = map(lambda s: str(s)[2:] if str(s)[:2] == 'rs' else s, refs)
+    ## Convert to integers since we store rsIDs as ints
+    refs = map(int, refs)
+    refs = tuplify(refs)
 
     with PooledCursor() as cursor:
 
@@ -1991,26 +1988,25 @@ def get_variants_by_refs(refs, build):
 
 def get_variant_odes_by_refs(refs, build):
     """
-    Returns ode_gene_ids for a set of variants using the given variant
-    references. Maps variant reference IDs (rsID) to internal GW variant IDs
-    (var_id), then maps each var_id to the relevant ode_gene_id.
+    Retrieves a 1:1 mapping of variant reference identifiers--which are canonical
+    reference SNPs (rsIDs)--and internal GW variant gene IDs (ode_gene_id).
+    Variant gene IDs are stored in the gene table and are used to map genetic 
+    variants to gene features through intragenic, upstream, downstream, or regulatory
+    associations.
+
+    arguments
+        refs:  a list of reference SNP identifiers
+        build: genome build
+
+    returns
+        a bijection of reference IDs to GW variant gene IDs
     """
 
-    new_refs = []
-
-    ## Throw out potentially bad variant IDs by trying to convert the reference
-    ## ID to an integer. We store only store the integer portion of the rsID so
-    ## this will fail for non-reference SNPs
-    for r in refs:
-        try:
-            int(r)
-
-            new_refs.append(r)
-
-        except ValueError:
-            pass
-
-    refs = tuple(map(str, new_refs))
+    ## Reference SNPs are prefixed with 'rs', we remove these if they exist
+    refs = map(lambda s: str(s)[2:] if str(s)[:2] == 'rs' else s, refs)
+    ## Convert to integers since we store rsIDs as ints
+    refs = map(int, refs)
+    refs = tuplify(refs)
 
     with PooledCursor() as cursor:
 
@@ -2023,6 +2019,10 @@ def get_variant_odes_by_refs(refs, build):
             INNER JOIN odestatic.genome_build gb
             USING      (gb_id)
             INNER JOIN extsrc.gene g
+            --
+            ---- We convert to a varchar so we can take advantage of the ode_ref_id
+            ---- index on the gene table
+            --
             ON         v.var_id :: varchar = g.ode_ref_id
             WHERE      gb.gb_ref_id = %s AND
                        g.sp_id = gb.sp_id AND
@@ -2034,20 +2034,14 @@ def get_variant_odes_by_refs(refs, build):
 
 def get_variant_refs_by_odes(odes, build):
     """
-    Returns the reference IDs (rsID) for the given ode_gene_ids that represents a
-    variant.
-    Maps ode_gene_ids to the internal GW variant IDs (var_id) then to the
-    variant reference.
+    Returns a mapping of canonical reference SNP identifier (rsID) to the given 
+    variant gene IDs (ode_gene_id). 
 
     arguments
         odes: ode_gene_id list
-        build: string specifying the genome build to use (e.g. hg38)
 
         returns
-            a mapping of ode_gene_ids to variant reference IDs. If a var_ref_id
-            could not be found for a given ode_gene_id, it will be missing from
-            the list of returned associations. Similarly, if the genome build
-            given is incorrect, no mapping will be returned.
+            a bijection of variant gene IDs to variant reference identifiers
     """
 
     odes = tuple(odes)
@@ -2110,11 +2104,11 @@ def is_variant_set(gsids):
     Determines if the given gene sets are variant sets.
 
     arguments
-        gsids: an iterable containing a series of GS IDs
+        gsids: list of gene set IDs
 
     returns
-        a GSID-bool bijection, as a dict, where the bool is true if the set is a variant
-        set and false otherwise.
+        a GSID-bool bijection, as a dict, where the bool is true if the set is a 
+        variant set and false otherwise.
     """
 
     gsids = tuplify(gsids)
@@ -2148,6 +2142,7 @@ def is_variant_set(gsids):
         return associate(cursor)
 
 
+## Can get rid of all the insert variant functions
 def insert_variant(var):
     """
     Inserts a new variant into the database. This function does not check to
