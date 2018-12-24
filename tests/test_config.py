@@ -4,15 +4,13 @@
 ## desc: Unit tests for config.py.
 ## auth: TR
 
-import pytest
-
 from gwlib import config
 
 config.load_config('tests/test.cfg')
 
 def test_config_db():
 
-    assert config.get_db('database', cfg) == 'test-db'
+    assert config.get_db('database') == 'test-db'
     assert config.get_db('host') == '127.0.0.1'
     assert config.get_db('user') == 'test-user'
     assert config.get_db('password') == 'test-password'

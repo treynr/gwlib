@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name='gwlib', 
+    name='gwlib',
     version='1.0.0',
     description='GeneWeaver python library',
     packages=['gwlib']

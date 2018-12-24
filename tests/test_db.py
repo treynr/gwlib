@@ -4,11 +4,10 @@
 ## desc: Unit tests for db.py.
 ## auth: TR
 
-import pytest
 import warnings
 
 ## Ignore binary wheel warnings from psycopg2
-warnings.filterwarnings('ignore',module='psycopg2')
+warnings.filterwarnings('ignore', module='psycopg2')
 
 from gwlib import config
 from gwlib import db
@@ -24,7 +23,7 @@ def test_connect():
         config.get_db('user')
     )
 
-    assert success == True
+    assert success
 
 def test_get_species():
 
@@ -90,7 +89,7 @@ def test_get_gene_ids_1():
 
     res = db.get_gene_ids(['MGI:108511', 'HGNC:7189', 'ENSRNOG00000018700'])
 
-    assert res == { 
+    assert res == {
         'MGI:108511': 5105,
         'HGNC:7189': 66945,
         'ENSRNOG00000018700': 124272
@@ -114,7 +113,7 @@ def test_get_gene_ids_4():
 
     assert res == {'MOBP': 66945}
 
-def test_get_gene_ids_4():
+def test_get_gene_ids_5():
 
     res = db.get_gene_ids(['mobp'], gdb_id=7, sp_id=2)
 
@@ -197,7 +196,7 @@ def test_get_geneset_ids_by_attribute_2():
     assert len(res) == 1
     assert res == [185236]
 
-def test_get_geneset_ids_by_attribute_2():
+def test_get_geneset_ids_by_attribute_3():
 
     res = db.get_geneset_ids_by_attribute(attrib=6, sp_id=2)
 

@@ -3,7 +3,7 @@
 ## file: batch.py
 ## desc: Batch file reader and writer. This is a variant of the batch parser
 ##       found in the GW2 sauce. It works the same way but decouples most of
-##       the DB code and adds support for specifying tiers, attributions, 
+##       the DB code and adds support for specifying tiers, attributions,
 ##       and user IDs in the batch file.
 ## auth: Baker
 ##       TR
@@ -13,18 +13,13 @@
 from collections import Counter as mset
 from collections import defaultdict as dd
 from copy import deepcopy
-import datetime
 import json
-import random
 import re
 import urllib2 as url2
 
 from ncbi import get_pubmed_articles
 import db
 import util
-
-        ## UTILITY ##
-        #############
 
 def get_pubmed_info(pmid):
     """
@@ -50,9 +45,7 @@ def get_pubmed_info(pmid):
             sum_res = url2.urlopen(sum_url).read()
             abs_res = url2.urlopen(abs_url).read()
 
-        except url2.HTTPError as e:
-            #print 'Error! Failed to retrieve a set of UniGene IDs from NCBI:'
-            #print e
+        except url2.HTTPError:
             continue
 
         break
@@ -70,15 +63,6 @@ def get_pubmed_info(pmid):
     try:
         pub = sum_res[u'result']
 
-        ## fucking unicode errors
-        #for k, v in pub.items():
-        #    k = k.encode('ascii', 'ignore')
-
-        #    if isinstance(v, str):
-        #        v = v.encode('ascii', 'ignore')
-
-        #    pub[k] = v
-
         pub = pub[pmid]
 
         pinfo['pub_title'] = pub['title']
@@ -91,8 +75,6 @@ def get_pubmed_info(pmid):
 
         ## Author struct {name, authtype, clustid}
         for auth in pub['authors']:
-            #name = auth[u'name'].encode('ascii', 'ignore')
-            #pinfo[u'pub_authors'].append(name)
             pinfo[u'pub_authors'].append(auth['name'])
 
         pinfo['pub_authors'] = ','.join(pinfo['pub_authors'])
@@ -127,7 +109,7 @@ def calculate_str_similarity(s1, s2):
     Calculates the percent similarity between two strings. Meant to be a
     replacement for PHP's similar_text function, which old GeneWeaver uses
     to determine the right microarray platform to use.
-    This algorithm uses digram intersections determine percent similarity. 
+    This algorithm uses digram intersections determine percent similarity.
     It is calculated as:
 
     sim(s1, s2) = (2 * intersection(digrams(s1), digrams(s2)) /
@@ -147,9 +129,6 @@ def calculate_str_similarity(s1, s2):
 
     return (2 * len(intersect)) / float(len(sd1) + len(sd2))
 
-        ## READER ##
-        ############
-
 class BatchReader(object):
     """
     Class used to read and parse batch geneset files.
@@ -158,17 +137,17 @@ class BatchReader(object):
         filepath:   string indicating the location of a batch file
         genesets:   list of dicts representing the parsed genesets, each dict
                     has fields corresponding to columns in the geneset table
-        errors:     list of strings indicating critical errors found during 
+        errors:     list of strings indicating critical errors found during
                     parsing
-        warns:      list of strings indicating non-crit errors found during 
+        warns:      list of strings indicating non-crit errors found during
                     parsing
 
     private
         _parse_set:         the gene set currently being parsed
         _pub_map:           PMID -> pub_id mapping
         _symbol_cache:      a series of nested dicts used to map species
-                            specific gene symbols to GW identifiers. The 
-                            structure is: 
+                            specific gene symbols to GW identifiers. The
+                            structure is:
                                 sp_id -> gdb_id -> ode_ref_id -> ode_gene_id
         _annotation_cache:  mapping of ontology term IDs -> ont_ids
     """
@@ -230,7 +209,7 @@ class BatchReader(object):
            'gs_gene_id_type' not in self._parse_set or\
            'gs_threshold_type' not in self._parse_set or\
            'sp_id' not in self._parse_set:
-               return False
+                return False
 
         return True
 
@@ -244,7 +223,7 @@ class BatchReader(object):
             Q-Value < 0.05
             0.40 < Correlation < 0.50
             6.0 < Effect < 22.50
-           
+
         The numbers listed above are only examples and can vary depending on
         geneset. If those numbers can't be parsed for some reason, default values
         (e.g. 0.05) are used. The score types are converted into a numeric
@@ -260,7 +239,7 @@ class BatchReader(object):
             s: string containing score type and possibly threshold value(s)
 
         returns
-            a tuple containing the threshold type and threshold value. 
+            a tuple containing the threshold type and threshold value.
                 i.e. (gs_threshold_type, gs_threshold)
         """
 
@@ -296,7 +275,7 @@ class BatchReader(object):
 
         elif s.lower().find('correlation') != -1:
             ## This regex doesn't work on some input. It doesn't properly parse
-            ## integers (only floats) and you must have two threshold values 
+            ## integers (only floats) and you must have two threshold values
             ## (you can't do something like Correlation < 5.0).
             ## Too lazy to change it though since this score type isn't widely
             ## used.
@@ -310,7 +289,7 @@ class BatchReader(object):
 
                 self.warns.append(
                     'Invalid threshold. Using -0.75 < Correlation < 0.75'
-                ) 
+                )
 
         elif s.lower().find('effect') != -1:
             ## Same comments as the correlation regex
@@ -347,8 +326,8 @@ class BatchReader(object):
         ## similarity to find the best possible platform in our DB. The
         ## best match above a threshold is used. This has to be done
         ## since naming conventions for the same platform can vary.
-        ## All other gene types are easier to handle; they are 
-        ## retrieved from the DB and their ID types are negated. 
+        ## All other gene types are easier to handle; they are
+        ## retrieved from the DB and their ID types are negated.
         if gtype.lower().find('microarray') != -1:
             ## Remove 'microarray' text
             gtype = gtype[len('microarray'):].strip()
@@ -365,7 +344,7 @@ class BatchReader(object):
                     best = sim
                     gtype = plat
 
-            ## Convert to the parsed gene ID type to an actual ID. 
+            ## Convert to the parsed gene ID type to an actual ID.
             ## gene will now be an integer
             gtype = platforms.get(gtype, 'unknown')
 
@@ -378,8 +357,8 @@ class BatchReader(object):
         ## Otherwise the user specified one of the gene types, not a
         ## microarray platform
         ## :IMPORTANT: Gene ID representation is fucking ass backwards.
-        ## Expression platforms have positive (+) gs_gene_id_types 
-        ## while all other types (e.g. symbols) should have negative 
+        ## Expression platforms have positive (+) gs_gene_id_types
+        ## while all other types (e.g. symbols) should have negative
         ## (-) integer ID types despite their gdb_ids being positive.
         else:
             gtype = gtype.lower()
@@ -398,7 +377,7 @@ class BatchReader(object):
         Parses a batch file according to the format listed on
         http://geneweaver.org/index.php?action=manage&cmd=batchgeneset
         The results (gene set objects) and any errors or warnings are stored in
-        their respective class attributes. 
+        their respective class attributes.
 
         arguments
             lns: list of strings, one for each line in the batch file
@@ -425,7 +404,7 @@ class BatchReader(object):
         for i in range(len(lns)):
             lns[i] = lns[i].strip()
 
-            ## These are special (dev only) additions to the batch file that 
+            ## These are special (dev only) additions to the batch file that
             ## allow tiers, user IDs, and attributions to be specified. These
             ## are only used in the public resource uploader scripts.
             #
@@ -456,7 +435,7 @@ class BatchReader(object):
             elif lns[i][:1] == ':':
                 ## This checks to see if we've already read, parsed, and stored
                 ## some gene values. If we have, that means we can save the
-                ## currently parsed geneset, clear out any REQUIRED fields before 
+                ## currently parsed geneset, clear out any REQUIRED fields before
                 ## we do more parsing, and begin parsing this new set.
                 if self._parse_set['values']:
                     self.__reset_parsed_set()
@@ -490,7 +469,7 @@ class BatchReader(object):
 
                 ttype, threshold = self.__parse_score_type(lns[i][1:].strip())
 
-                ## An error ocurred 
+                ## An error ocurred
                 if not ttype:
                     ## Appends the line number to the last error which should
                     ## be the error indicating an unknown score type was used
@@ -531,7 +510,7 @@ class BatchReader(object):
                 gene = lns[i][1:].strip()
                 gene = self.__parse_gene_type(gene, platforms, gene_types)
 
-                ## An error ocurred 
+                ## An error ocurred
                 if not gene:
                     ## Appends the line number to the last error which should
                     ## be the error indicating an invalid gene type
@@ -539,7 +518,6 @@ class BatchReader(object):
 
                 else:
                     self._parse_set['gs_gene_id_type'] = gene
-                            
 
             ## Lines beginning with 'P ' are PubMed IDs (OPTIONAL)
             elif (lns[i][:2] == 'P ') and (len(lns[i].split('\t')) == 1):
@@ -618,7 +596,7 @@ class BatchReader(object):
             ## Who knows what the fuck this line is, just skip it
             else:
                 self.warns.append(
-                    'LINE %s: Skipping line with unknown identifiers (%s)' % 
+                    'LINE %s: Skipping line with unknown identifiers (%s)' %
                     ((i + 1), lns[i])
                 )
 
@@ -677,7 +655,7 @@ class BatchReader(object):
     def __map_gene_identifiers(self, gs):
         """
         Maps the user provided gene symbols (ode_ref_ids) to ode_gene_ids.
-        The mapped genes are added to the gene set object in the 
+        The mapped genes are added to the gene set object in the
         'geneset_values' key. This added key is a list of triplets containing
         the user uploaded symbol, the ode_gene_id, and the value.
             e.g. [('mobp', 1318, 0.03), ...]
@@ -699,26 +677,19 @@ class BatchReader(object):
 
         ## Check to see if we have cached copies of these references. If we do,
         ## we don't have to make any DB calls or build the mapping
-        #if self._symbol_cache[sp_id][gene_type]:
-        #    pass
 
         ## Negative numbers indicate normal gene types (found in genedb) while
         ## positive numbers indicate expression platforms and more work :(
         if gs['gs_gene_id_type'] < 0:
 
-            #print self._symbol_cache
-            #print self._symbol_cache[sp_id]
-            #print self._symbol_cache[sp_id][gene_type]
             ## Check to see if we have IDs for these refs in the cache
             miss = set(gene_refs) - set(self._symbol_cache[sp_id][gene_type].keys())
 
             ## Some are missing, so we need to get them from the DB
             if len(miss) > 0:
                 ## A mapping of (symbols) ode_ref_ids -> ode_gene_ids. The
-                ## ode_ref_ids returned by this function have all been lower 
+                ## ode_ref_ids returned by this function have all been lower
                 ## cased.
-                #ref2ode = db.get_gene_ids_by_spid_type(sp_id, -gene_type)
-                #ref2ode = db.get_gene_ids_by_refs(gene_refs, sp_id, -gene_type)
 
                 ## Variants are handled using a slightly different function
                 if -gene_type == db.get_variant_gene_type():
@@ -742,7 +713,7 @@ class BatchReader(object):
                     ## Should check to see if the genome build is valid...
                     ref2ode = db.get_variant_odes_by_refs(gene_refs, gs['genome_build'])
 
-                    ## The variant ode retrieval function returns variant 
+                    ## The variant ode retrieval function returns variant
                     ## references as integers, we convert them back to strings
                     ref2ode = dict(
                         map(lambda t: (str(t[0]), t[1]), ref2ode.items())
@@ -750,14 +721,12 @@ class BatchReader(object):
                 else:
                     ref2ode = db.get_gene_ids_by_refs(gene_refs, sp_id, -gene_type)
 
-                #self._symbol_cache[sp_id][gene_type] = dd(int, ref2ode)
                 self._symbol_cache[sp_id][gene_type].update(ref2ode)
 
         ## It's a damn expression platform :/
         else:
             ## This is a mapping of (symbols) prb_ref_ids -> prb_ids for the
             ## given platform
-            #ref2prbid = db.get_platform_probes(gene_type, gene_refs)
             ref2prbid = db.get_all_platform_probes(gene_type)
             ## This is a mapping of prb_ids -> ode_gene_ids
             prbid2ode = db.get_probe2gene(ref2prbid.values())
@@ -772,7 +741,6 @@ class BatchReader(object):
 
         ## duplicate detection
         dups = dd(str)
-        total = 0
 
         for ref, value in gs['values']:
 
@@ -860,7 +828,7 @@ class BatchReader(object):
 
     def parse_batch_file(self):
         """
-        Parses a batch file to completion. 
+        Parses a batch file to completion.
 
         arguments
             fp: a string, the filepath to a batch file
@@ -876,9 +844,6 @@ class BatchReader(object):
         if not self.filepath:
             self.errors('No batch file was provided.')
             return []
-
-        ## list of gs_ids successfully added to the db
-        added = []  
 
         self.__parse_batch_syntax(self.__read_file())
 
@@ -915,9 +880,6 @@ class BatchReader(object):
             self._pub_map = db.get_publication_mapping()
 
         found = filter(lambda g: g['pmid'] in self._pub_map, self.genesets)
-        not_found = filter(
-            lambda g: g['pmid'] not in self._pub_map, self.genesets
-        )
 
         for gs in found:
             gs['pub_id'] = self._pub_map[gs['pmid']]
@@ -1006,7 +968,7 @@ class BatchWriter(object):
         arguments
             filepath: path to the batch file output
             genesets: gene sets to be formatted as a batch file
-            is_dev:   output hidden dev attributes/syntax  
+            is_dev:   output hidden dev attributes/syntax
             no_db:    don't use the DB to map various DB specific IDs and table
                       features to their plain text equivalent, just output the
                       user given gene set values as-is to the batch file
@@ -1080,7 +1042,7 @@ class BatchWriter(object):
             self.errors.append('Invalid threshold type')
 
         return serial
-    
+
     def __format_species(self, sp_id):
         """
         """
@@ -1227,12 +1189,11 @@ class BatchWriter(object):
 
         return '> ' + str(uri)
 
-
     def __passes_sanity_check(self, gs):
         """
         Checks to make sure the required portions of gene set metadata are
         present. Whether or not this metadata is valid is determined by the
-        __format* functions. If descriptors are missing the function sets 
+        __format* functions. If descriptors are missing the function sets
         the appropriate errors.
         """
 
@@ -1291,7 +1252,6 @@ class BatchWriter(object):
 
         return passes
 
-
     def serialize(self, versioning=''):
         """
         Formats the list of genesets into a single batch file and outputs the
@@ -1312,7 +1272,6 @@ class BatchWriter(object):
         species = None
         gene_type = None
         tier = None
-        groups = None
         access = None
         pmid = None
         usr_id = None
@@ -1409,41 +1368,5 @@ class BatchWriter(object):
         return True
 
 if __name__ == '__main__':
-    from optparse import OptionParser
-    from sys import argv
-
-    # cmd line shit
-    usage = 'usage: %s [options] <batch_file>' % argv[0]
-    parse = OptionParser(usage=usage)
-
-    parse.add_option('-u', action='store', type='string', dest='usr_id',
-                     help='Specify a usr_id for newly added genesets')
-    parse.add_option('-c', action='store', type='string', dest='cur_id',
-                     help='Specify a cur_id for newly added genesets')
-
-    (opts, args) = parse.parse_args(argv)
-
-    if len(args) < 2:
-        print '[!] You need to provide a batch geneset file.'
-        parse.print_help()
-        print ''
-        exit()
-
-    if not opts.usr_id:
-        opts.usr_id = 0
-    if not opts.cur_id:
-        opts.cur_id = 5
-
-    ## Where all the magic happens
-    stuff = parse_batch_file(args[1], opts.cur_id, opts.usr_id)
-
-    print '[+] The following genesets were added:'
-    print ', '.join(map(str, stuff[0]))
-    print ''
-
-    if stuff[1]:
-        print '[!] There were some non-critical errors with the batch file:'
-        for er in stuff[1]:
-            print er
-        print ''
+    pass
 
