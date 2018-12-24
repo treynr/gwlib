@@ -7,11 +7,10 @@
 
 from collections import namedtuple
 import sys
-import itertools as it
 import logging
 
 Colors = namedtuple(
-    'Colors', 
+    'Colors',
     'green red white yellow ltgreen ltred ltwhite ltyellow bold normal'
 )
 Colors.__new__.__defaults__ = ('',) * 10
@@ -44,7 +43,7 @@ class ConsoleFilter(logging.Filter):
     def filter(self, record):
 
         ## I don't think I should be doing this but whatever lol
-        if record.levelno == 10: 
+        if record.levelno == 10:
             record.msg = '{}{}'.format(colors.ltwhite, record.msg)
         elif record.levelno == 20:
             record.msg = '{}{}'.format(colors.ltgreen, record.msg)

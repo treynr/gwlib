@@ -8,11 +8,7 @@
 
 from collections import OrderedDict as od
 from psycopg2.extras import execute_values
-from sys import maxint
-import os
 import psycopg2
-import random
-import warnings
 
 ## Global connection variable
 conn = None
@@ -49,9 +45,38 @@ class PooledCursor(object):
 
             self.cursor = None
 
-
         ## UTILITY ##
         #############
+
+def connect(host, db, user, password, port=5432):
+    """
+    Connect to a database using the given credentials.
+
+    arguments
+        host:     DB host/server
+        db:       DB name
+        user:     user name
+        password: password
+        port:     optional port the DB server is using
+
+    returns
+        a tuple indicating success. The first element is a boolean which indicates
+        whether the connection was successful or not. In the case of an unsuccessful
+        connection, the second element contains the error or exception.
+    """
+
+    global conn
+
+    try:
+        conn = psycopg2.connect(
+            host=host, dbname=db, user=user, password=password, port=port
+        )
+
+    except Exception as e:
+
+        return (False, e)
+
+    return (True, '')
 
 def asciify(s):
     """
@@ -73,7 +98,7 @@ def asciify(s):
 
 def dictify(cursor, ordered=False):
     """
-    Converts each row returned by the cursor into a list of dicts, where  
+    Converts each row returned by the cursor into a list of dicts, where
     each key is a column name and each value is whatever is returned by the
     query.
 
@@ -86,7 +111,7 @@ def dictify(cursor, ordered=False):
     """
 
     dlist = []
-    
+
     for row in cursor:
         ## Prevents unicode type errors from cropping up later. Convert to
         ## ascii, ignore any conversion errors.
@@ -117,7 +142,7 @@ def dictify_and_map(cursor):
     """
 
     d = {}
-    
+
     for row in cursor:
         ## Prevents unicode type errors from cropping up later. Convert to
         ## ascii, ignore any conversion errors.
@@ -193,7 +218,7 @@ def associate(cursor):
 def associate_duplicate(cursor):
     """
     Like associate(), creates a simple mapping from all the rows returned by
-    the cursor. The first tuple member serves as the key and the rest are the 
+    the cursor. The first tuple member serves as the key and the rest are the
     values. This function correctly handles duplicate entries.
 
     arguments
@@ -231,12 +256,12 @@ def commit():
 
     conn.commit()
 
-        ## SELECTIONS ##
-        ################
+    ## SELECTIONS ##
+    ################
 
 def get_species():
     """
-    Returns a species name and ID mapping for all the species currently 
+    Returns a species name and ID mapping for all the species currently
     supported by GW.
 
     returns
@@ -256,7 +281,7 @@ def get_species():
 
 def get_species_with_taxid():
     """
-    Returns a species name and column mapping for all the species currently 
+    Returns a species name and column mapping for all the species currently
     supported by GW.
 
     returns
@@ -267,12 +292,12 @@ def get_species_with_taxid():
 
         cursor.execute(
             '''
-            SELECT  sp_name, sp_id, sp_taxid
-            FROM    odestatic.species;
+            SELECT sp_name, sp_id, sp_taxid
+            FROM   odestatic.species;
             '''
         )
 
-        return dictify_and_map(cursor)
+        return dictify(cursor)
 
 def get_species_by_taxid():
     """
@@ -286,13 +311,14 @@ def get_species_by_taxid():
 
         cursor.execute(
             '''
-            SELECT  sp_taxid, sp_id
-            FROM    odestatic.species;
+            SELECT sp_taxid, sp_id
+            FROM   odestatic.species;
             '''
         )
 
         return associate(cursor)
 
+## Might delete this
 def get_species_gene_id():
     """
     Returns a species name and the ID corresponding to which type of gene
@@ -306,8 +332,8 @@ def get_species_gene_id():
 
         cursor.execute(
             '''
-            SELECT  sp_name, sp_ref_gdb_id
-            FROM    odestatic.species;
+            SELECT sp_name, sp_ref_gdb_id
+            FROM   odestatic.species;
             '''
         )
 
@@ -326,8 +352,8 @@ def get_attributions():
 
         cursor.execute(
             '''
-            SELECT  at_abbrev, at_id
-            FROM    odestatic.attribution;
+            SELECT at_abbrev, at_id
+            FROM   odestatic.attribution;
             '''
         )
 
@@ -335,8 +361,8 @@ def get_attributions():
 
 def get_gene_ids(refs, sp_id=None, gdb_id=None):
     """
-    Given a set of external reference IDs, this returns a mapping of 
-    reference gene identifiers to the IDs used internally by GeneWeaver (ode_gene_id). 
+    Given a set of external reference IDs, this returns a mapping of
+    reference gene identifiers to the IDs used internally by GeneWeaver (ode_gene_id).
     An optional species id can be provided to limit gene results by species.
     An optional gene identifier type can be provided to limit mapping by ID type (useful
     when identifiers from different resources overlap).
@@ -362,22 +388,22 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
         cursor.execute(
             '''
             WITH symbol_type AS (
-                SELECT gdb_id 
-                FROM   odestatic.genedb 
+                SELECT gdb_id
+                FROM   odestatic.genedb
                 WHERE  gdb_name = 'Gene Symbol'
                 LIMIT  1
             )
             SELECT  ode_ref_id, ode_gene_id
             FROM    extsrc.gene
             WHERE   ode_ref_id IN %(refs)s AND
-                    CASE 
+                    CASE
                         WHEN %(spid)s IS NOT NULL AND %(gdbid)s IS NOT NULL
                         THEN sp_id = %(spid)s AND gdb_id = %(gdbid)s
 
                         WHEN %(spid)s IS NOT NULL
-                        THEN sp_id = %(spid)s 
+                        THEN sp_id = %(spid)s
 
-                        WHEN %(gdbid)s IS NOT NULL 
+                        WHEN %(gdbid)s IS NOT NULL
                         THEN gdb_id = %(gdbid)s
 
                         ELSE true
@@ -431,7 +457,7 @@ def get_species_genes(sp_id):
 def get_gene_refs(genes, type_id=None):
     """
     The inverse of the get_gene_refs() function. For the given list of internal GW gene
-    identifiers, this function returns a mapping of internal to external 
+    identifiers, this function returns a mapping of internal to external
     (e.g. MGI, HGNC, Ensembl) reference identifiers.
     The mapping is 1:N since many external references may exist for a single, condensed
     GW identifier.
@@ -450,14 +476,14 @@ def get_gene_refs(genes, type_id=None):
 
         cursor.execute(
             '''
-            SELECT  ode_gene_id, ode_ref_id
+            SELECT  DISTINCT ON (ode_gene_id, ode_ref_id) ode_gene_id, ode_ref_id
             FROM    extsrc.gene
             WHERE   ode_gene_id IN %(genes)s AND
-                    CASE 
-                        WHEN %(id_type)s IS NOT NULL THEN gdb_id = %(id_type)s
+                    CASE
+                        WHEN %(type_id)s IS NOT NULL THEN gdb_id = %(type_id)s
                         ELSE true
                     END;
-            ''', {'genes': genes, 'id_type': id_type}
+            ''', {'genes': genes, 'type_id': type_id}
         )
 
         return associate_duplicate(cursor)
@@ -485,8 +511,7 @@ def get_preferred_gene_refs(genes):
             FROM    extsrc.gene
             WHERE   ode_pref = TRUE AND
                     ode_gene_id IN %s;
-            ''', 
-                (genes,)
+            ''', (genes,)
         )
 
         return associate(cursor)
@@ -550,9 +575,9 @@ def get_genesets(gs_ids):
 
         return dictify(cursor, ordered=True)
 
-def get_geneset_ids_by_tier(tiers=[1,2,3,4,5], size=0, sp_id=0):
+def get_geneset_ids_by_tier(tiers=[1, 2, 3, 4, 5], size=0, sp_id=0):
     """
-    Returns a list of normal (i.e. their status is not deleted or deprecated) 
+    Returns a list of normal (i.e. their status is not deleted or deprecated)
     gene set IDs that belong in a particular tier or set of tiers. Allows filtering of
     returned sets based on size and species.
 
@@ -575,22 +600,22 @@ def get_geneset_ids_by_tier(tiers=[1,2,3,4,5], size=0, sp_id=0):
             FROM    production.geneset
             WHERE   gs_status NOT LIKE 'de%%' AND
                     cur_id IN %(tiers)s AND
-                    CASE 
+                    CASE
                         WHEN %(size)s > 0 THEN gs_count < %(size)s
                         ELSE true
                     END AND
-                    CASE 
+                    CASE
                         WHEN %(sp_id)s > 0 THEN sp_id = %(sp_id)s
                         ELSE true
                     END;
-            ''', {'tiers':tiers, 'size': size, 'sp_id': sp_id}
+            ''', {'tiers': tiers, 'size': size, 'sp_id': sp_id}
         )
 
         return listify(cursor)
 
 def get_geneset_ids_by_attribute(attrib, size=0, sp_id=0):
     """
-    Returns a list of normal (i.e. their status is not deleted or deprecated) 
+    Returns a list of normal (i.e. their status is not deleted or deprecated)
     geneset IDs that belong to a particular attribution group. Allows filtering of
     returned sets based on size and species.
 
@@ -611,11 +636,11 @@ def get_geneset_ids_by_attribute(attrib, size=0, sp_id=0):
             FROM    production.geneset
             WHERE   gs_status NOT LIKE 'de%%' AND
                     gs_attribution = %(attrib)s AND
-                    CASE 
+                    CASE
                         WHEN %(size)s > 0 THEN gs_count < %(size)s
                         ELSE true
                     END AND
-                    CASE 
+                    CASE
                         WHEN %(sp_id)s > 0 THEN sp_id = %(sp_id)s
                         ELSE true
                     END;
@@ -641,13 +666,19 @@ def get_geneset_values(gs_ids):
 
         cursor.execute(
             '''
-            SELECT  gs_id, ode_gene_id, gsv_value
-            FROM    extsrc.geneset_value
-            WHERE   gs_id IN %s;
+            SELECT gs_id, ode_gene_id, gsv_value
+            FROM   extsrc.geneset_value
+            WHERE  gs_id IN %s;
             ''', (gs_ids,)
         )
 
-        return dictify(cursor)
+        results = dictify(cursor)
+
+        ## Convert Decimal values to floats
+        for i in range(len(results)):
+            results[i]['gsv_value'] = float(results[i]['gsv_value'])
+
+        return results
 
 def get_gene_homologs(genes, hom_source='Homologene'):
     """
@@ -655,12 +686,13 @@ def get_gene_homologs(genes, hom_source='Homologene'):
 
     arguments
         genes:  list of internal GeneWeaver gene identifiers
-        source: the homology mapping data source to use 
+        source: the homology mapping data source to use
 
     returns
         a bijection of gene identifiers to homology identifiers
 
-    TODO: might want to consider making this return a 1:N mapping
+    TODO: might want to consider making this return a 1:N mapping to take into account
+          paralogs, etc.
     """
 
     genes = tuplify(genes)
@@ -669,11 +701,11 @@ def get_gene_homologs(genes, hom_source='Homologene'):
 
         cursor.execute(
             '''
-            SELECT  ode_gene_id, hom_id
-            FROM    extsrc.homology
-            WHERE   ode_gene_id IN %s AND
-                    hom_source_name = %s;
-            ''', (gene_ids, hom_source)
+            SELECT ode_gene_id, hom_id
+            FROM   extsrc.homology
+            WHERE  ode_gene_id IN %s AND
+                   hom_source_name = %s;
+            ''', (genes, hom_source)
         )
 
         return associate(cursor)
@@ -700,8 +732,7 @@ def get_homolog_species(hom_ids):
             SELECT  hom_id, sp_id
             FROM    extsrc.homology
             WHERE   hom_id IN %s;
-            ''', 
-                (hom_ids,)
+            ''', (hom_ids,)
         )
 
         return associate_duplicate(cursor)
@@ -728,7 +759,6 @@ def get_publication(pmid):
             WHERE       pub_pubmed = %s
             ORDER BY    pub_id ASC;
             ''', (pmid,)
-                
         )
 
         result = cursor.fetchone()
@@ -775,7 +805,6 @@ def get_publication_pmid(pub_id):
             FROM   production.publication
             WHERE  pub_id = %s;
             ''', (pub_id,)
-                
         )
 
         result = cursor.fetchone()
@@ -791,7 +820,7 @@ def get_geneset_pmids(gs_ids):
         gs_ids: list of gene set IDs to retrieve PMIDs for
 
     returns
-        a dict that maps the GS ID to the PMID. If a GS ID doesn't have an associated 
+        a dict that maps the GS ID to the PMID. If a GS ID doesn't have an associated
         publication, then it will be missing from results.
     """
 
@@ -807,7 +836,6 @@ def get_geneset_pmids(gs_ids):
             USING       (pub_id)
             WHERE       gs_id IN %s;
             ''', (gs_ids,)
-                
         )
 
         return associate(cursor)
@@ -833,8 +861,7 @@ def get_geneset_metadata(gs_ids):
             SELECT  gs_id, gs_name, gs_description, gs_abbreviation
             FROM    production.geneset
             WHERE   gs_id IN %s;
-            ''',
-                (gs_ids,)
+            ''', (gs_ids,)
         )
 
         return dictify(cursor)
@@ -855,8 +882,7 @@ def get_geneset_size(gs_ids):
             SELECT  gs_id, gs_count
             FROM    production.geneset
             WHERE   gs_id IN %s;
-            ''',
-                (gs_ids,)
+            ''', (gs_ids,)
         )
 
         return associate(cursor)
@@ -883,8 +909,7 @@ def get_geneset_species(gs_ids):
             SELECT  gs_id, sp_id
             FROM    production.geneset
             WHERE   gs_id IN %s;
-            ''',
-                (gs_ids,)
+            ''', (gs_ids,)
         )
 
         return associate(cursor)
@@ -905,7 +930,7 @@ def get_gene_types(short=False):
 
         cursor.execute(
             '''
-            SELECT  CASE WHEN %s THEN gdb_shortname ELSE gdb_name END, 
+            SELECT  CASE WHEN %s THEN gdb_shortname ELSE gdb_name END,
                     gdb_id
             FROM    odestatic.genedb;
             ''', (short,)
@@ -915,7 +940,7 @@ def get_gene_types(short=False):
 
 def get_platforms():
     """
-    Returns the list of GW supported microarray platform and gene expression 
+    Returns the list of GW supported microarray platform and gene expression
     technologies.
 
     returns
@@ -937,11 +962,11 @@ def get_platforms():
 
 def get_platform_names():
     """
-    Returns the list of GW supported microarray platform and gene expression 
+    Returns the list of GW supported microarray platform and gene expression
     technologies.
 
     returns
-        a bijection of platform names to identifiers. 
+        a bijection of platform names to identifiers.
     """
 
     with PooledCursor() as cursor:
@@ -1036,7 +1061,7 @@ def get_all_platform_genes(pf_id):
 
 def get_probe2gene(prb_ids):
     """
-    For the given list of GW probe identifiers, retrieves the genes each probe is 
+    For the given list of GW probe identifiers, retrieves the genes each probe is
     supposed to map to. Retrieves a 1:N mapping since some platforms map a single probe
     to multiple genes.
 
@@ -1080,10 +1105,9 @@ def get_group_by_name(name):
             FROM    production.grp
             WHERE   grp_name = %s
             ''', (name,)
-                
         )
 
-        return result[0] if result else None
+        return None if not cursor.rowcount else cursor.fetchone()[0]
 
 ## I think I can delete this
 def get_projects():
@@ -1197,7 +1221,7 @@ def get_annotation_by_refs(ont_refs):
 
 def get_ontologies():
     """
-    Returns the list of ontologies supported by GeneWeaver for use with gene 
+    Returns the list of ontologies supported by GeneWeaver for use with gene
     set annotations.
 
     returns
@@ -1222,7 +1246,7 @@ def get_ontdb_id(name):
 
     args
         name: ontology name
-        
+
     returns
         an int ID for the corresponding ontologydb entry. None is returned if
         the ontology name is not found in the database.
@@ -1236,7 +1260,6 @@ def get_ontdb_id(name):
             FROM   odestatic.ontologydb
             WHERE  LOWER(ontdb_name) = LOWER(%s);
             ''', (name,)
-                
         )
 
         return None if not cursor.rowcount else cursor.fetchone()[0]
@@ -1264,13 +1287,12 @@ def get_ontology_terms_by_ontdb(ontdb_id):
 
         return dictify(cursor)
 
-
         ## INSERTIONS ##
         ################
 
 def insert_geneset(gs):
     """
-    Inserts a new geneset into the database. 
+    Inserts a new geneset into the database.
 
     :type gs: dict
     :arg gs: each key in the dict corresponds to a column in the geneset table
@@ -1320,30 +1342,29 @@ def insert_geneset(gs):
                 gs_attribution, gs_uri)
 
             VALUES
-                
-                (%(usr_id)s, %(file_id)s, %(gs_name)s, %(gs_abbreviation)s, 
-                %(pub_id)s, %(cur_id)s, %(gs_description)s, %(sp_id)s, 
-                %(gs_count)s, %(gs_threshold_type)s, %(gs_threshold)s, 
-                %(gs_groups)s, %(gs_gene_id_type)s, %(gs_created)s, 
+
+                (%(usr_id)s, %(file_id)s, %(gs_name)s, %(gs_abbreviation)s,
+                %(pub_id)s, %(cur_id)s, %(gs_description)s, %(sp_id)s,
+                %(gs_count)s, %(gs_threshold_type)s, %(gs_threshold)s,
+                %(gs_groups)s, %(gs_gene_id_type)s, %(gs_created)s,
                 %(gs_attribution)s, %(gs_uri)s)
-            
+
             RETURNING gs_id;
-            ''', 
-                gs
+            ''', gs
         )
 
         return cursor.fetchone()[0]
 
 def insert_geneset_value(gs_id, gene_id, value, name, threshold):
     """
-    Inserts a new geneset_value into the database. 
+    Inserts a new geneset_value into the database.
 
     arguments
         gs_id:      gene set ID
         gene_id:    ode_gene_id
         value:      value associated with this gene
         name:       a gene name or symbol (typically an ode_ref_id)
-        threshold:  a threshold value for the gene set 
+        threshold:  a threshold value for the gene set
 
     returns
         the gs_id associated with this gene set value
@@ -1361,12 +1382,11 @@ def insert_geneset_value(gs_id, gene_id, value, name, threshold):
                 gsv_value_list, gsv_in_threshold, gsv_hits, gsv_date)
 
             VALUES
-                
+
                 (%s, %s, %s, %s, %s, %s, 0, NOW())
 
             RETURNING gs_id;
-            ''', 
-                (gs_id, gene_id, value, [name], [float(value)], threshold)
+            ''', (gs_id, gene_id, value, [name], [float(value)], threshold)
         )
 
         return cursor.fetchone()[0]
@@ -1405,12 +1425,11 @@ def insert_gene(gene_id, ref_id, gdb_id, sp_id, pref='f'):
                 (ode_gene_id, ode_ref_id, gdb_id, sp_id, ode_pref, ode_date)
 
             VALUES
-                
+
                 (%s, %s, %s, %s, %s, %s, NOW());
 
             RETURNING (ode_gene_id, ode_ref_id);
-            ''', 
-                (gene_id, ref_id, gdb_id, sp_id, pref)
+            ''', (gene_id, ref_id, gdb_id, sp_id, pref)
         )
 
         return cursor.fetchone()[0]
@@ -1436,21 +1455,20 @@ def insert_publication(pub):
                 pub_volume, pub_pages, pub_month, pub_year, pub_pubmed)
 
             VALUES
-                
-                (%(pub_authors)s, %(pub_title)s, %(pub_abstract)s, 
-                %(pub_journal)s, %(pub_volume)s, %(pub_pages)s, %(pub_month)s, 
+
+                (%(pub_authors)s, %(pub_title)s, %(pub_abstract)s,
+                %(pub_journal)s, %(pub_volume)s, %(pub_pages)s, %(pub_month)s,
                 %(pub_year)s, %(pub_pubmed)s)
 
             RETURNING pub_id;
-            ''', 
-                pub
+            ''', pub
         )
 
         return cursor.fetchone()[0]
 
 def insert_file(size, contents, comments):
     """
-    Inserts a new file into the database. 
+    Inserts a new file into the database.
 
     arguments
         size:       size of the file in bytes
@@ -1471,12 +1489,11 @@ def insert_file(size, contents, comments):
                 (file_size, file_contents, file_comments, file_created)
 
             VALUES
-                
+
                 (%s, %s, %s, NOW())
 
             RETURNING file_id;
-            ''', 
-                (size, contents, comments)
+            ''', (size, contents, comments)
         )
 
         return cursor.fetchone()[0]
@@ -1503,8 +1520,7 @@ def insert_platform(platform):
             VALUES
                 (%(pf_gpl_id)s, %(pf_shortname)s, %(pf_name)s, %(sp_id)s, NOW())
             RETURNING pf_id;
-            ''', 
-                platform
+            ''', platform
         )
 
         return cursor.fetchone()[0]
@@ -1530,8 +1546,7 @@ def insert_probe(prb_ref, pf_id):
             VALUES
                 (%s, %s)
             RETURNING prb_id;
-            ''', 
-                (prb_ref, pf_id)
+            ''', (prb_ref, pf_id)
         )
 
         return cursor.fetchone()[0]
@@ -1557,8 +1572,7 @@ def insert_probe2gene(prb_id, ode_id):
             VALUES
                 (%s, %s)
             RETURNING prb_id;
-            ''', 
-                (prb_id, ode_id)
+            ''', (prb_id, ode_id)
         )
 
         return cursor.fetchone()[0]
@@ -1585,8 +1599,7 @@ def insert_jaccard(lid, rid, jac):
                 (gs_id_left, gs_id_right, jac_value)
             VALUES
                 (%s, %s, %s);
-            ''', 
-                (lid, rid, jac)
+            ''', (lid, rid, jac)
         )
 
         return cursor.rowcount
@@ -1612,8 +1625,7 @@ def insert_ontologydb_entry(name, prefix):
             VALUES
                 (%s, %s, NOW())
             RETURNING ontdb_id;
-            ''', 
-                (name, prefix)
+            ''', (name, prefix)
         )
 
         return cursor.fetchone()[0]
@@ -1638,15 +1650,14 @@ def insert_ontology(ref_id, name, desc, children, parents, ontdb_id):
         cursor.execute(
             '''
             INSERT INTO extsrc.ontology (
-                ont_ref_id, ont_name, ont_description, ont_children, 
+                ont_ref_id, ont_name, ont_description, ont_children,
                 ont_parents, ontdb_id
 
             ) VALUES (
                 %s, %s, %s, %s, %s, %s
 
             ) RETURNING ont_id;
-            ''', 
-                (ref_id, name, desc, children, parents, ontdb_id)
+            ''', (ref_id, name, desc, children, parents, ontdb_id)
         )
 
         return cursor.fetchone()[0]
@@ -1671,8 +1682,7 @@ def insert_ontology_relation(left, right, relation):
                 (left_ont_id, right_ont_id, or_type)
             VALUES
                 (%s, %s, %s);
-            ''', 
-                (left, right, relation)
+            ''', (left, right, relation)
         )
 
 def insert_geneset_ontology(gs_id, ont_id, ref_type):
@@ -1694,8 +1704,7 @@ def insert_geneset_ontology(gs_id, ont_id, ref_type):
                 (gs_id, ont_id, gso_ref_type)
             VALUES
                 (%s, %s, %s);
-            ''', 
-                (gs_id, ont_id, ref_type)
+            ''', (gs_id, ont_id, ref_type)
         )
 
         ## UPDATES ##
@@ -1756,7 +1765,7 @@ def update_geneset_size(gsid, size):
     Update the size of a geneset.
 
     arguments
-        gsid: gene set ID 
+        gsid: gene set ID
         size: new size of the gene set
 
     returns
@@ -1796,30 +1805,31 @@ def update_ontology_term_by_ref(ref_id, name, description, children, parents):
         cursor.execute(
             '''
             UPDATE    extsrc.ontology
-            SET       ont_name = CASE WHEN %(name)s 
-                                 THEN %(name)s 
+            SET       ont_name = CASE WHEN %(name)s
+                                 THEN %(name)s
                                  ELSE ont_name,
-                      ont_description = CASE WHEN %(description)s 
-                                        THEN %(description)s ELSE 
+                      ont_description = CASE WHEN %(description)s
+                                        THEN %(description)s ELSE
                                         ont_description,
-                      ont_children = CASE WHEN %(children)s 
-                                        THEN %(children)s ELSE 
+                      ont_children = CASE WHEN %(children)s
+                                        THEN %(children)s ELSE
                                         ont_children,
-                      ont_parents = CASE WHEN %(parents)s 
-                                        THEN %(parents)s ELSE 
+                      ont_parents = CASE WHEN %(parents)s
+                                        THEN %(parents)s ELSE
                                         ont_parents,
             WHERE     ont_ref_id = %(ref_id)s
             RETURNING ont_id;
-            ''', {
-                    'name': name, 
-                    'description': description, 
-                    'children': children, 
-                    'parents': parents, 
-                    'ref_id': ref_id
-        })
+            ''',
+            {
+                'name': name,
+                'description': description,
+                'children': children,
+                'parents': parents,
+                'ref_id': ref_id
+            }
+        )
 
         return None if not cursor.rowcount else cursor.fetchone()[0]
-
 
     ## DELETES ##
     #############
@@ -1846,8 +1856,7 @@ def delete_jaccard(lid, rid):
             FROM   extsrc.geneset_jaccard
             WHERE  gs_id_left = %s AND
                    gs_id_right = %s;
-            ''', 
-                (lid, rid)
+            ''', (lid, rid)
         )
 
         return cursor.rowcount
@@ -1857,7 +1866,7 @@ def delete_ontology_relations(ont_ids):
     Deletes all ontology relations for the given set of ont_ids.
 
     args
-        ont_ids: list of ont_ids 
+        ont_ids: list of ont_ids
 
     returns
         the number of rows deleted
@@ -1873,8 +1882,7 @@ def delete_ontology_relations(ont_ids):
             FROM   extsrc.ontology_relation
             WHERE  left_ont_id IN %s OR
                    right_ont_id IN %s;
-            ''', 
-                (ont_ids, ont_ids)
+            ''', (ont_ids, ont_ids)
         )
 
         return cursor.rowcount
@@ -1894,7 +1902,7 @@ def get_variant_gene_type():
             SELECT gdb_id FROM odestatic.genedb WHERE gdb_name = 'Variant';
             '''
         )
-        
+
         return None if not cursor.rowcount else cursor.fetchone()[0]
 
 def get_genome_builds():
@@ -1924,7 +1932,7 @@ def get_genome_builds_by_ref(build):
         cursor.execute(
             '''
             SELECT gb_id
-            FROM   odestatic.genome_build 
+            FROM   odestatic.genome_build
             WHERE  gb_ref_id = %s;
             ''', (build,)
         )
@@ -1940,11 +1948,11 @@ def get_variant_type_by_effect(effect):
 
         cursor.execute(
             '''
-            SELECT * 
+            SELECT *
             FROM   odestatic.variant_type
             WHERE  vt_effect = %s;
-            ''',
-                (effect,))
+            ''', (effect,)
+        )
 
         return dictify(cursor)
 
@@ -1976,8 +1984,8 @@ def get_variants_by_refs(refs, build):
             INNER JOIN extsrc.variant_info vi
             USING      (vri_id)
             WHERE      vi.gb_id = (
-                            SELECT gb_id 
-                            FROM   odestatic.genome_build 
+                            SELECT gb_id
+                            FROM   odestatic.genome_build
                             WHERE  gb_ref_id = %s
                         ) AND
                         v.var_ref_id IN %s;
@@ -1990,7 +1998,7 @@ def get_variant_odes_by_refs(refs, build):
     """
     Retrieves a 1:1 mapping of variant reference identifiers--which are canonical
     reference SNPs (rsIDs)--and internal GW variant gene IDs (ode_gene_id).
-    Variant gene IDs are stored in the gene table and are used to map genetic 
+    Variant gene IDs are stored in the gene table and are used to map genetic
     variants to gene features through intragenic, upstream, downstream, or regulatory
     associations.
 
@@ -2034,8 +2042,8 @@ def get_variant_odes_by_refs(refs, build):
 
 def get_variant_refs_by_odes(odes, build):
     """
-    Returns a mapping of canonical reference SNP identifier (rsID) to the given 
-    variant gene IDs (ode_gene_id). 
+    Returns a mapping of canonical reference SNP identifier (rsID) to the given
+    variant gene IDs (ode_gene_id).
 
     arguments
         odes: ode_gene_id list
@@ -2078,7 +2086,7 @@ def roll_up_variants_from_odes(odes, mapping=('Variant',)):
     returns
         a mapping of variant ode_gene_ids to gene ode_gene_ids. If the variant is not
         found in a gene, or no mapping exists, then it will be missing from the dict of
-        returned associations. Similarly, if the genome build given is incorrect, no 
+        returned associations. Similarly, if the genome build given is incorrect, no
         mapping will be returned.
     """
 
@@ -2089,7 +2097,7 @@ def roll_up_variants_from_odes(odes, mapping=('Variant',)):
 
         cursor.execute(
             '''
-            SELECT DISTINCT ON (hom_source_id, ode_gene_id) 
+            SELECT DISTINCT ON (hom_source_id, ode_gene_id)
                    hom_source_id, ode_gene_id
             FROM   extsrc.homology h
             WHERE  hom_source_id IN %s AND
@@ -2107,7 +2115,7 @@ def is_variant_set(gsids):
         gsids: list of gene set IDs
 
     returns
-        a GSID-bool bijection, as a dict, where the bool is true if the set is a 
+        a GSID-bool bijection, as a dict, where the bool is true if the set is a
         variant set and false otherwise.
     """
 
@@ -2161,14 +2169,13 @@ def insert_variant(var):
 
             VALUES
 
-                (%(var_ref_id)s, %(var_allele)s, %(var_chromosome)s, 
-                %(var_position)s, %(vt_id)s, %(var_ref_cur)s, 
+                (%(var_ref_id)s, %(var_allele)s, %(var_chromosome)s,
+                %(var_position)s, %(vt_id)s, %(var_ref_cur)s,
                 %(var_obs_alleles)s, %(var_ma)s, %(var_maf)s, %(var_clinsig)s,
                 %(gb_id)s)
-            
+
             RETURNING var_id;
-            ''', 
-                var
+            ''', var
         )
 
         return cursor.fetchone()[0]
@@ -2177,7 +2184,8 @@ def insert_variants_and_info(variants):
     """
     """
     with PooledCursor() as cursor:
-        execute_values(cursor,
+        execute_values(
+            cursor,
             '''
             INSERT INTO extsrc.variant
                 (
@@ -2189,9 +2197,9 @@ def insert_variants_and_info(variants):
             variants,
             '''
             (%(rsid)s, %(allele)s, %(observed)s, %(ma)s, %(maf)s, %(effect)s,
-            %(clinsig)s, 
+            %(clinsig)s,
             (
-                INSERT INTO extsrc.variant_info 
+                INSERT INTO extsrc.variant_info
                     (vri_chromosome, vri_position, gb_id)
                 VALUES
                     (%(chrom)s, %(coord)s, %(build)s)
@@ -2204,7 +2212,8 @@ def insert_variants(variants):
     """
     """
     with PooledCursor() as cursor:
-        execute_values(cursor,
+        execute_values(
+            cursor,
             '''
             INSERT INTO extsrc.variant
                 (
@@ -2225,9 +2234,10 @@ def insert_variant_infos(variants):
     """
     """
     with PooledCursor() as cursor:
-        execute_values(cursor,
+        execute_values(
+            cursor,
             '''
-            INSERT INTO extsrc.variant_info 
+            INSERT INTO extsrc.variant_info
                     (vri_chromosome, vri_position, gb_id)
             VALUES %s
             RETURNING vri_id;
@@ -2246,9 +2256,9 @@ def insert_variant_info(variant):
     with PooledCursor() as cursor:
         cursor.execute(
             '''
-            INSERT INTO extsrc.variant_info 
+            INSERT INTO extsrc.variant_info
                 (vri_chromosome, vri_position, gb_id)
-            VALUES 
+            VALUES
                 (%(chrom)s, %(coord)s, %(build)s)
             RETURNING vri_id;
             ''', variant
@@ -2273,32 +2283,18 @@ def insert_variant_with_id(var):
 
             VALUES
 
-                (%(var_id)s, %(var_ref_id)s, %(var_allele)s, %(var_chromosome)s, 
-                %(var_position)s, %(vt_id)s, %(var_ref_cur)s, 
+                (%(var_id)s, %(var_ref_id)s, %(var_allele)s, %(var_chromosome)s,
+                %(var_position)s, %(vt_id)s, %(var_ref_cur)s,
                 %(var_obs_alleles)s, %(var_ma)s, %(var_maf)s, %(var_clinsig)s,
                 %(gb_id)s)
-            
+
             RETURNING var_id;
-            ''', 
-                var
+            ''', var
         )
 
         return cursor.fetchone()[0]
 
 if __name__ == '__main__':
 
-    ## Simple tests
-    ## Selections
-    #print get_species()
-    #print get_attributions()
-    #print get_gene_ids(['Daxx', 'Mobp', 'Ccr4'])
-    #print get_gene_ids_by_species(['Daxx', 'Mobp', 'Ccr4'], 1)
-    #print get_gene_refs([83882, 85988])
-    #print get_gene_refs_by_type([83882, 85988], 7)
-    #print get_preferred_gene_refs([83882, 85988])
-    #print get_genesets_by_tier(tiers=[3], size=10)
-    #print get_genesets_by_attribute(11, size=2)
-    #print get_geneset_values([720])
-    #print get_gene_homologs([135283, 135642])
     pass
 

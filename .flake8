@@ -1,0 +1,17 @@
+[flake8]
+
+exclude = 
+    ## Ignore the .git directory
+    .git
+
+ignore =
+    ## Too many leading #...
+    E266,
+    ## Expected 2 blank lines...
+    E302,
+    ## Expected 2 blank lines...
+    E305,
+    ## Line too long... our max length is 90 characters
+    E501,
+    ## Blank line at end of file...
+    W391

@@ -1,6 +1,9 @@
 ## Ignore the following shit:
 #
 
+__pycache__/**
+__pycache__
+
 ## super secret stuffs
 *.cfg
 
