@@ -16,7 +16,7 @@ CREATE TABLE odestatic.species (
 
     sp_id    SERIAL NOT NULL,
     sp_name  VARCHAR NOT NULL,
-    sp_taxid INTEGER NOT NULL,
+    sp_taxid INTEGER NOT NULL
 );
 
 CREATE TABLE odestatic.attribution (
@@ -32,7 +32,7 @@ CREATE TABLE odestatic.genedb (
     gdb_id          INTEGER NOT NULL,
     gdb_name        VARCHAR NOT NULL,
     sp_id           INTEGER,
-    gdb_shortname   VARCHAR,
+    gdb_shortname   VARCHAR
 );
 
 -- Minimal gene table, 5 of 7 columns represented
@@ -42,7 +42,7 @@ CREATE TABLE extsrc.gene (
     ode_ref_id       VARCHAR NOT NULL,
     gdb_id           INTEGER,
     sp_id            INTEGER,
-    ode_pref         BOOLEAN DEFAULT FALSE NOT NULL,
+    ode_pref         BOOLEAN DEFAULT FALSE NOT NULL
 );
 
 -- Minimal gene table, 13 of 27 columns represented
