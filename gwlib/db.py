@@ -700,7 +700,7 @@ def get_geneset_values(gs_ids):
 
         return results
 
-def get_gene_homologs(genes, hom_source='Homologene'):
+def get_gene_homologs(genes, source='Homologene'):
     """
     Returns all homology IDs for the given list of gene IDs.
 
@@ -725,7 +725,7 @@ def get_gene_homologs(genes, hom_source='Homologene'):
             FROM   extsrc.homology
             WHERE  ode_gene_id IN %s AND
                    hom_source_name = %s;
-            ''', (genes, hom_source)
+            ''', (genes, source)
         )
 
         return associate(cursor)
