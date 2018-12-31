@@ -1,0 +1,27 @@
+
+language: python
+
+python:
+    - 2.7
+
+services:
+    - postgresql
+
+addons:
+    postgreqsl: 10
+    apt:
+        packages:
+            - postgresql-10
+            - postgresql-client-10
+
+## Install testing requirements: psycopg2, flake8, and pytest
+install:
+    - pip install -r tests/requirements.txt
+
+## Setup the test database
+before_script:
+    - (cd tests && ./setup-db.sh)
+
+script:
+    - flake8 gwlib
+    - PYTHONPATH=. pytest tests -v
