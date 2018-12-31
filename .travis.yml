@@ -1,10 +1,11 @@
 
-sudo: true
-
 language: python
 
 python:
     - 2.7
+
+services:
+    - postgresql
 
 addons:
     postgreqsl: 10
@@ -16,7 +17,8 @@ addons:
 env:
     global:
         - PGPORT=5433
-        - PGUSER=travis
+        - PGUSER=postgres
+        - PGHOST=127.0.0.1
 
 ## Install testing requirements: psycopg2, flake8, and pytest
 install:
