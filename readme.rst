@@ -6,12 +6,9 @@ A python library designed to help write backend services for GeneWeaver__ (GW).
 
 .. __: https://ncbi.nlm.nih.gov/pubmed/26656951
 
-The :code:`gwlib` package is comprised of four separate modules:
+The :code:`gwlib` package is comprised of five separate modules:
 
 - :code:`batch.py`: classes to parse and output gene sets in GeneWeaver's batch format.
-
-- :code:`config.py`: contains a simple configuration file parser based on python's
-  :code:`ConfigParser`.
 
 - :code:`config.py`: contains a simple configuration file parser based on python's
   :code:`ConfigParser`.
@@ -36,6 +33,7 @@ We can do this in just a few lines of code using the :code:`db.py` module:
 
     from gwlib import db
 
+    ## Replace these with your own credentials
     db.connect('host', 'database', 'user', 'password')
 
     ## Returns a bijection of species names to unique species identifiers
