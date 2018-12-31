@@ -6,11 +6,8 @@ language: python
 python:
     - 2.7
 
-services:
-    - postgresql
-
 addons:
-    postgreqsl: 10
+    postgreqsl: "10"
     apt:
         packages:
             - postgresql-10
@@ -20,6 +17,7 @@ env:
     global:
         - PGPORT=5433
         - PGUSER=postgres
+        - PGHOST=""
 
 ## Install testing requirements: psycopg2, flake8, and pytest
 install:
