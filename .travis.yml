@@ -4,15 +4,16 @@ language: python
 python:
     - 2.7
 
-services:
-    - postgresql
-
 addons:
     postgreqsl: 10
     apt:
         packages:
             - postgresql-10
             - postgresql-client-10
+
+env:
+    global:
+        - PGPORT=5433
 
 ## Install testing requirements: psycopg2, flake8, and pytest
 install:
