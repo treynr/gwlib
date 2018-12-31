@@ -20,7 +20,8 @@ def test_connect():
         config.get_db('host'),
         config.get_db('database'),
         config.get_db('user'),
-        config.get_db('user')
+        config.get_db('password'),
+        config.get_db('port')
     )
 
     assert success
