@@ -1,4 +1,6 @@
 
+sudo: true
+
 language: python
 
 python:
