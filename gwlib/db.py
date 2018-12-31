@@ -465,7 +465,7 @@ def get_species_genes(sp_id, gdb_id=None, symbol=True):
                             SELECT gdb_id
                             FROM   odestatic.genedb 
                             WHERE  gdb_name = 'Gene Symbol'
-                        )
+                        ) AND ode_pref = TRUE
 
                         ELSE TRUE
                     END;
