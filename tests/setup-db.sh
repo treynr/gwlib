@@ -7,3 +7,4 @@
 psql -U postres -c 'CREATE USER test_user;'
 psql -U postgres -c 'ALTER USER test_user WITH SUPERUSER;'
 psql -U postgres -c 'CREATE DATABASE test_db;'
+psql -U postgres test_db -f setup-db.sql

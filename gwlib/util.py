@@ -187,7 +187,7 @@ def get_git_info():
     git_hash = subprocess.check_output(cmd_hash).strip()
     git_branch = subprocess.check_output(cmd_branch).strip()
 
-    return '%s@%s' % (git_branch, git_hash)
+    return '{}@{}'.format(git_branch, git_hash)
 
 def make_export_header(exe, version):
     """
