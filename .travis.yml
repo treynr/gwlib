@@ -1,4 +1,6 @@
 
+sudo: true
+
 language: python
 
 python:
@@ -18,7 +20,6 @@ env:
     global:
         - PGPORT=5433
         - PGUSER=postgres
-        - PGHOST=127.0.0.1
 
 ## Install testing requirements: psycopg2, flake8, and pytest
 install:
@@ -26,6 +27,8 @@ install:
 
 ## Setup the test database
 before_script:
+    - sudo -u postgres psql -c "CREATE USER postgres;"
+    - sudo -u postgres psql -c "ALTER USER postgres WITH SUPERUSER;"
     - (cd tests && ./setup-db.sh)
 
 script:
