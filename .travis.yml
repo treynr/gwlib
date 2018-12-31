@@ -25,8 +25,8 @@ install:
 
 ## Setup the test database
 before_script:
-    - sudo -u postgres psql -c "CREATE USER postgres;"
-    - sudo -u postgres psql -c "ALTER USER postgres WITH SUPERUSER;"
+    #- sudo -u postgres psql -c "CREATE USER postgres;"
+    #- sudo -u postgres psql -c "ALTER USER postgres WITH SUPERUSER;"
     - (cd tests && ./setup-db.sh)
 
 script:
