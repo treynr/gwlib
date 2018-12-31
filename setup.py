@@ -15,7 +15,7 @@ with open(os.path.join(here, NAME, '__version__.py')) as fl:
 
 setup(
     name=NAME,
-    version=about['__version__']
+    version=about['__version__'],
     description='GeneWeaver python library',
     author='TR',
     python_requires='>=2.7.5',

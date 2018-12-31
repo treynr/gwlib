@@ -426,17 +426,24 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
 
         return associate(cursor)
 
-def get_species_genes(sp_id):
+def get_species_genes(sp_id, gdb_id=None, symbol=True):
     """
     Similar to the above get_gene_ids() but returns a reference to GW ID mapping for all
     genes for the given species (as a warning, this will be a lot of data).
     This query does not include genomic variants.
+    If a gdb_id is provided then this will return all genes covered by the given gene
+    type.
+    If symbol is true, then the function returns genes covered by the symbol gene type to
+    limit the amount of data returned.
+    gdb_id will always override the symbol argument.
 
     arguments
-        sp_id: species identifier
+        sp_id:  species identifier
+        gdb_id: an optional gene type identifier used to limit the ID mapping process
+        symbol: if true limits results to genes covered by the symbol gene type
 
     returns
-        a bijection of reference identifiers to GW IDs
+        an N:1 mapping of reference identifiers to GW IDs
     """
 
     with PooledCursor() as cursor:
@@ -445,11 +452,24 @@ def get_species_genes(sp_id):
             '''
             SELECT  ode_ref_id, ode_gene_id
             FROM    extsrc.gene
-            WHERE   sp_id = %s AND
+            WHERE   sp_id = %(sp_id)s AND
                     gdb_id NOT IN (
                         SELECT gdb_id FROM odestatic.genedb WHERE gdb_name = 'Variant'
-                    );
-            ''', (sp_id,)
+                    ) AND
+                    CASE
+                        WHEN %(gdb_id)s IS NOT NULL
+                        THEN gdb_id = %(gdb_id)s
+
+                        WHEN %(symbol)s = TRUE
+                        THEN gdb_id = (
+                            SELECT gdb_id
+                            FROM   odestatic.genedb 
+                            WHERE  gdb_name = 'Gene Symbol'
+                        )
+
+                        ELSE TRUE
+                    END;
+            ''', {'sp_id': sp_id, 'gdb_id': gdb_id, 'symbol': symbol}
         )
 
         return associate(cursor)

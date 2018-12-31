@@ -121,7 +121,7 @@ def test_get_gene_ids_5():
 
 def test_get_species_genes():
 
-    res = db.get_species_genes(1)
+    res = db.get_species_genes(1, symbol=False)
 
     assert res == {
         'MGI:108511': 5105,
