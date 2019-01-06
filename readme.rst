@@ -2,7 +2,7 @@
 gwlib
 =====
 
-A python library designed to help write backend services for GeneWeaver__ (GW).
+A Python 2.7/3.6/3.7 library designed to help write backend services for GeneWeaver__ (GW).
 
 .. __: https://ncbi.nlm.nih.gov/pubmed/26656951
 
@@ -46,7 +46,7 @@ We can do this in just a few lines of code using the :code:`db.py` module:
     homologs = db.get_gene_homologs(set(genes.values()), source='Homologene')
 
     ## Print the gene identifiers
-    print homologs.keys()
+    print(homologs.keys())
 
 
 API
