@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 
 ## file: util.py
 ## desc: A bunch of misc. utility functions.
@@ -166,7 +167,7 @@ def manipulate_path(path, pre='', post='', ext='', delim='-'):
     if post:
         path_base = path_base + delim + post
 
-    if not path_ext and ext:
+    if ext:
         if ext[0] != '.':
             ext = '.' + ext
 
@@ -176,18 +177,16 @@ def manipulate_path(path, pre='', post='', ext='', delim='-'):
 
 def get_git_info():
     """
-    Returns the current git branch and commit hash.
+    Returns the current git commit hash.
 
     returns
         a string containing the current git branch and short seven letter hash
     """
 
     cmd_hash = ['git', 'rev-parse', '--short', 'HEAD']
-    cmd_branch = ['git', 'symbolic-ref', '--short', 'HEAD']
     git_hash = subprocess.check_output(cmd_hash).strip()
-    git_branch = subprocess.check_output(cmd_branch).strip()
 
-    return '{}@{}'.format(git_branch, git_hash)
+    return git_hash
 
 def make_export_header(exe, version):
     """
@@ -201,24 +200,9 @@ def make_export_header(exe, version):
     """
 
     return [
-        '## {} v. {} ({})'.format(exe, version, get_git_info()),
+        '## {} v. {}'.format(exe, version),
         '## {}'.format(make_export_tag()),
         '## last updated {}'.format(get_today()),
         '#'
     ]
-
-def make_version(major=0, minor=0, patch=0):
-    """
-    Formats the version as a string.
-
-    arguments
-        major: major version number
-        minor: minor version number
-        patch: patch version number
-
-    returns
-        the version string e.g. 0.1.0
-    """
-
-    return '{}.{}.{}'.format(major, minor, patch)
 

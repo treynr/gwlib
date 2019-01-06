@@ -23,7 +23,6 @@ env:
         - PGPORT=5432
         - PGUSER=postgres
         - PGHOST=""
-          #- PGPASSWORD="test_password"
 
 ## Ensure only postgres 10 is running
 before_install:
@@ -38,6 +37,8 @@ install:
 before_script:
     - (cd tests && ./setup-db.sh)
 
+## Run the style checker then unit tests
 script:
     - flake8 gwlib
     - PYTHONPATH=. pytest tests -v
+
