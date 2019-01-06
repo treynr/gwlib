@@ -3,8 +3,6 @@ sudo: true
 
 dist: xenial
 
-language: python
-
 matrix:
     include:
         - python: 2.7
