@@ -78,24 +78,6 @@ def connect(host, db, user, password, port=5432):
 
     return (True, '')
 
-def asciify(s):
-    """
-    Takes a string, which could be unicode or a regular ASCII string and
-    forcibly converts it to ASCII. Any conversion errors are ignored during the
-    process. If the given argument isn't a string, the function does nothing.
-
-    arguments
-        s: string being converted
-
-    returns
-        a string that has potentially been converted to ASCII
-    """
-
-    if isinstance(s, basestring):
-        return s.decode('utf-8').encode('utf-8', 'ignore')
-
-    return s
-
 def dictify(cursor, ordered=False):
     """
     Converts each row returned by the cursor into a list of dicts, where
@@ -113,9 +95,7 @@ def dictify(cursor, ordered=False):
     dlist = []
 
     for row in cursor:
-        ## Prevents unicode type errors from cropping up later. Convert to
-        ## ascii, ignore any conversion errors.
-        row = map(lambda s: asciify(s), row)
+
         d = od() if ordered else {}
 
         for i, col in enumerate(cursor.description):
@@ -144,9 +124,7 @@ def dictify_and_map(cursor):
     d = {}
 
     for row in cursor:
-        ## Prevents unicode type errors from cropping up later. Convert to
-        ## ascii, ignore any conversion errors.
-        row = map(lambda s: asciify(s), row)
+
         drow = {}
 
         for i, col in enumerate(cursor.description):
@@ -168,7 +146,7 @@ def listify(cursor):
         a list containing the query results
     """
 
-    return map(lambda t: t[0], cursor.fetchall())
+    return [t[0] for t in cursor.fetchall()]
 
 def tuplify(thing):
     """
@@ -203,7 +181,6 @@ def associate(cursor):
     d = {}
 
     for row in cursor:
-        row = map(lambda s: asciify(s), row)
 
         ## 1:1
         if len(row) == 2:
@@ -231,7 +208,6 @@ def associate_duplicate(cursor):
     d = {}
 
     for row in cursor:
-        row = map(lambda s: asciify(s), row)
 
         ## 1:1
         if len(row) == 2:

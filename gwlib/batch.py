@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 ## file: batch.py
 ## desc: Batch file reader and writer. This is a variant of the batch parser
@@ -9,7 +10,7 @@
 ##       TR
 #
 
-## multisets because regular sets remove duplicates, requires python 2.7
+from __future__ import print_function
 from collections import Counter as mset
 from collections import defaultdict as dd
 from copy import deepcopy
@@ -808,8 +809,8 @@ class BatchReader(object):
                     gs['gs_id'], ode, value, ref, gs['gs_threshold']
                 )
             except Exception as e:
-                print e
-                print gs
+                print(e)
+                print(gs)
                 exit()
 
     def __insert_annotations(self, gs):
@@ -1363,7 +1364,7 @@ class BatchWriter(object):
             return False
 
         with open(self.filepath, 'w') as fl:
-            print >> fl, '\n'.join(serial)
+            print('\n'.join(serial), file=fl)
 
         return True
 

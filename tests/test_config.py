@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 ## file: test_config.py
 ## desc: Unit tests for config.py.

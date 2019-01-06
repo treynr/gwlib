@@ -1,10 +1,11 @@
 #!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 
 ## file: config.py
 ## desc: Configuration file parsing.
 ## auth: TR
 
-import ConfigParser
+import configparser
 import os
 
 ## Path to the configuration file
@@ -74,7 +75,7 @@ def load_config(fp=CONFIG_PATH):
             'Could not find a config file so one was created for you @ {}'.format(fp)
         )
 
-    CONFIG = ConfigParser.RawConfigParser(allow_no_value=True)
+    CONFIG = configparser.RawConfigParser(allow_no_value=True)
 
     CONFIG.read(fp)
 
