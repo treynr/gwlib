@@ -934,6 +934,23 @@ def get_gene_types(short=False):
 
         return associate(cursor)
 
+def get_score_types():
+    """
+    Returns a list of score types supported by GeneWeaver. This data isn't currently
+    stored in the DB but it should be.
+
+    returns
+        a bijection of score types to type IDs
+    """
+
+    return {
+        'p-value': 1,
+        'q-value': 2,
+        'binary': 3,
+        'correlation': 4,
+        'effect': 5
+    }
+
 def get_platforms():
     """
     Returns the list of GW supported microarray platform and gene expression
