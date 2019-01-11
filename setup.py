@@ -5,7 +5,7 @@ from setuptools import setup
 import os
 
 NAME = 'gwlib'
-REQUIRED = ['psycopg2']
+REQUIRED = ['configparser', 'psycopg2']
 
 about = {}
 here = os.path.abspath(os.path.dirname(__file__))
