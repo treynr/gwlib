@@ -235,11 +235,13 @@ def commit():
     ## SELECTIONS ##
     ################
 
-def get_species():
+def get_species(lower=False):
     """
     Returns a species name and ID mapping for all the species currently
     supported by GW.
 
+    arguments
+        lower: if true, returns lowercased species names
     returns
         a mapping of sp_names to sp_ids
     """
@@ -248,9 +250,9 @@ def get_species():
 
         cursor.execute(
             '''
-            SELECT  sp_name, sp_id
+            SELECT  CASE WHEN %s THEN LOWER(sp_name) ELSE sp_name END, sp_id
             FROM    odestatic.species;
-            '''
+            ''', (lower,)
         )
 
         return associate(cursor)
@@ -2306,6 +2308,20 @@ def insert_variant_with_id(var):
         )
 
         return cursor.fetchone()[0]
+
+    ## SCHEMAS ##
+    #############
+
+def get_geneset_schema():
+    """
+    Returns a list of columns found in the geneset table.
+    """
+
+    with PooledCursor() as cursor:
+
+        cursor.execute('''SELECT * FROM production.geneset LIMIT 0;''');
+
+        return [d[0] for d in cursor.description]
 
 if __name__ == '__main__':
 

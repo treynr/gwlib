@@ -272,3 +272,15 @@ def test_get_gene_types_2():
         'variant': 25,
     }
 
+def test_get_score_types():
+
+    res = db.get_score_types()
+
+    assert res == {
+        'p-value': 1,
+        'q-value': 2,
+        'binary': 3,
+        'correlation': 4,
+        'effect': 5
+    }
+

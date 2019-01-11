@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import util
+from gwlib import util
 
 VERSION = (1, 0, 0)
 
