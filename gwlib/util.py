@@ -188,7 +188,7 @@ def get_git_info():
 
     try:
         git_hash = subprocess.check_output(cmd_hash).strip()
-    except:
+    except Exception:
         return ''
 
     return git_hash

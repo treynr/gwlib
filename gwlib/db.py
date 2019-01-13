@@ -2319,7 +2319,7 @@ def get_geneset_schema():
 
     with PooledCursor() as cursor:
 
-        cursor.execute('''SELECT * FROM production.geneset LIMIT 0;''');
+        cursor.execute('''SELECT * FROM production.geneset LIMIT 0;''')
 
         return [d[0] for d in cursor.description]
 
