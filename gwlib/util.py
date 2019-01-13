@@ -185,7 +185,11 @@ def get_git_info():
     """
 
     cmd_hash = ['git', 'rev-parse', '--short', 'HEAD']
-    git_hash = subprocess.check_output(cmd_hash).strip()
+
+    try:
+        git_hash = subprocess.check_output(cmd_hash).strip()
+    except:
+        return ''
 
     return git_hash
 
@@ -201,7 +205,7 @@ def make_export_header(exe, version):
     """
 
     return [
-        '## {} v. {}'.format(exe, version),
+        '## {} v. {}-'.format(exe, version, get_git_info()),
         '## {}'.format(make_export_tag()),
         '## last updated {}'.format(get_today()),
         '#'
