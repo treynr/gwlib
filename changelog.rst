@@ -33,4 +33,4 @@ Fixed
 1.0.0 - 2018.01.05
 ------------------
 
-Initial public release.
+- Initial public release.
