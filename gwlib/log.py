@@ -8,6 +8,7 @@
 from collections import namedtuple
 import sys
 import logging
+import logging.handlers
 
 Colors = namedtuple(
     'Colors',
@@ -36,114 +37,90 @@ else:
 
 class ConsoleFilter(logging.Filter):
     """
-    Logging filter attached to the console handler. All this does is color messages based
-    on the log level.
+    Logging filter attached to the console handler. 
+    All this does add color and symbol features to messages based user-supplied format
+    strings.
     """
 
     def filter(self, record):
 
-        ## I don't think I should be doing this but whatever lol
+        ## DEBUG
         if record.levelno == 10:
-            record.msg = '{}{}'.format(colors.ltwhite, record.msg)
+            record.color = colors.ltwhite
+            record.symbol = '[*]'
+
+        ## INFO
         elif record.levelno == 20:
-            record.msg = '{}{}'.format(colors.ltgreen, record.msg)
+            record.color = colors.ltgreen
+            record.symbol = '[+]'
+
+        ## WARNING
         elif record.levelno == 30:
-            record.msg = '{}{}'.format(colors.ltyellow, record.msg)
-        elif record.levelno == 40:
-            record.msg = '{}{}'.format(colors.ltred, record.msg)
+            record.color = colors.ltyellow
+            record.symbol = '[-]'
+
+        ## ERROR/CRITICAL
+        elif record.levelno == 40 or record.levelno == 50:
+            record.color = colors.ltred
+            record.symbol = '[!]'
 
         return True
 
-class Log(object):
+def attach_console_logger(log, format, level=logging.DEBUG):
     """
-    Basic logging class that encapsulates python's logging classes and functions.
+    Attaches a console logger to the given logging object. Adds a special filter object
+    so messages can be printed in color.
+
+    log:    Python logging object
+    format: logging Formatter string
+    level:  logging level
     """
 
-    def __init__(self, console=True, filename='', name='log', on=True, cfmt='', ffmt=''):
-        """
-        Initialize a logging object.
+    conlog = logging.StreamHandler()
 
-        arguments
-            console:  boolean indicating if console logging is turned on or off
-            filename: filepath to log to, if none is given file logging is turned off
-            name:     the name of the logging instance
-            on:       deprecated
-            cfmt:     format string for the console logginng handler
-            ffmt:     format string for the file logging handler
+    log.setLevel(level)
+    conlog.setLevel(level)
+    conlog.setFormatter(logging.Formatter(format))
+    conlog.addFilter(ConsoleFilter())
 
-        """
+    log.addHandler(conlog)
 
-        self.filename = filename
-        self.cfmt = cfmt
-        self.ffmt = ffmt
-        self.logger = logging.getLogger(name)
+    return log
 
-        self.logger.setLevel(logging.DEBUG)
+def attach_file_logger(log, filepath, format, level=logging.DEBUG):
+    """
+    Attaches a file handler to the given logging object.
 
-        if console:
-            conlog = logging.StreamHandler()
+    log:      Python logging object
+    filepath: log filepath
+    format:   logging Formatter string
+    level:    logging level
+    """
 
-            conlog.setLevel(logging.DEBUG)
-            conlog.setFormatter(logging.Formatter(cfmt if cfmt else '%(message)s'))
-            conlog.addFilter(ConsoleFilter())
+    filelog = logging.FileHandler(filename=filepath)
 
-            self.logger.addHandler(conlog)
+    log.setLevel(level)
+    filelog.setLevel(level)
+    filelog.setFormatter(logging.Formatter(format))
 
-        if filename:
-            filelog = logging.StreamHandler()
+    log.addHandler(filelog)
 
-            filelog.setLevel(logging.INFO)
-            filelog.setFormatter(logging.Formatter(ffmt if ffmt else '%(message)s'))
+def attach_rotating_file_logger(log, filepath, format, level=logging.DEBUG):
+    """
+    Attaches a rotating file handler to the given logging object.
+    The rotating logger will always be rolled over every time the application runs.
 
-            self.logger.addHandler(filelog)
+    log:      Python logging object
+    filepath: log filepath
+    format:   logging Formatter string
+    level:    logging level
+    """
 
-    def debug(self, s):
-        """
-        Log the given string (s) at the DEBUG level.
-        """
+    filelog = logging.handlers.RotatingFileHandler(filename=filepath)
 
-        self.logger.debug(s)
+    ## Immediately roll the log over
+    filelog.doRollover()
+    filelog.setLevel(level)
+    filelog.setFormatter(logging.Formatter(format))
 
-    def info(self, s):
-        """
-        Log the given string (s) at the INFO level.
-        """
-
-        self.logger.info(s)
-
-    def warn(self, s):
-        """
-        Log the given string (s) at the WARN level.
-        """
-
-        self.logger.warn(s)
-
-    def error(self, s):
-        """
-        Log the given string (s) at the ERROR level.
-        """
-
-        self.logger.error(s)
-
-    def turn_on(self, on=True):
-        """
-        Turns logging on or off based on the provided boolean.
-        """
-
-        if type(on) != bool:
-            self.on = True
-
-        else:
-            self.on = on
-
-if __name__ == "__main__":
-    log = Log()
-
-    log.info("log.py -- Logs and stuff")
-    log.info('')
-    log.debug('DEBUG\t| For debugging and developer messages')
-    log.info('INFO\t| For general user messages')
-    log.warn('WARNING\t| Things went wrong and you should probably know about it')
-    log.error('ERROR\t| OH SHIT')
-
-
+    log.addHandler(filelog)
