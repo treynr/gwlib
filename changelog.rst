@@ -24,6 +24,8 @@ Changed
 
 - Change versioning scheme.
 
+- Redo logging functionality
+
 Fixed
 '''''
 
