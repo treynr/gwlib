@@ -37,7 +37,7 @@ else:
 
 class ConsoleFilter(logging.Filter):
     """
-    Logging filter attached to the console handler. 
+    Logging filter attached to the console handler.
     All this does add color and symbol features to messages based user-supplied format
     strings.
     """
