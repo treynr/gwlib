@@ -2,7 +2,7 @@
 Changelog
 =========
 
-Unreleased
+1.1.0 - 2019.01.31
 ----------
 
 Added
@@ -10,8 +10,6 @@ Added
 
 - Add :code:`get_score_types` function to :code:`db.py` which returns a list of 
   supported GW score types. 
-
-- Add :code:`get_geneset_schema` function to retrieve the geneset table layout.
 
 - Add :code:`configpraser` to required module list.
 
@@ -32,7 +30,7 @@ Fixed
 - Fixed ImportError in :code:`setup.py`.
 
 
-1.0.0 - 2018.01.05
+1.0.0 - 2019.01.05
 ------------------
 
 - Initial public release.

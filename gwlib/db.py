@@ -2309,20 +2309,6 @@ def insert_variant_with_id(var):
 
         return cursor.fetchone()[0]
 
-    ## SCHEMAS ##
-    #############
-
-def get_geneset_schema():
-    """
-    Returns a list of columns found in the geneset table.
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute('''SELECT * FROM production.geneset LIMIT 0;''')
-
-        return [d[0] for d in cursor.description]
-
 if __name__ == '__main__':
 
     pass
