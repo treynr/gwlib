@@ -34,7 +34,7 @@ before_install:
 
 ## Install testing requirements: psycopg2, flake8, and pytest
 install:
-    - pip install -r tests/requirements.txt
+    - pip install -r requirements-dev.txt
 
 ## Setup the test database
 before_script:

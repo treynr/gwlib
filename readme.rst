@@ -8,14 +8,14 @@ A Python 2.7/3.6/3.7 library designed to help write backend services for GeneWea
 
 The :code:`gwlib` package is comprised of five separate modules:
 
-- :code:`batch.py`: classes to parse and output gene sets in GeneWeaver's batch format.
+- :code:`batch.py`: classes to parse and output gene sets in GW's batch format.
 
 - :code:`config.py`: contains a simple configuration file parser based on python's
   :code:`ConfigParser`.
 
 - :code:`db.py`: wrapper functions that encapsulate commonly used GW database queries.
 
-- :code:`log.py`: output logging class based python's :code:`logging` module.
+- :code:`log.py`: output logging customization based python's :code:`logging` module.
 
 - :code:`util.py`: miscellaneous utility functions.
 

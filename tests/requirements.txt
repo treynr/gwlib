@@ -1,4 +1,0 @@
-configparser
-flake8
-psycopg2
-pytest
