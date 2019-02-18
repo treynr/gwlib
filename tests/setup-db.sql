@@ -71,12 +71,16 @@ CREATE TABLE production.publication (
     pub_pubmed VARCHAR
 );
 
--- Minimal geneset_value table, 5 of 8 columns represented
+
+-- geneset_value table, 8 of 8 columns represented
 --
 CREATE TABLE extsrc.geneset_value (
     gs_id            BIGINT NOT NULL,
     ode_gene_id      BIGINT NOT NULL,
     gsv_value        NUMERIC,
+    gsv_hits         INTEGER,
+    gsv_source_list  VARCHAR[],
+    gsv_value_list   NUMERIC[],
     gsv_in_threshold BOOLEAN DEFAULT false NOT NULL,
     gsv_date         DATE DEFAULT NOW()
 );

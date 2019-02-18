@@ -45,8 +45,8 @@ class PooledCursor(object):
 
             self.cursor = None
 
-        ## UTILITY ##
-        #############
+    ## UTILITY ##
+    #############
 
 def connect(host, db, user, password, port=5432):
     """
@@ -370,6 +370,11 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
                 FROM   odestatic.genedb
                 WHERE  gdb_name = 'Gene Symbol'
                 LIMIT  1
+            ), variant_type AS (
+                SELECT COALESCE(
+                    (SELECT gdb_id FROM odestatic.genedb WHERE gdb_name = 'Variant'),
+                    0
+                ) LIMIT 1
             )
             SELECT  ode_ref_id, ode_gene_id
             FROM    extsrc.gene
@@ -398,7 +403,11 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
                         THEN ode_pref = true
 
                         ELSE true
-                    END;
+                    END AND
+                    --
+                    -- We don't want to match gene IDs that are representing variants
+                    --
+                    gdb_id <> (SELECT * FROM variant_type);
             ''', {'refs': refs, 'spid': sp_id, 'gdbid': gdb_id}
         )
 
@@ -762,6 +771,33 @@ def get_publication(pmid):
         result = cursor.fetchone()
 
         return result[0] if result else None
+
+def get_publications(pmids):
+    """
+    Returns a mapping of PubMed IDs to their GW publication IDs.
+
+    arguments
+        pmids: a list of PubMed IDs
+
+    returns
+        a dict mapping PubMed IDs to GW publication IDs
+    """
+
+    pmids = tuplify(pmids)
+
+    with PooledCursor() as cursor:
+
+        ## The lowest pub_id should be used and the others eventually deleted.
+        cursor.execute(
+            '''
+            SELECT      pub_pubmed, MIN(pub_id) as pub_id
+            FROM        production.publication
+            WHERE       pub_pubmed IN %s
+            GROUP BY    pub_pubmed;
+            ''', (pmids,)
+        )
+
+        return associate(cursor)
 
 ## I think this can be deleted
 def get_publication_mapping():
@@ -1302,8 +1338,28 @@ def get_ontology_terms_by_ontdb(ontdb_id):
 
         return dictify(cursor)
 
-        ## INSERTIONS ##
-        ################
+def get_threshold_types(lower=False):
+    """
+    Returns a bijection of threshold type names to their IDs.
+    This data should be stored in the DB but it's not so we hardcode it here.
+
+    arguments
+        lower: optional argument which lower cases names if it is set to True
+
+    returns
+        a mapping of threshold types to IDs (gs_threshold_type)
+    """
+
+    types = ['P-value', 'Q-value', 'Binary', 'Correlation', 'Effect']
+    type_ids = [1, 2, 3, 4, 5]
+
+    if lower:
+        return dict(zip([t.lower() for t in types], type_ids))
+
+    return dict(zip(types, type_ids))
+
+    ## INSERTIONS ##
+    ################
 
 def insert_geneset(gs):
     """
@@ -1405,6 +1461,46 @@ def insert_geneset_value(gs_id, gene_id, value, name, threshold):
         )
 
         return cursor.fetchone()[0]
+
+def insert_geneset_values(values):
+    """
+    Like insert_geneset_value but inserts a list of values.
+
+    arguments
+        values: a list of geneset values, where each element is a tuple.
+                The elements in the tuple should be in the following order:
+
+                    gs_id, ode_gene_id, value, name, in_threshold
+    """
+
+    ## Some preprocessing: the source and value list fields need to generated and
+    ## formatted as arrays
+    for i, vs in enumerate(values):
+
+        values[i] = (vs[0], vs[1], vs[2], [vs[3]], [vs[2]], vs[4])
+
+    with PooledCursor() as cursor:
+
+        execute_values(
+            cursor,
+            '''
+            INSERT INTO extsrc.geneset_value (
+                gs_id,
+                ode_gene_id,
+                gsv_value,
+                gsv_source_list,
+                gsv_value_list,
+                gsv_in_threshold,
+                gsv_hits,
+                gsv_date
+            ) VALUES %s;
+            ''',
+            values,
+            '''
+            (%s, %s, %s, %s, %s, %s, 0, NOW())
+            '''
+        )
+
 
 def insert_gene(gene_id, ref_id, gdb_id, sp_id, pref='f'):
     """
@@ -1722,8 +1818,8 @@ def insert_geneset_ontology(gs_id, ont_id, ref_type):
             ''', (gs_id, ont_id, ref_type)
         )
 
-        ## UPDATES ##
-        #############
+    ## UPDATES ##
+    #############
 
 def update_geneset_status(gsid, status='normal'):
     """

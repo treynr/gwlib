@@ -284,3 +284,38 @@ def test_get_score_types():
         'effect': 5
     }
 
+def test_get_threshold_types_1():
+
+    res = db.get_threshold_types()
+
+    assert res == dict(zip(
+        ['P-value', 'Q-value', 'Binary', 'Correlation', 'Effect'],
+        [1, 2, 3, 4, 5]
+    ))
+
+def test_get_threshold_types_2():
+
+    res = db.get_threshold_types(lower=True)
+
+    assert res == dict(zip(
+        ['p-value', 'q-value', 'binary', 'correlation', 'effect'],
+        [1, 2, 3, 4, 5]
+    ))
+
+def test_insert_geneset_values():
+
+    db.insert_geneset_values([
+        (1, 100, 1.2, 'Mobp', True),
+        (1, 200, -1.2, 'Aplp2', True)
+    ])
+
+    values = db.get_geneset_values([1])
+    values = sorted(values, key=lambda g: g['ode_gene_id'])
+
+    assert values[0]['gs_id'] == 1
+    assert values[0]['ode_gene_id'] == 100
+    assert values[0]['gsv_value'] == 1.2
+    assert values[1]['gs_id'] == 1
+    assert values[1]['ode_gene_id'] == 200
+    assert values[1]['gsv_value'] == -1.2
+

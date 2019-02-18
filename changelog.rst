@@ -2,8 +2,25 @@
 Changelog
 =========
 
+1.2.0 - 2019.02.16
+------------------
+
+Added
+'''''
+
+- Add function for retrieving gene set threshold type identifiers
+
+- Add function for publication metadata based on PMIDs.
+
+- Add function for inserting multiple gene set values at once.
+
+Changed
+'''''''
+
+- Update ``get_geneset_values`` to ignore variant gene types.
+
 1.1.0 - 2019.01.31
-----------
+------------------
 
 Added
 '''''
