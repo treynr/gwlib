@@ -38,7 +38,7 @@ else:
 class ConsoleFilter(logging.Filter):
     """
     Logging filter attached to the console handler.
-    All this does add color and symbol features to messages based user-supplied format
+    All this does add color and symbol features to messages based on user-supplied format
     strings.
     """
 
@@ -69,11 +69,12 @@ class ConsoleFilter(logging.Filter):
 def attach_console_logger(log, format, level=logging.DEBUG):
     """
     Attaches a console logger to the given logging object. Adds a special filter object
-    so messages can be printed in color.
+    so messages can be printed to the terminal in color.
 
-    log:    Python logging object
-    format: logging Formatter string
-    level:  logging level
+    arguments
+        log:    Python logging object
+        format: logging Formatter string
+        level:  logging level
     """
 
     conlog = logging.StreamHandler()
@@ -91,10 +92,11 @@ def attach_file_logger(log, filepath, format, level=logging.DEBUG):
     """
     Attaches a file handler to the given logging object.
 
-    log:      Python logging object
-    filepath: log filepath
-    format:   logging Formatter string
-    level:    logging level
+    arguments
+        log:      Python logging object
+        filepath: log filepath
+        format:   logging Formatter string
+        level:    logging level
     """
 
     filelog = logging.FileHandler(filename=filepath)
@@ -110,10 +112,11 @@ def attach_rotating_file_logger(log, filepath, format, level=logging.DEBUG):
     Attaches a rotating file handler to the given logging object.
     The rotating logger will always be rolled over every time the application runs.
 
-    log:      Python logging object
-    filepath: log filepath
-    format:   logging Formatter string
-    level:    logging level
+    arguments
+        log:      Python logging object
+        filepath: log filepath
+        format:   logging Formatter string
+        level:    logging level
     """
 
     filelog = logging.handlers.RotatingFileHandler(filename=filepath)

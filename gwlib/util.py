@@ -3,8 +3,6 @@
 
 ## file: util.py
 ## desc: A bunch of misc. utility functions.
-## auth: TR
-#
 
 from functools import reduce
 from sys import argv
