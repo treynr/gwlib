@@ -173,34 +173,34 @@ def test_get_genesets():
 
 def test_get_geneset_ids_by_tier_1():
 
-    res = db.get_geneset_ids_by_tier(tiers=[1])
+    res = db.get_geneset_ids(tiers=[1])
 
     assert len(res) == 2
     assert set(res) == set([185236, 270867])
 
 def test_get_geneset_ids_by_tier_2():
 
-    res = db.get_geneset_ids_by_tier(tiers=[1, 3])
+    res = db.get_geneset_ids(tiers=[1, 3])
 
     assert len(res) == 3
     assert set(res) == set([185236, 270867, 219234])
 
 def test_get_geneset_ids_by_attribute_1():
 
-    res = db.get_geneset_ids_by_attribute(attrib=2)
+    res = db.get_geneset_ids(at_id=2)
 
     assert len(res) == 0
 
 def test_get_geneset_ids_by_attribute_2():
 
-    res = db.get_geneset_ids_by_attribute(attrib=8)
+    res = db.get_geneset_ids(at_id=8)
 
     assert len(res) == 1
     assert res == [185236]
 
 def test_get_geneset_ids_by_attribute_3():
 
-    res = db.get_geneset_ids_by_attribute(attrib=6, sp_id=2)
+    res = db.get_geneset_ids(at_id=6, sp_id=2)
 
     assert len(res) == 1
     assert res == [270867]

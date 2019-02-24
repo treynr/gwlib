@@ -259,7 +259,7 @@ def get_species(lower=False):
 
 def get_species_with_taxid():
     """
-    Returns a a list of species supported by GW. The returned list includes species 
+    Returns a a list of species supported by GW. The returned list includes species
     names, identifiers, and NCBI taxon IDs.
 
     returns
@@ -342,7 +342,7 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
     Given a set of external reference IDs, this returns a mapping of
     reference gene identifiers to the IDs used internally by GeneWeaver (ode_gene_id).
     An optional species id can be provided to limit gene results by species.
-    An optional gene identifier type can be provided to limit mapping by ID type 
+    An optional gene identifier type can be provided to limit mapping by ID type
     (useful when identifiers from different resources overlap).
     This query does not incude genomic variants.
 
@@ -358,7 +358,7 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
         gdb_id: an optional gene type identifier used to limit the ID mapping process
 
     returns
-        a bijection of reference identifiers (ode_ref_id) to GW 
+        a bijection of reference identifiers (ode_ref_id) to GW
         gene IDs (ode_gene_id)
     """
 
@@ -571,7 +571,7 @@ def get_genesets(gs_ids):
         gs_ids: a list of gs_ids
 
     returns
-        A list of geneset objects. Each object is a dict where each field 
+        A list of geneset objects. Each object is a dict where each field
         corresponds to the columns in the geneset table.
     """
 
@@ -619,6 +619,7 @@ def get_geneset_ids(tiers=[1, 2, 3, 4, 5], at_id=None, size=0, sp_id=0):
                     CASE
                         WHEN %(at_id)s IS NOT NULL THEN gs_attribution = %(at_id)s
                         ELSE TRUE
+                    END AND
                     CASE
                         WHEN %(size)s > 0 THEN gs_count < %(size)s
                         ELSE TRUE
