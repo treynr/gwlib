@@ -1577,7 +1577,7 @@ def insert_publication(pub):
 
         return cursor.fetchone()[0]
 
-def insert_file(size, contents, comments):
+def insert_file(size, contents, comments=''):
     """
     Inserts a new file into the database.
 
