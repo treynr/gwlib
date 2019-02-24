@@ -1,11 +1,13 @@
 
-``db.py module``
-============
+``db.py`` Module API
+====================
 
 Documentation for functions in the ``db`` module.
 
-API
----
+
+Connecting
+----------
+
 
 ``db.connect(host, db, user, password, port=5432)``
 '''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -30,7 +32,8 @@ unsuccessful connection, the second element contains the error or exception.
 
 
 Selections
-''''''''''
+----------
+
 
 ``db.get_species(lower=False)``
 '''''''''''''''''''''''''''''''
