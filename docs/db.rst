@@ -65,8 +65,8 @@ A list of dicts, each dict field corresponds to the column name (sp_id, sp_name,
 and sp_taxid).
 
 
-``db.get_species_with_taxid()``
-'''''''''''''''''''''''''''''''
+``db.get_species_by_taxid()``
+'''''''''''''''''''''''''''''
 
 Returns a mapping of species tax IDs (NCBI taxonomy ID) to their GW sppecies ID.
 
