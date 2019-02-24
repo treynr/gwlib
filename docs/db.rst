@@ -51,6 +51,7 @@ Returns:
     
 A mapping of species names (sp_name) to species identifiers (sp_id).
 
+----
 
 ``db.get_species_with_taxid()``
 '''''''''''''''''''''''''''''''
@@ -75,6 +76,7 @@ Returns:
 
 A mapping of taxon IDs (sp_taxid) to species IDs (sp_id).
 
+----
 
 ``db.get_attributions()``
 '''''''''''''''''''''''''
@@ -87,6 +89,7 @@ Returns:
 
 A mapping of attribution abbreviations to IDs.
 
+----
 
 ``db.get_gene_ids(refs, sp_id=None, gdb_id=None)``
 ''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -116,6 +119,7 @@ Returns:
 
 A bijection of reference identifiers (ode_ref_id) to GW gene IDs (ode_gene_id).
 
+----
 
 ``db.get_species_genes(sp_id, gdb_id=None, symbol=True)``
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -143,6 +147,7 @@ Returns:
 
 An N:1 mapping of reference identifiers to GW IDs
 
+----
 
 ``db.get_gene_refs(genes, type_id=None)``
 '''''''''''''''''''''''''''''''''''''''''
@@ -164,6 +169,7 @@ Returns:
 
 A 1:N mapping of GW IDs to reference identifiers
 
+----
 
 ``db.get_genesets(gs_ids)``
 '''''''''''''''''''''''''''
@@ -175,11 +181,13 @@ Arguments:
 
 - gs_ids: a list of gs_ids
 
-Returns
+Returns:
+^^^^^^^^
 
 A list of geneset objects. Each object is a dict where each field corresponds to 
 the columns in the geneset table. 
 
+----
 
 ``db.get_geneset_ids(tiers=[1, 2, 3, 4, 5], at_id=0, size=0, sp_id=0)``
 '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -202,6 +210,7 @@ Returns:
 
 A list of gene set IDs.
 
+----
 
 ``db.get_geneset_values(gs_ids)``
 '''''''''''''''''''''''''''''''''
@@ -218,6 +227,8 @@ Returns:
 
 A list of dicts, each dict contains the gene set id, gene id, and gene score.
 Dictionary fields correspond to column names: gs_id, ode_gene_id, and gsv_value.
+
+----
 
 
 ``db.get_gene_homologs(genes, source='Homologene')``
@@ -236,6 +247,8 @@ Returns:
 
 A bijection of gene identifiers to homology identifiers
 
+----
+
 
 ``db.get_publication(pmid)``
 ''''''''''''''''''''''''''''
@@ -251,6 +264,8 @@ Returns:
 ^^^^^^^^
 
 A GW publication ID (pub_id) or None one doesn't exist.
+
+----
 
 
 ``db.get_publications(pmids)``
@@ -268,6 +283,8 @@ Returns:
 
 A dict mapping PubMed IDs to GW publication IDs.
 
+----
+
 
 ``db.get_publication_pmid(pub_id)``
 '''''''''''''''''''''''''''''''''''
@@ -283,6 +300,8 @@ Returns:
 ^^^^^^^^
 
 A string representing the article's PMID or None if one doesn't exist
+
+----
 
 
 ``db.get_geneset_pmids(gs_ids)``
@@ -301,6 +320,8 @@ Returns:
 
 A dict that maps the GS ID to the PMID. If a GS ID doesn't have an associated
 publication, then it will be missing from results.
+
+----
 
 
 ``db.get_geneset_metadata(gs_ids)``
@@ -321,6 +342,8 @@ A list of dicts containing gene set IDs, names, descriptions, and abbreviations.
 Each dict field corresponds to the column name (gs_id, gs_name, 
 gs_description, gs_abbreviation).
 
+----
+
 
 ``db.get_gene_types(short=False)``
 ''''''''''''''''''''''''''''''''''
@@ -338,6 +361,7 @@ Returns:
 
 A bijection of gene type names to type IDs.
 
+----
 
 ``db.get_score_types()``
 ''''''''''''''''''''''''
@@ -349,6 +373,8 @@ Returns:
 ^^^^^^^^
 
 A bijection of score types to type IDs.
+
+----
 
 
 ``db.get_platforms()``
@@ -364,6 +390,8 @@ A list of objects whose keys match the platform table. These attributes include
 the unique platform identifier, the platform name, a condensed name, and the GEO
 GPL identifier (pf_id, pf_name, pf_shortname, and pf_gpl_id).
 
+----
+
 
 ``db.get_platform_names()``
 '''''''''''''''''''''''''''
@@ -374,6 +402,8 @@ Returns:
 ^^^^^^^^
 
 A bijection of platform names (pf_name) to identifiers (pf_id).
+
+----
 
 
 ``db.get_platform_probes(pf_id, refs)``
@@ -394,6 +424,8 @@ Returns:
 
 A bijection of probe references to GW probe identifiers for the given platform
 
+----
+
 
 ``db.get_all_platform_probes(pf_id)``
 '''''''''''''''''''''''''''''''''''''
@@ -410,6 +442,8 @@ Returns:
 ^^^^^^^^
 
 A list of probe references
+
+----
 
 
 ``db.get_probe2gene(prb_ids)``
@@ -429,6 +463,8 @@ Returns:
 
 A 1:N mapping of probe IDs (prb_id) to genes (ode_gene_id)
 
+----
+
 
 ``db.get_group_by_name(name)``
 ''''''''''''''''''''''''''''''
@@ -445,6 +481,8 @@ Returns:
 
 A group ID (grp_id).
 
+----
+
 
 ``db.get_genesets_by_project(pj_ids)``
 ''''''''''''''''''''''''''''''''''''''
@@ -460,6 +498,8 @@ Returns:
 ^^^^^^^^
 
 A 1:N mapping of project IDs to gene set IDs
+
+----
 
 
 ``db.get_genesets_annotations(gs_ids)``
@@ -482,6 +522,8 @@ Each tuple comprises a single annotation and contains two elements:
 the external ontology term id used by the source ontology.
 e.g. {123456: (7890, 'GO:1234567')}
 
+----
+
 
 ``db.get_annotation_by_refs(ont_refs)``
 '''''''''''''''''''''''''''''''''''''''
@@ -499,6 +541,8 @@ Returns:
 
 A bijection of ontology term references to GW ontology IDs.
 
+----
+
 
 ``db.get_ontologies()``
 '''''''''''''''''''''''
@@ -511,6 +555,8 @@ Returns:
 
 A list of dicts. Each dict contains fields that match the ontologydb table 
 (ontdb_id, ontdb_name, ontdb_prefix, ontdb_date).
+
+----
 
 
 ``db.get_ontdb_id(name)``
@@ -529,6 +575,8 @@ Returns:
 The ontology ID (ont_id) for the given ontology name. None is returned if the
 ontology name is not found in the database.
 
+----
+
 
 ``db.get_ontology_terms_by_ontdb(ontdb_id)``
 ''''''''''''''''''''''''''''''''''''''''''''
@@ -544,6 +592,8 @@ Returns:
 ^^^^^^^^
 
 A list of dicts whose fields match the columns in the ontology table.
+
+----
 
 
 ``db.get_threshold_types(lower=False)``

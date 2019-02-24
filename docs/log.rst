@@ -36,6 +36,8 @@ Arguments:
 - format: logging Formatter string
 - level:  logging level, default is DEBUG
 
+----
+
 
 ``log.attach_file_logger(log, filepath, format, level=logging.DEBUG)``
 ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -49,6 +51,8 @@ Arguments:
 - filepath: log filepath
 - format:   logging Formatter string
 - level:    logging level
+
+----
 
 
 ``log.attach_rotating_file_logger(log, filepath, format, level=logging.DEBUG)``
