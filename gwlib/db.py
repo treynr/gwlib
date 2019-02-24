@@ -259,11 +259,11 @@ def get_species(lower=False):
 
 def get_species_with_taxid():
     """
-    Returns a species name and column mapping for all the species currently
-    supported by GW.
+    Returns a a list of species supported by GW. The returned list includes species 
+    names, identifiers, and NCBI taxon IDs.
 
     returns
-        a dict mapping sp_name to the specified entries in the table
+        a list of dicts, each dict field corresponds to the column name.
     """
 
     with PooledCursor() as cursor:
@@ -282,7 +282,7 @@ def get_species_by_taxid():
     Returns a mapping of species taxids (NCBI taxonomy ID) to their sp_id.
 
     returns
-        a mapping of sp_taxids to sp_ids
+        A mapping of taxon IDs (sp_taxid) to species IDs (sp_id)
     """
 
     with PooledCursor() as cursor:
@@ -342,13 +342,15 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
     Given a set of external reference IDs, this returns a mapping of
     reference gene identifiers to the IDs used internally by GeneWeaver (ode_gene_id).
     An optional species id can be provided to limit gene results by species.
-    An optional gene identifier type can be provided to limit mapping by ID type (useful
-    when identifiers from different resources overlap).
+    An optional gene identifier type can be provided to limit mapping by ID type 
+    (useful when identifiers from different resources overlap).
+    This query does not incude genomic variants.
 
     Reference IDs are always strings (even if they're numeric) and should be
     properly capitalized. If duplicate references exist in the DB (unlikely)
     then they are overwritten in the return dict. Reference IDs can be any valid
     identifier supported by GeneWeaver (e.g. Ensembl, NCBI Gene, MGI, HGNC, etc.).
+    See the get_gene_types function for gene types supported by GW.
 
     arguments
         refs:   a list of reference identifiers to convert
@@ -356,7 +358,8 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
         gdb_id: an optional gene type identifier used to limit the ID mapping process
 
     returns
-        a bijection of reference identifiers to GW IDs
+        a bijection of reference identifiers (ode_ref_id) to GW 
+        gene IDs (ode_gene_id)
     """
 
     refs = tuplify(refs)
@@ -420,7 +423,9 @@ def get_species_genes(sp_id, gdb_id=None, symbol=True):
     This query does not include genomic variants.
     If a gdb_id is provided then this will return all genes covered by the given gene
     type.
-    If symbol is true, then the function returns genes covered by the symbol gene type to
+    If symbol is true, then the function returns gene entities that have an official
+    gene symbol to limit the amount of data returned.
+
     limit the amount of data returned.
     gdb_id will always override the symbol argument.
 
@@ -495,6 +500,7 @@ def get_gene_refs(genes, type_id=None):
 
         return associate_duplicate(cursor)
 
+## Will probably delete this
 def get_preferred_gene_refs(genes):
     """
     Exactly like get_gene_refs() but only retrieves preferred ode_ref_ids.
@@ -565,7 +571,8 @@ def get_genesets(gs_ids):
         gs_ids: a list of gs_ids
 
     returns
-        a list of geneset objects that contain all columns in the geneset table
+        A list of geneset objects. Each object is a dict where each field 
+        corresponds to the columns in the geneset table.
     """
 
     gs_ids = tuplify(gs_ids)
@@ -582,13 +589,15 @@ def get_genesets(gs_ids):
 
         return dictify(cursor, ordered=True)
 
-def get_geneset_ids_by_tier(tiers=[1, 2, 3, 4, 5], size=0, sp_id=0):
+def get_geneset_ids(tiers=[1, 2, 3, 4, 5], at_id=None, size=0, sp_id=0):
     """
     Returns a list of normal (i.e. their status is not deleted or deprecated)
-    gene set IDs that belong in a particular tier or set of tiers. Allows filtering of
-    returned sets based on size and species.
+    gene set IDs.
+    IDs can be filtered based on tiers, gene set size, species, and public resource
+    attribution.
 
     arguments
+        at_id: public resource attribution ID
         tiers: a list of curation tiers
         size:  indicates the maximum size a set should be during retrieval
         sp_id: species identifier
@@ -608,18 +617,22 @@ def get_geneset_ids_by_tier(tiers=[1, 2, 3, 4, 5], size=0, sp_id=0):
             WHERE   gs_status NOT LIKE 'de%%' AND
                     cur_id IN %(tiers)s AND
                     CASE
+                        WHEN %(at_id)s IS NOT NULL THEN gs_attribution = %(at_id)s
+                        ELSE TRUE
+                    CASE
                         WHEN %(size)s > 0 THEN gs_count < %(size)s
-                        ELSE true
+                        ELSE TRUE
                     END AND
                     CASE
                         WHEN %(sp_id)s > 0 THEN sp_id = %(sp_id)s
-                        ELSE true
+                        ELSE TRUE
                     END;
-            ''', {'tiers': tiers, 'size': size, 'sp_id': sp_id}
+            ''', {'tiers': tiers, 'at_id': at_id, 'size': size, 'sp_id': sp_id}
         )
 
         return listify(cursor)
 
+## Remove this
 def get_geneset_ids_by_attribute(attrib, size=0, sp_id=0):
     """
     Returns a list of normal (i.e. their status is not deleted or deprecated)
@@ -692,8 +705,8 @@ def get_gene_homologs(genes, source='Homologene'):
     Returns all homology IDs for the given list of gene IDs.
 
     arguments
-        genes:  list of internal GeneWeaver gene identifiers
-        source: the homology mapping data source to use
+        genes:  list of internal GeneWeaver gene identifiers (ode_gene_id)
+        source: the homology mapping data source to use, default is Homologene
 
     returns
         a bijection of gene identifiers to homology identifiers
@@ -746,13 +759,13 @@ def get_homolog_species(hom_ids):
 
 def get_publication(pmid):
     """
-    Returns the GW publication ID associated with the gived PubMed ID.
+    Returns the GW publication ID associated with the given PubMed ID.
 
     arguments
         pmid: PubMed ID
 
     returns
-        a GW publication ID or None one doesn't exist
+        a GW publication ID (pub_id) or None one doesn't exist
     """
 
     with PooledCursor() as cursor:
@@ -880,7 +893,7 @@ def get_geneset_metadata(gs_ids):
     provided list.
 
     arguments
-        gs_ids: list of gene set IDs to retrieve PMIDs for
+        gs_ids: list of gene set IDs to retrieve metadata for
 
     returns
         a list of dicts containing gene set IDs, names, descriptions, and abbreviations
@@ -1013,8 +1026,8 @@ def get_platforms():
 
 def get_platform_names():
     """
-    Returns the list of GW supported microarray platform and gene expression
-    technologies.
+    Returns a mapping of microarray platform names (pf_name) to GW platform IDs
+    (pf_id).
 
     returns
         a bijection of platform names to identifiers.
@@ -1033,7 +1046,7 @@ def get_platform_names():
 
 def get_platform_probes(pf_id, refs):
     """
-    Retrieves internal GW probe identifiers for the given list probe reference
+    Retrieves internal GW probe identifiers for the given list of probe reference
     identifiers. Requires a platform ID since some expression platforms reuse probe
     references.
 
@@ -1120,7 +1133,7 @@ def get_probe2gene(prb_ids):
         prb_ids: a list of probe IDs
 
     returns
-        a 1:N mapping of probe IDs to genes (ode_gene_ids)
+        a 1:N mapping of probe IDs (prb_id) to genes (ode_gene_id)
     """
 
     prb_ids = tuplify(prb_ids)
@@ -1251,6 +1264,9 @@ def get_annotation_by_refs(ont_refs):
     """
     Maps ontology reference IDs (e.g. GO:0123456, MP:0123456) to the internal
     ontology IDs used by GW.
+
+    arguments
+        ont_refs: a list of external ontology reference IDs
 
     returns
         a bijection of ontology term references to GW ontology IDs
