@@ -44,6 +44,8 @@ class ConsoleFilter(logging.Filter):
 
     def filter(self, record):
 
+        record.default_color = colors.ltwhite
+
         ## DEBUG
         if record.levelno == 10:
             record.color = colors.ltwhite

@@ -2,6 +2,14 @@
 Changelog
 =========
 
+1.2.1 - 2019.02.27
+------------------
+
+Added
+'''''
+
+- Add default_color parameter to logging messages
+
 1.2.0 - 2019.02.16
 ------------------
 

@@ -65,6 +65,8 @@ Returns:
 A list of dicts, each dict field corresponds to the column name (sp_id, sp_name, 
 and sp_taxid).
 
+----
+
 
 ``db.get_species_by_taxid()``
 '''''''''''''''''''''''''''''
