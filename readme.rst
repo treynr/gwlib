@@ -2,6 +2,9 @@
 gwlib
 =====
 
+.. image:: https://img.shields.io/travis/treynr/gwlib.svg?style=flat-square
+    :target: https://travis-ci.org/treynr/gwlib
+
 A Python 2.7/3.6/3.7 library designed to help write backend services for GeneWeaver__ (GW).
 
 .. __: https://ncbi.nlm.nih.gov/pubmed/26656951
@@ -23,8 +26,9 @@ The :code:`gwlib` package is comprised of five separate modules:
 Usage
 -----
 
-Let's say we're interested in retrieving all the genes belonging to a single species and
-removing any genes that don't have homologs__ in at least one other species.
+As an example, let's say we're interested in retrieving all the genes belonging to a 
+single species and removing any genes that don't have homologs__ in at least one other 
+species.
 We can do this in just a few lines of code using the :code:`db.py` module:
 
 .. __: https://en.wikipedia.org/wiki/Sequence_homology
@@ -52,8 +56,38 @@ We can do this in just a few lines of code using the :code:`db.py` module:
 API
 ---
 
-See the individual module docs for API and usage.
+See the individual module docs__ for API and usage.
+
+.. __: docs/
 
 
 Installation
 ------------
+
+Installation can be accomplished by either retrieving the latest release and installing 
+via pip or by cloning this repository and installing from source.
+To install the latest version via pip:
+
+.. code:: bash
+
+    $ pip install https://github.com/treynr/gwlib/archive/v1.2.1.tar.gz
+
+To install from source:
+
+.. code:: bash
+
+    $ git clone https://github.com/treynr/gwlib.git
+    $ cd gwlib
+    $ python setup.py install
+
+
+Requirements
+''''''''''''
+
+- Python 2.7/3.6/3.7
+- configparser__
+- psycopg2__
+
+.. __: https://github.com/jaraco/configparser/
+.. __: http://initd.org/psycopg/
+
