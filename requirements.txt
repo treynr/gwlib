@@ -1,2 +1,2 @@
 configparser==3.5.0
-psycopg2==2.7.6.1
+psycopg2==2.7.x
