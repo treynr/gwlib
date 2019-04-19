@@ -123,32 +123,19 @@ def connect(host, db, user, password, port=5432):
 
     return (True, '')
 
-def dictify(cursor, ordered=False):
+def dictify(df):
     """
-    Converts each row returned by the cursor into a list of dicts, where
-    each key is a column name and each value is whatever is returned by the
-    query.
+    Converts rows return by a query into a list of dictionaries.
 
     arguments
-        cursor:  an active psycopg cursor
-        ordered: a boolean indicating whether to use a regular or ordered dict
+        df: dataframe returned by a DB query
 
     returns
-        a list of dicts containing the results of the SQL query
+        a list of dicts containing the results of the query.
+        In the form [{column: value, ...}, ...]
     """
 
-    dlist = []
-
-    for row in cursor:
-
-        d = od() if ordered else {}
-
-        for i, col in enumerate(cursor.description):
-            d[col[0]] = row[i]
-
-        dlist.append(d)
-
-    return dlist
+    return df.to_dict(orient='records')
 
 def dictify_and_map(cursor):
     """
@@ -179,19 +166,24 @@ def dictify_and_map(cursor):
 
     return d
 
-def listify(cursor):
+def listify(df, key=None):
     """
-    Converts each cursor row into a list. Only the first tuple member is saved
-    to the list.
+    Converts the query result into a 2D numpy array.
+    If key is given, then produces a 1D array using values from the column 
+    specified by key.
 
     arguments
-        cursor: an active psycopg cursor
+        df:  dataframe
+        key: optional, return a list of values from this column
 
     returns
-        a list containing the query results
+        an array
     """
 
-    return [t[0] for t in cursor.fetchall()]
+    if key:
+        return df[key].values
+
+    return df.values
 
 def tuplify(thing):
     """
@@ -209,9 +201,9 @@ def tuplify(thing):
 
     return (thing,)
 
-def associate(df, key=None, val=None):
+def biject(df, key=None, val=None):
     """
-    Creates a simple mapping of values from one column to another.
+    Creates a simple mapping (bijection) of values from one column to another.
     If key or val are not supplied, generates a bijection between values from
     the first and second columns of the given dataframe.
     Duplicates are overwritten.
@@ -222,7 +214,7 @@ def associate(df, key=None, val=None):
         val: optional, the column that should be used as the value
 
     returns
-        a bijection of one column to another
+        a bijection of values in one column to another
     """
 
     if key and val:

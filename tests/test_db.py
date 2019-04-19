@@ -522,6 +522,34 @@ def test_get_ontology_terms_by_ontdb(connect):
         ]
     ))
 
+def test_dictify(connect):
+
+    res = db.dictify(db.get_species())
+
+    assert res == [
+        {'sp_name': 'Mus musculus', 'sp_id': 1},
+        {'sp_name': 'Homo sapiens', 'sp_id': 2},
+        {'sp_name': 'Rattus norvegicus', 'sp_id': 3}
+    ]
+
+def test_listify_1(connect):
+
+    res = db.listify(db.get_species())
+
+    assert (
+        res == np.array([
+            ('Mus musculus', 1),
+            ('Homo sapiens', 2),
+            ('Rattus norvegicus', 3)
+        ], dtype='object')
+    ).all()
+
+def test_listify_1(connect):
+
+    res = db.listify(db.get_species(), key='sp_id')
+
+    assert (res == np.array([1, 2, 3])).all()
+
 """
 def test_insert_geneset_values():
 

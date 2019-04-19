@@ -18,6 +18,8 @@ Changed
 
 - Update PooledCursor to actually use pooled connections
 
+- Update DB utility functions for dataframe input
+
 
 1.2.1 - 2019.02.27
 ------------------
