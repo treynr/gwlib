@@ -10,7 +10,6 @@ from collections import OrderedDict as od
 from psycopg2.extras import execute_values
 from psycopg2.pool import ThreadedConnectionPool
 import pandas as pd
-import psycopg2
 
 ## Global connection variable
 conn = None
@@ -20,7 +19,7 @@ class PooledConnection(ThreadedConnectionPool):
     """
     Derives psycopg2's ThreadedConnectionPool class and allows connection pools
     to be creating using python's with statement.
-    Can also be instantiated normally and implements the same methods as 
+    Can also be instantiated normally and implements the same methods as
     ThreadedConnectionPool.
     """
 
@@ -59,7 +58,7 @@ class PooledCursor(object):
     """
     Small class that encapsulates psycopg2's connection and cursor objects.
     Makes use of the global connection pool and retrieves a new connection from
-    the pool when instatiated normally or using the with statement. 
+    the pool when instatiated normally or using the with statement.
     """
 
     def __init__(self, pool=None):
@@ -90,7 +89,6 @@ class PooledCursor(object):
             self.cursor = None
 
         self.pool.putconn(self.connection)
-
 
     ## UTILITY ##
     #############
@@ -213,7 +211,7 @@ def tuplify(thing):
 
 def associate(df, key=None, val=None):
     """
-    Creates a simple mapping of values from one column to another. 
+    Creates a simple mapping of values from one column to another.
     If key or val are not supplied, generates a bijection between values from
     the first and second columns of the given dataframe.
     Duplicates are overwritten.
@@ -227,12 +225,10 @@ def associate(df, key=None, val=None):
         a bijection of one column to another
     """
 
-    d = {}
-
     if key and val:
         pass
 
-    ## Only key was provided, then assume the value is just the first column after 
+    ## Only key was provided, then assume the value is just the first column after
     ## the key column is removed
     elif key:
         val = df.iloc[:, ~df.columns.isin([key])].columns[0]
@@ -262,7 +258,7 @@ def associate_multiple(df, key=None):
         a bijection of one column to all others
     """
 
-    ## Only key was provided, then assume the value is just the first column after 
+    ## Only key was provided, then assume the value is just the first column after
     ## the key column is removed
     if not key:
         key = df.columns[0]
@@ -348,7 +344,7 @@ def get_species_with_taxid(lower=False):
         a dataframe containing species names (sp_name), GW species IDs (sp_id), and
         NCBI taxon IDs (sp_taxid)
     """
-    
+
     with CONNPOOL as conn:
         return pd.read_sql_query(
             '''
@@ -374,8 +370,7 @@ def get_species_by_taxid():
             SELECT sp_taxid, sp_id
             FROM   odestatic.species;
             ''',
-            conn,
-            params=(lower,)
+            conn
         )
 
 def get_attributions():
@@ -384,7 +379,7 @@ def get_attributions():
     These represent third party data resources integrated into GeneWeaver.
 
     returns
-        a dataframe of attribution abbreviations (at_abbrev) and their 
+        a dataframe of attribution abbreviations (at_abbrev) and their
         identifiers (at_id)
     """
 
@@ -400,7 +395,7 @@ def get_attributions():
 def get_gene_ids(refs, sp_id=None, gdb_id=None):
     """
     Given a set of external reference IDs, this returns a dataframe of
-    reference gene identifiers and their IDs used internally by GeneWeaver 
+    reference gene identifiers and their IDs used internally by GeneWeaver
     (ode_gene_id).
     An optional species id can be provided to limit gene results by species.
     An optional gene identifier type can be provided to limit mapping by ID type
@@ -408,9 +403,9 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
     This query does not incude genomic variants.
 
     Reference IDs are always strings (even if they're numeric) and should be
-    properly capitalized. If duplicate references exist in the DB (unlikely for 
-    anything except symbols) then they are overwritten in the return dict. 
-    Reference IDs can be any valid identifier supported by GeneWeaver (e.g. 
+    properly capitalized. If duplicate references exist in the DB (unlikely for
+    anything except symbols) then they are overwritten in the return dict.
+    Reference IDs can be any valid identifier supported by GeneWeaver (e.g.
     Ensembl, NCBI Gene, MGI, HGNC, etc.).
     See the get_gene_types function for gene types supported by GW.
 
@@ -420,7 +415,7 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
         gdb_id: an optional gene type identifier used to limit the ID mapping process
 
     returns
-        a dataframe containing reference identifiers (ode_ref_id) and GW gene 
+        a dataframe containing reference identifiers (ode_ref_id) and GW gene
         IDs (ode_gene_id)
     """
 
@@ -479,7 +474,7 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
 
 def get_species_genes(sp_id, gdb_id=None, symbol=True):
     """
-    Similar to the above get_gene_ids() but returns a dataframe containing reference 
+    Similar to the above get_gene_ids() but returns a dataframe containing reference
     and GW IDs mapping for every single gene associated with a given species (warning,
     this might be a lot of data).
     This query does not include genomic variants.
@@ -497,7 +492,7 @@ def get_species_genes(sp_id, gdb_id=None, symbol=True):
         symbol: if true limits results to genes covered by the symbol gene type
 
     returns
-        a dataframe containing all gene reference ID (ode_ref_id) and GW gene ID 
+        a dataframe containing all gene reference ID (ode_ref_id) and GW gene ID
         (ode_gene_id) pairs for a species.
     """
 
@@ -623,7 +618,7 @@ def get_geneset_ids(tiers=[1, 2, 3, 4, 5], at_id=None, size=0, sp_id=0):
                         WHEN %(sp_id)s > 0 THEN sp_id = %(sp_id)s
                         ELSE TRUE
                     END;
-            ''', 
+            ''',
             conn,
             params={'tiers': tiers, 'at_id': at_id, 'size': size, 'sp_id': sp_id}
         ).gs_id.to_numpy()
@@ -667,8 +662,8 @@ def get_geneset_ids_by_attribute(attrib, size=0, sp_id=0):
 
 def get_geneset_values(gs_ids):
     """
-    Returns a dataframe containing gene set values (genes and scores) for the given list 
-    of gene set IDs.
+    Returns a dataframe containing gene set values (genes and scores) for the given
+    list of gene set IDs.
 
     arguments
         gs_ids: a list of gene set identifiers
@@ -693,7 +688,7 @@ def get_geneset_values(gs_ids):
 
 def get_gene_homologs(genes, source='Homologene'):
     """
-    Returns a dataframe contaiing internal GW homology IDs for the given 
+    Returns a dataframe contaiing internal GW homology IDs for the given
     list of gene IDs.
 
     arguments
@@ -749,7 +744,7 @@ def get_publication(pmid):
 
 def get_publications(pmids):
     """
-    Returns a dataframe containing PubMed IDs and their respective GW publication 
+    Returns a dataframe containing PubMed IDs and their respective GW publication
     IDs.
     In cases where there are duplicate entries for the same PubMed ID, the minimum
     GW publication ID (pub_id) is returned.
@@ -804,7 +799,7 @@ def get_publication_pmid(pub_id):
 
 def get_geneset_pmids(gs_ids):
     """
-    Returns a dataframe of gene set identifiers and the PubMed IDs they are 
+    Returns a dataframe of gene set identifiers and the PubMed IDs they are
     associated with.
 
     arguments
@@ -831,14 +826,14 @@ def get_geneset_pmids(gs_ids):
 
 def get_geneset_text(gs_ids):
     """
-    Returns a dataframe containing gene set names, descriptions, and abbreviations 
+    Returns a dataframe containing gene set names, descriptions, and abbreviations
     for each geneset in the provided list.
 
     arguments
         gs_ids: list of gene set IDs to retrieve metadata for
 
     returns
-        a dataframe of containing gene set IDs, names, descriptions, and 
+        a dataframe of containing gene set IDs, names, descriptions, and
         abbreviations
     """
 
@@ -880,8 +875,6 @@ def get_gene_types(short=False):
             params=(short,)
         )
 
-        return associate(cursor)
-
 def get_platforms():
     """
     Returns the list of GW supported microarray platform and gene expression
@@ -911,7 +904,7 @@ def get_platform_probes(pf_id, refs):
         refs:  list of probe reference identifiers belonging to a platform
 
     returns
-        a dataframe containing probe references (prb_ref_id) and GW probe 
+        a dataframe containing probe references (prb_ref_id) and GW probe
         identifiers (prb_id)
     """
 
@@ -938,7 +931,7 @@ def get_all_platform_probes(pf_id):
         pf_id: platform ID
 
     returns
-        a dataframe containing probe references (prb_ref_id) and their GW probe 
+        a dataframe containing probe references (prb_ref_id) and their GW probe
         IDs (prb_id)
     """
 
@@ -956,7 +949,7 @@ def get_all_platform_probes(pf_id):
 def get_probe_genes(prb_ids):
     """
     For the given list of GW probe identifiers (prb_id), retrieves a dataframe containing
-    the genes each probe is supposed to map to. 
+    the genes each probe is supposed to map to.
     This ends up being a N:1 mapping since some platforms map a multiple probes to a
     single gene.
 
@@ -977,7 +970,7 @@ def get_probe_genes(prb_ids):
             FROM    extsrc.probe2gene
             WHERE   prb_id in %s;
             ''',
-            conn, 
+            conn,
             params=(prb_ids,)
         )
 
@@ -1057,7 +1050,7 @@ def get_geneset_annotations(gs_ids):
 
 def get_ontology_ids_by_refs(ont_refs):
     """
-    Returns a dataframe containing internal GW ontology IDs and the external 
+    Returns a dataframe containing internal GW ontology IDs and the external
     reference IDs (e.g. GO:0123456, MP:0123456) they are associated with.
 
     arguments
