@@ -6,6 +6,27 @@
 -- auth: TR
 --
 
+DROP TABLE IF EXISTS odestatic.species;
+DROP TABLE IF EXISTS odestatic.attribution;
+DROP TABLE IF EXISTS odestatic.genedb;
+DROP TABLE IF EXISTS odestatic.probe;
+DROP TABLE IF EXISTS odestatic.platform;
+DROP TABLE IF EXISTS odestatic.ontologydb;
+DROP TABLE IF EXISTS extsrc.gene;
+DROP TABLE IF EXISTS extsrc.geneset_value;
+DROP TABLE IF EXISTS extsrc.geneset_ontology;
+DROP TABLE IF EXISTS extsrc.homology;
+DROP TABLE IF EXISTS extsrc.ontology;
+DROP TABLE IF EXISTS extsrc.probe2gene;
+DROP TABLE IF EXISTS production.geneset;
+DROP TABLE IF EXISTS production.publication;
+DROP TABLE IF EXISTS production.file;
+DROP TABLE IF EXISTS production.grp;
+
+DROP SCHEMA IF EXISTS extsrc;
+DROP SCHEMA IF EXISTS odestatic;
+DROP SCHEMA IF EXISTS production;
+
 CREATE SCHEMA extsrc;
 CREATE SCHEMA odestatic;
 CREATE SCHEMA production;
@@ -85,6 +106,14 @@ CREATE TABLE extsrc.geneset_value (
     gsv_date         DATE DEFAULT NOW()
 );
 
+-- geneset_value table, 8 of 8 columns represented
+--
+CREATE TABLE extsrc.geneset_ontology (
+    gs_id            BIGINT NOT NULL,
+    ont_id           BIGINT NOT NULL,
+    gso_ref_type     VARCHAR
+);
+
 -- Minimal homology table, 5 of 6 columns represented
 --
 CREATE TABLE extsrc.homology (
@@ -114,6 +143,26 @@ CREATE TABLE odestatic.probe (
     prb_id      BIGINT NOT NULL,
     prb_ref_id  VARCHAR,
     pf_id       INTEGER NOT NULL
+);
+
+CREATE TABLE odestatic.platform (
+    pf_id         INTEGER NOT NULL,
+    pf_gpl_id     VARCHAR,
+    pf_shortname  VARCHAR,
+    pf_name       VARCHAR
+);
+
+CREATE TABLE odestatic.ontologydb (
+    ontdb_id          SERIAL,
+    ontdb_name        VARCHAR,
+    ontdb_prefix      VARCHAR,
+    ontdb_linkout_url VARCHAR,
+    ontdb_date        DATE DEFAULT NOW()
+);
+
+CREATE TABLE production.grp (
+    grp_id   INTEGER NOT NULL,
+    grp_name VARCHAR NOT NULL
 );
 
 INSERT INTO odestatic.species (sp_name, sp_taxid) 
@@ -172,4 +221,37 @@ UPDATE production.geneset SET pub_id = 7841 WHERE gs_id = 270867;
 INSERT INTO production.publication (pub_id, pub_pubmed)
 VALUES                             (2312, 17440432),
                                    (7841, 26077402);
+
+INSERT INTO odestatic.platform (pf_id, pf_gpl_id, pf_shortname, pf_name)
+VALUES                         (92, 'GPL10739', 'HuGene-1_0-st', 'Affymetrix Human Gene 1.0 ST'),
+                               (82, 'GPL6887', 'MouseWG-6 v2.0', 'Illumina MouseWG-6 v2.0'),
+                               (1, 'GPL32', 'MG_U74A', 'Affymetrix Murine Genome U74A');
+
+INSERT INTO odestatic.probe (prb_id, prb_ref_id, pf_id)
+VALUES                      (4723, '104722_at', 1),
+                            (5213, '92624_r_at', 1),
+                            (1014432, '1223735', 82),
+                            (1014603, '2455830', 82),
+                            (2132663, '7920865', 92),
+                            (2132681, '8146657', 92);
+
+INSERT INTO extsrc.probe2gene (prb_id, ode_gene_id)
+VALUES                        (4723, 6566),
+                              (5213, 1658);
+
+INSERT INTO production.grp (grp_id, grp_name)
+VALUES                     (1, 'A group name'),
+                           (2, 'My group');
+
+INSERT INTO odestatic.ontologydb (ontdb_id, ontdb_name, ontdb_prefix, ontdb_linkout_url)
+VALUES                     (1, 'Gene Ontology', 'GO', 'url'),
+                           (4, 'MeSH Terms', 'MESH', 'url');
+
+INSERT INTO extsrc.geneset_ontology (gs_id, ont_id, gso_ref_type)
+VALUES                              (185236, 60455, 'Manual Association');
+
+INSERT INTO extsrc.ontology (ont_id, ont_ref_id, ont_name, ont_description, ont_children, ont_parents, ontdb_id)
+VALUES                     (60455, 'GO:0006184', 'GTP catabolic process', 'The chemical...', 4, 2, 1),
+                           (50019, 'GO:0043088', 'regulation of Cdc42 GTPase activity', 'Any process...', 1, 2, 1),
+                           (7507, 'D009062', 'Mouth Neoplasms', 'Tumors or cancer...', 6, 2, 4);
 

@@ -8,27 +8,71 @@
 
 from collections import OrderedDict as od
 from psycopg2.extras import execute_values
+from psycopg2.pool import ThreadedConnectionPool
+import pandas as pd
 import psycopg2
 
 ## Global connection variable
 conn = None
+CONNPOOL = None
+
+class PooledConnection(ThreadedConnectionPool):
+    """
+    Derives psycopg2's ThreadedConnectionPool class and allows connection pools
+    to be creating using python's with statement.
+    Can also be instantiated normally and implements the same methods as 
+    ThreadedConnectionPool.
+    """
+
+    def __init__(self, minconn=2, maxconn=10, pool=None, *args, **kwargs):
+
+        if pool:
+            self.pool = pool
+        else:
+            self.pool = super(PooledConnection, self).__init__(
+                minconn, maxconn, *args, **kwargs
+            )
+
+        self.connections = []
+
+    def __enter__(self):
+
+        self.connections.append(self.getconn())
+
+        return self.connections[-1]
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+
+        if self.connections:
+            self.putconn(self.connections.pop())
+
+    def getconn(self, key=None):
+        return super(PooledConnection, self).getconn(key=key)
+
+    def putconn(self, conn, key=None, close=False):
+        return super(PooledConnection, self).putconn(conn, key=key, close=close)
+
+    def closeall(self):
+        return super(PooledConnection, self).closeall()
 
 class PooledCursor(object):
     """
     Small class that encapsulates psycopg2's connection and cursor objects.
-    On instantiation the class will create a new DB connection if one doesn't exist and
-    creates a new cursor when entered (e.g. using in a with statement).
+    Makes use of the global connection pool and retrieves a new connection from
+    the pool when instatiated normally or using the with statement. 
     """
 
-    def __init__(self, new_conn=None):
+    def __init__(self, pool=None):
 
-        if not new_conn:
-            global conn
-        else:
-            conn = new_conn
+        if not pool:
+            global CONNPOOL
+            pool = CONNPOOL
 
-        self.connection = conn
+        self.pool = pool
+        self.connection = pool.getconn()
         self.cursor = None
+
+        self.connection.set_client_encoding('UTF-8')
 
     def __enter__(self):
 
@@ -44,6 +88,9 @@ class PooledCursor(object):
             self.cursor.close()
 
             self.cursor = None
+
+        self.pool.putconn(self.connection)
+
 
     ## UTILITY ##
     #############
@@ -65,11 +112,11 @@ def connect(host, db, user, password, port=5432):
         connection, the second element contains the error or exception.
     """
 
-    global conn
+    global CONNPOOL
 
     try:
-        conn = psycopg2.connect(
-            host=host, dbname=db, user=user, password=password, port=port
+        CONNPOOL = PooledConnection(
+            2, 10, host=host, dbname=db, user=user, password=password, port=port
         )
 
     except Exception as e:
@@ -164,33 +211,65 @@ def tuplify(thing):
 
     return (thing,)
 
-def associate(cursor):
+def associate(df, key=None, val=None):
     """
-    Creates a simple mapping from all the rows returned by the cursor. The
-    first tuple member serves as the key and the rest are the values. Unlike
-    dictify, this does not use column names and generates a single dict from
-    all returned rows. Be careful since duplicates are overwritten.
+    Creates a simple mapping of values from one column to another. 
+    If key or val are not supplied, generates a bijection between values from
+    the first and second columns of the given dataframe.
+    Duplicates are overwritten.
 
     arguments
-        cursor: an active psycopg cursor
+        df:  dataframe returned by one of the DB queries
+        key: optional, the column that should be used as the dict key
+        val: optional, the column that should be used as the value
 
     returns
-        mapping of tuple element #1 to the rest
+        a bijection of one column to another
     """
 
     d = {}
 
-    for row in cursor:
+    if key and val:
+        pass
 
-        ## 1:1
-        if len(row) == 2:
-            d[row[0]] = row[1]
+    ## Only key was provided, then assume the value is just the first column after 
+    ## the key column is removed
+    elif key:
+        val = df.iloc[:, ~df.columns.isin([key])].columns[0]
 
-        ## 1:many
-        else:
-            d[row[0]] = list(row[1:])
+    ## Only val was provided, then assume the key is the first column after the
+    ## val column is removed
+    elif val:
+        key = df.iloc[:, ~df.columns.isin([val])].columns[0]
 
-    return d
+    ## Assume the key is the first column and the value is the second
+    else:
+        key, val = df.columns[:2]
+
+    return df.set_index(key).to_dict(orient='dict')[val]
+
+def associate_multiple(df, key=None):
+    """
+    Creates a mapping of values from one column to all others.
+    If key is not supplied, generates a bijection between values from
+    the first column to values of all others.
+
+    arguments
+        df:  dataframe returned by one of the DB queries
+        key: optional, the column that should be used as the dict key
+
+    returns
+        a bijection of one column to all others
+    """
+
+    ## Only key was provided, then assume the value is just the first column after 
+    ## the key column is removed
+    if not key:
+        key = df.columns[0]
+
+    return dict(
+        [(row[key], row[row.index != key].tolist()) for (_, row) in df.iterrows()]
+    )
 
 def associate_duplicate(cursor):
     """
@@ -242,80 +321,62 @@ def get_species(lower=False):
 
     arguments
         lower: if true, returns lowercased species names
+
     returns
-        a mapping of sp_names to sp_ids
+        a dataframe containing species names (sp_name) and GW species IDs (sp_id)
     """
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT  CASE WHEN %s THEN LOWER(sp_name) ELSE sp_name END, sp_id
             FROM    odestatic.species;
-            ''', (lower,)
+            ''',
+            conn,
+            params=(lower,)
         )
 
-        return associate(cursor)
-
-def get_species_with_taxid():
+def get_species_with_taxid(lower=False):
     """
     Returns a a list of species supported by GW. The returned list includes species
     names, identifiers, and NCBI taxon IDs.
 
+    arguments
+        lower: if true, returns lowercased species names
+
     returns
-        a list of dicts, each dict field corresponds to the column name.
+        a dataframe containing species names (sp_name), GW species IDs (sp_id), and
+        NCBI taxon IDs (sp_taxid)
     """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
-            SELECT sp_name, sp_id, sp_taxid
+            SELECT CASE WHEN %s THEN LOWER(sp_name) ELSE sp_name END, sp_id, sp_taxid
             FROM   odestatic.species;
-            '''
+            ''',
+            conn,
+            params=(lower,)
         )
 
-        return dictify(cursor)
-
+## Get rid of this
 def get_species_by_taxid():
     """
     Returns a mapping of species taxids (NCBI taxonomy ID) to their sp_id.
 
     returns
-        A mapping of taxon IDs (sp_taxid) to species IDs (sp_id)
+        a dataframe of NCBI taxon IDs (sp_taxid) and GW species IDs (sp_id)
     """
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT sp_taxid, sp_id
             FROM   odestatic.species;
-            '''
+            ''',
+            conn,
+            params=(lower,)
         )
-
-        return associate(cursor)
-
-## Might delete this
-def get_species_gene_id():
-    """
-    Returns a species name and the ID corresponding to which type of gene
-    identifiers the species uses by default.
-
-    returns
-        a dict mapping sp_name to gdb_id
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT sp_name, sp_ref_gdb_id
-            FROM   odestatic.species;
-            '''
-        )
-
-        return associate(cursor)
 
 def get_attributions():
     """
@@ -323,33 +384,34 @@ def get_attributions():
     These represent third party data resources integrated into GeneWeaver.
 
     returns
-        mapping of attribution abbreviations to IDs
+        a dataframe of attribution abbreviations (at_abbrev) and their 
+        identifiers (at_id)
     """
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT at_abbrev, at_id
             FROM   odestatic.attribution;
-            '''
+            ''',
+            conn
         )
-
-        return associate(cursor)
 
 def get_gene_ids(refs, sp_id=None, gdb_id=None):
     """
-    Given a set of external reference IDs, this returns a mapping of
-    reference gene identifiers to the IDs used internally by GeneWeaver (ode_gene_id).
+    Given a set of external reference IDs, this returns a dataframe of
+    reference gene identifiers and their IDs used internally by GeneWeaver 
+    (ode_gene_id).
     An optional species id can be provided to limit gene results by species.
     An optional gene identifier type can be provided to limit mapping by ID type
     (useful when identifiers from different resources overlap).
     This query does not incude genomic variants.
 
     Reference IDs are always strings (even if they're numeric) and should be
-    properly capitalized. If duplicate references exist in the DB (unlikely)
-    then they are overwritten in the return dict. Reference IDs can be any valid
-    identifier supported by GeneWeaver (e.g. Ensembl, NCBI Gene, MGI, HGNC, etc.).
+    properly capitalized. If duplicate references exist in the DB (unlikely for 
+    anything except symbols) then they are overwritten in the return dict. 
+    Reference IDs can be any valid identifier supported by GeneWeaver (e.g. 
+    Ensembl, NCBI Gene, MGI, HGNC, etc.).
     See the get_gene_types function for gene types supported by GW.
 
     arguments
@@ -358,15 +420,14 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
         gdb_id: an optional gene type identifier used to limit the ID mapping process
 
     returns
-        a bijection of reference identifiers (ode_ref_id) to GW
-        gene IDs (ode_gene_id)
+        a dataframe containing reference identifiers (ode_ref_id) and GW gene 
+        IDs (ode_gene_id)
     """
 
     refs = tuplify(refs)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             WITH symbol_type AS (
                 SELECT gdb_id
@@ -411,15 +472,16 @@ def get_gene_ids(refs, sp_id=None, gdb_id=None):
                     -- We don't want to match gene IDs that are representing variants
                     --
                     gdb_id <> (SELECT * FROM variant_type);
-            ''', {'refs': refs, 'spid': sp_id, 'gdbid': gdb_id}
+            ''',
+            conn,
+            params={'refs': refs, 'spid': sp_id, 'gdbid': gdb_id}
         )
-
-        return associate(cursor)
 
 def get_species_genes(sp_id, gdb_id=None, symbol=True):
     """
-    Similar to the above get_gene_ids() but returns a reference to GW ID mapping for all
-    genes for the given species (as a warning, this will be a lot of data).
+    Similar to the above get_gene_ids() but returns a dataframe containing reference 
+    and GW IDs mapping for every single gene associated with a given species (warning,
+    this might be a lot of data).
     This query does not include genomic variants.
     If a gdb_id is provided then this will return all genes covered by the given gene
     type.
@@ -435,12 +497,12 @@ def get_species_genes(sp_id, gdb_id=None, symbol=True):
         symbol: if true limits results to genes covered by the symbol gene type
 
     returns
-        an N:1 mapping of reference identifiers to GW IDs
+        a dataframe containing all gene reference ID (ode_ref_id) and GW gene ID 
+        (ode_gene_id) pairs for a species.
     """
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT  ode_ref_id, ode_gene_id
             FROM    extsrc.gene
@@ -461,32 +523,30 @@ def get_species_genes(sp_id, gdb_id=None, symbol=True):
 
                         ELSE TRUE
                     END;
-            ''', {'sp_id': sp_id, 'gdb_id': gdb_id, 'symbol': symbol}
+            ''',
+            conn,
+            params={'sp_id': sp_id, 'gdb_id': gdb_id, 'symbol': symbol}
         )
-
-        return associate(cursor)
 
 def get_gene_refs(genes, type_id=None):
     """
     The inverse of the get_gene_refs() function. For the given list of internal GW gene
-    identifiers, this function returns a mapping of internal to external
-    (e.g. MGI, HGNC, Ensembl) reference identifiers.
-    The mapping is 1:N since many external references may exist for a single, condensed
-    GW identifier.
+    identifiers, this function returns a datafrome of external (e.g. MGI, HGNC, Ensembl)
+    reference identifiers.
 
     arguments
         genes:   a list of internal GW gene identifiers (ode_gene_id)
         type_id: an optional gene type ID to limit the mapping to a specific gene type
 
     returns
-        a 1:N mapping of GW IDs to reference identifiers
+        a dataframe containing GW gene IDs (ode_gene_id) and gene reference IDs
+        (ode_ref_id)
     """
 
     genes = tuplify(genes)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT  DISTINCT ON (ode_gene_id, ode_ref_id) ode_gene_id, ode_ref_id
             FROM    extsrc.gene
@@ -495,103 +555,39 @@ def get_gene_refs(genes, type_id=None):
                         WHEN %(type_id)s IS NOT NULL THEN gdb_id = %(type_id)s
                         ELSE true
                     END;
-            ''', {'genes': genes, 'type_id': type_id}
+            ''',
+            conn,
+            params={'genes': genes, 'type_id': type_id}
         )
 
-        return associate_duplicate(cursor)
-
-## Will probably delete this
-def get_preferred_gene_refs(genes):
-    """
-    Exactly like get_gene_refs() but only retrieves preferred ode_ref_ids.
-    There _should_ only be one preferred ID and it _should_ always be the gene symbol
-    type.
-
-    arguments
-        genes: a list of internal GW gene identifiers (ode_gene_id)
-
-    returns
-        a bijection of GW IDs to reference identifiers
-    """
-
-    genes = tuplify(genes)
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  ode_gene_id, ode_ref_id
-            FROM    extsrc.gene
-            WHERE   ode_pref = TRUE AND
-                    ode_gene_id IN %s;
-            ''', (genes,)
-        )
-
-        return associate(cursor)
-
-## Reminder to delete this function. Don't remember writing it but don't wanna remove it
-## just yet in case doing so breaks something.
-def get_preferred_gene_refs_from_homology(hom_ids, sp_id=2):
-    """
-    Returns a mapping of hom_id -> gene symbol using the given list of hom_ids and
-    species. Defaults to a species ID of 2 which is usually human on almost all GW
-    instances.
-
-    arguments
-        hom_ids: an iterator type containing the list of homology IDs
-        sp_id    the species ID
-
-    returns
-        a dict mapping hom_id -> gene symbol
-    """
-
-    hom_ids = tuple(list(hom_ids))
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT     hom_id, ode_ref_id
-            FROM       extsrc.homology h
-            INNER JOIN extsrc.gene g
-            USING      (ode_gene_id)
-            WHERE      h.hom_id IN %s AND
-                       g.sp_id = %s AND
-                       g.ode_pref;
-            ''', (hom_ids, sp_id)
-        )
-
-        return associate(cursor)
 
 def get_genesets(gs_ids):
     """
-    Returns a list of gene set metadata for the given list of gene set IDs.
+    Returns a dataframe of gene set metadata for the given list of gene set IDs.
 
     arguments
         gs_ids: a list of gs_ids
 
     returns
-        A list of geneset objects. Each object is a dict where each field
-        corresponds to the columns in the geneset table.
+        a dataframe of geneset metadata
     """
 
     gs_ids = tuplify(gs_ids)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT  *
             FROM    production.geneset
             WHERE   gs_id IN %s;
-            ''', (gs_ids,)
+            ''',
+            conn,
+            params=(gs_ids,)
         )
-
-        return dictify(cursor, ordered=True)
 
 def get_geneset_ids(tiers=[1, 2, 3, 4, 5], at_id=None, size=0, sp_id=0):
     """
-    Returns a list of normal (i.e. their status is not deleted or deprecated)
+    Returns an array of normal (i.e. their status is not deleted or deprecated)
     gene set IDs.
     IDs can be filtered based on tiers, gene set size, species, and public resource
     attribution.
@@ -603,14 +599,13 @@ def get_geneset_ids(tiers=[1, 2, 3, 4, 5], at_id=None, size=0, sp_id=0):
         sp_id: species identifier
 
     returns
-        a list of gene set IDs
+        an array of gene set IDs (gs_id)
     """
 
     tiers = tuplify(tiers)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT  gs_id
             FROM    production.geneset
@@ -628,10 +623,10 @@ def get_geneset_ids(tiers=[1, 2, 3, 4, 5], at_id=None, size=0, sp_id=0):
                         WHEN %(sp_id)s > 0 THEN sp_id = %(sp_id)s
                         ELSE TRUE
                     END;
-            ''', {'tiers': tiers, 'at_id': at_id, 'size': size, 'sp_id': sp_id}
-        )
-
-        return listify(cursor)
+            ''', 
+            conn,
+            params={'tiers': tiers, 'at_id': at_id, 'size': size, 'sp_id': sp_id}
+        ).gs_id.to_numpy()
 
 ## Remove this
 def get_geneset_ids_by_attribute(attrib, size=0, sp_id=0):
@@ -672,91 +667,57 @@ def get_geneset_ids_by_attribute(attrib, size=0, sp_id=0):
 
 def get_geneset_values(gs_ids):
     """
-    Returns all gene set values (genes and scores) for the given list of gene set IDs.
+    Returns a dataframe containing gene set values (genes and scores) for the given list 
+    of gene set IDs.
 
     arguments
-        gs_ids: a list of gs_ids
+        gs_ids: a list of gene set identifiers
 
     returns
-        a list of dicts, each dict contains the gene set id, gene id, and gene score
+        a dataframe containing gene set IDs (gs_id), GW gene IDs (ode_gene_id), and
+        scores (gsv_value)
     """
 
     gs_ids = tuplify(gs_ids)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT gs_id, ode_gene_id, gsv_value
             FROM   extsrc.geneset_value
             WHERE  gs_id IN %s;
-            ''', (gs_ids,)
+            ''',
+            conn,
+            params=(gs_ids,)
         )
-
-        results = dictify(cursor)
-
-        ## Convert Decimal values to floats
-        for i in range(len(results)):
-            results[i]['gsv_value'] = float(results[i]['gsv_value'])
-
-        return results
 
 def get_gene_homologs(genes, source='Homologene'):
     """
-    Returns all homology IDs for the given list of gene IDs.
+    Returns a dataframe contaiing internal GW homology IDs for the given 
+    list of gene IDs.
 
     arguments
         genes:  list of internal GeneWeaver gene identifiers (ode_gene_id)
         source: the homology mapping data source to use, default is Homologene
 
     returns
-        a bijection of gene identifiers to homology identifiers
-
-    TODO: might want to consider making this return a 1:N mapping to take into account
-          paralogs, etc.
+        a dataframe containing GW gene IDs (ode_gene_id) and their associated
+        homology IDs (hom_id)
     """
 
     genes = tuplify(genes)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT ode_gene_id, hom_id
             FROM   extsrc.homology
             WHERE  ode_gene_id IN %s AND
                    hom_source_name = %s;
-            ''', (genes, source)
+            ''',
+            conn,
+            params=(genes, source)
         )
-
-        return associate(cursor)
-
-## Idk why this is here but can probably be removed?
-def get_homolog_species(hom_ids):
-    """
-    Returns all the species associated with a given hom_id.
-
-    arguments
-        hom_ids: a list of hom_ids
-
-    returns
-        a mapping of ode_gene_ids to homology IDs (hom_id)
-    """
-
-    if type(hom_ids) == list:
-        hom_ids = tuple(hom_ids)
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  hom_id, sp_id
-            FROM    extsrc.homology
-            WHERE   hom_id IN %s;
-            ''', (hom_ids,)
-        )
-
-        return associate_duplicate(cursor)
 
 def get_publication(pmid):
     """
@@ -788,58 +749,40 @@ def get_publication(pmid):
 
 def get_publications(pmids):
     """
-    Returns a mapping of PubMed IDs to their GW publication IDs.
+    Returns a dataframe containing PubMed IDs and their respective GW publication 
+    IDs.
+    In cases where there are duplicate entries for the same PubMed ID, the minimum
+    GW publication ID (pub_id) is returned.
 
     arguments
         pmids: a list of PubMed IDs
 
     returns
-        a dict mapping PubMed IDs to GW publication IDs
+        a dataframe containing PubMed IDs (pub_pubmed) and their associated
+        GW publication IDs (pub_id).
     """
 
     pmids = tuplify(pmids)
 
-    with PooledCursor() as cursor:
-
+    with CONNPOOL as conn:
         ## The lowest pub_id should be used and the others eventually deleted.
-        cursor.execute(
+        return pd.read_sql_query(
             '''
             SELECT      pub_pubmed, MIN(pub_id) as pub_id
             FROM        production.publication
             WHERE       pub_pubmed IN %s
             GROUP BY    pub_pubmed;
-            ''', (pmids,)
+            ''',
+            conn,
+            params=(pmids,)
         )
-
-        return associate(cursor)
-
-## I think this can be deleted
-def get_publication_mapping():
-    """
-    Returns a mapping of PMID -> pub_id for all publications in the DB.
-
-    returns
-        a dict mapping PMIDs -> pub_ids
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT DISTINCT ON  (pub_pubmed) pub_pubmed, pub_id
-            FROM                production.publication
-            ORDER BY            pub_pubmed, pub_id;
-            '''
-        )
-
-        return associate(cursor)
 
 def get_publication_pmid(pub_id):
     """
     Returns the PMID associated with a GW publication ID.
 
     arguments:
-        pub_id: int publication ID
+        pub_id: the GW publication ID
 
     returns:
         a string representing the article's PMID or None if one doesn't exist
@@ -861,147 +804,83 @@ def get_publication_pmid(pub_id):
 
 def get_geneset_pmids(gs_ids):
     """
-    Returns a bijection of gene set identifiers to the PubMed IDs they are associated
-    with.
+    Returns a dataframe of gene set identifiers and the PubMed IDs they are 
+    associated with.
 
     arguments
         gs_ids: list of gene set IDs to retrieve PMIDs for
 
     returns
-        a dict that maps the GS ID to the PMID. If a GS ID doesn't have an associated
-        publication, then it will be missing from results.
+        a dataframe containing gene set IDs (gs_id) and PubMed IDs (pub_pubmed)
     """
 
     gs_ids = tuple(gs_ids)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT      g.gs_id, p.pub_pubmed
             FROM        production.publication p
             INNER JOIN  production.geneset g
             USING       (pub_id)
             WHERE       gs_id IN %s;
-            ''', (gs_ids,)
+            ''',
+            conn,
+            params=(gs_ids,)
         )
 
-        return associate(cursor)
-
-def get_geneset_metadata(gs_ids):
+def get_geneset_text(gs_ids):
     """
-    Returns names, descriptions, and abbreviations for each geneset in the
-    provided list.
+    Returns a dataframe containing gene set names, descriptions, and abbreviations 
+    for each geneset in the provided list.
 
     arguments
         gs_ids: list of gene set IDs to retrieve metadata for
 
     returns
-        a list of dicts containing gene set IDs, names, descriptions, and abbreviations
+        a dataframe of containing gene set IDs, names, descriptions, and 
+        abbreviations
     """
 
     gs_ids = tuplify(gs_ids)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT  gs_id, gs_name, gs_description, gs_abbreviation
             FROM    production.geneset
             WHERE   gs_id IN %s;
-            ''', (gs_ids,)
+            ''',
+            conn,
+            params=(gs_ids,)
         )
-
-        return dictify(cursor)
-
-## Might get rid of this
-def get_geneset_size(gs_ids):
-    """
-    Returns geneset sizes for the given genesets.
-
-    """
-    if type(gs_ids) == list:
-        gs_ids = tuple(gs_ids)
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  gs_id, gs_count
-            FROM    production.geneset
-            WHERE   gs_id IN %s;
-            ''', (gs_ids,)
-        )
-
-        return associate(cursor)
-
-## and get rid of this
-def get_geneset_species(gs_ids):
-    """
-    Returns geneset species IDs for the given genesets.
-
-    arguments
-        gs_ids: list of gs_ids to get species data for
-
-    returns
-        a dict mapping gs_id -> sp_id
-    """
-
-    if type(gs_ids) == list:
-        gs_ids = tuple(gs_ids)
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  gs_id, sp_id
-            FROM    production.geneset
-            WHERE   gs_id IN %s;
-            ''', (gs_ids,)
-        )
-
-        return associate(cursor)
 
 def get_gene_types(short=False):
     """
-    Returns a bijection of gene type names to their associated type identifier.
+    Returns a dataframe with gene type names and their associated type identifier.
     If short is true, returns "short names" which are condensed or abbreviated names.
 
     arguments
         short: optional argument to return short names
 
     returns
-        a bijection of type names to type IDs
+        a dataframe containing gene types and their GW IDs (gdb_id).
+        If short == True, then gdb_shortname is returned otherwise the column is
+        gdb_name.
     """
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT  CASE WHEN %s THEN gdb_shortname ELSE gdb_name END,
                     gdb_id
             FROM    odestatic.genedb;
-            ''', (short,)
+            ''',
+            conn,
+            params=(short,)
         )
 
         return associate(cursor)
-
-def get_score_types():
-    """
-    Returns a list of score types supported by GeneWeaver. This data isn't currently
-    stored in the DB but it should be.
-
-    returns
-        a bijection of score types to type IDs
-    """
-
-    return {
-        'p-value': 1,
-        'q-value': 2,
-        'binary': 3,
-        'correlation': 4,
-        'effect': 5
-    }
 
 def get_platforms():
     """
@@ -1009,41 +888,17 @@ def get_platforms():
     technologies.
 
     returns
-        a list of objects whose keys match the platform table. These attributes include
-        the unique platform identifier, the platform name, a condensed name, and the GEO
-        GPL identifier.
+        a  dataframe containing gene expression platforms supported by GW.
     """
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT pf_id, pf_name, pf_shortname, pf_gpl_id
             FROM   odestatic.platform;
-            '''
+            ''',
+            conn
         )
-
-        return dictify(cursor)
-
-def get_platform_names():
-    """
-    Returns a mapping of microarray platform names (pf_name) to GW platform IDs
-    (pf_id).
-
-    returns
-        a bijection of platform names to identifiers.
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT pf_name, pf_id
-            FROM   odestatic.platform;
-            '''
-        )
-
-        return associate(cursor)
 
 def get_platform_probes(pf_id, refs):
     """
@@ -1056,23 +911,23 @@ def get_platform_probes(pf_id, refs):
         refs:  list of probe reference identifiers belonging to a platform
 
     returns
-        a bijection of probe references to GW probe identifiers for the given platform
+        a dataframe containing probe references (prb_ref_id) and GW probe 
+        identifiers (prb_id)
     """
 
     refs = tuplify(refs)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT prb_ref_id, prb_id
             FROM   odestatic.probe
             WHERE  pf_id = %s AND
                    prb_ref_id IN %s;
-            ''', (pf_id, refs)
+            ''',
+            conn,
+            params=(pf_id, refs)
         )
-
-        return associate(cursor)
 
 def get_all_platform_probes(pf_id):
     """
@@ -1083,73 +938,48 @@ def get_all_platform_probes(pf_id):
         pf_id: platform ID
 
     returns
-        a list of probe references
+        a dataframe containing probe references (prb_ref_id) and their GW probe 
+        IDs (prb_id)
     """
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT  prb_ref_id, prb_id
             FROM    odestatic.probe
             WHERE   pf_id = %s;
-            ''', (pf_id,)
+            ''',
+            conn,
+            params=(pf_id,)
         )
 
-        return listify(cursor)
-
-## Idk if this is ever used anywhere
-def get_all_platform_genes(pf_id):
+def get_probe_genes(prb_ids):
     """
-    For the given platform, retrieves the genes each probe is supposed to map to.
-
-    arguments
-        pf_id: platform ID
-
-    returns
-        the list of genes targeted by all probes for the given platform
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT      ode_gene_id
-            FROM        odestatic.probe p
-            INNER JOIN  extsrc.probe2gene p2g
-            USING       (prb_id)
-            WHERE       pf_id = %s;
-            ''', (pf_id,)
-        )
-
-        return listify(cursor)
-
-def get_probe2gene(prb_ids):
-    """
-    For the given list of GW probe identifiers, retrieves the genes each probe is
-    supposed to map to. Retrieves a 1:N mapping since some platforms map a single probe
-    to multiple genes.
+    For the given list of GW probe identifiers (prb_id), retrieves a dataframe containing
+    the genes each probe is supposed to map to. 
+    This ends up being a N:1 mapping since some platforms map a multiple probes to a
+    single gene.
 
     arguments
         prb_ids: a list of probe IDs
 
     returns
-        a 1:N mapping of probe IDs (prb_id) to genes (ode_gene_id)
+        a dataframe containing probe IDs (prb_id) to and the genes (ode_gene_id) they
+        represent
     """
 
     prb_ids = tuplify(prb_ids)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT  prb_id, ode_gene_id
             FROM    extsrc.probe2gene
             WHERE   prb_id in %s;
-            ''', (prb_ids,)
+            ''',
+            conn, 
+            params=(prb_ids,)
         )
-
-        return associate_duplicate(cursor)
 
 def get_group_by_name(name):
     """
@@ -1163,7 +993,6 @@ def get_group_by_name(name):
     """
 
     with PooledCursor() as cursor:
-
         cursor.execute(
             '''
             SELECT  grp_id
@@ -1174,118 +1003,82 @@ def get_group_by_name(name):
 
         return None if not cursor.rowcount else cursor.fetchone()[0]
 
-## I think I can delete this
-def get_projects():
-    """
-    Returns all projects in the DB.
-
-    returns
-        a list of dicts representing projects
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT  pj_id, pj_name, pj_groups
-            FROM    production.project;
-            '''
-        )
-
-        return dictify(cursor)
-
 def get_genesets_by_project(pj_ids):
     """
-    Returns all genesets associated with the given project IDs.
+    Returns all genesets associated with the given GW project IDs (pj_id).
 
     arguments
         pj_ids: a list of project IDs
 
     returns
-        a 1:N mapping of project IDs to gene set IDs
+        a dataframe containing project IDs (pj_id) and their associated gene set
+        IDs (gs_id)
     """
 
     pj_ids = tuplify(pj_ids)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT  pj_id, gs_id
             FROM    production.project2geneset
             WHERE   pj_id IN %s;
-            ''', (pj_ids,)
+            ''',
+            conn,
+            (pj_ids,)
         )
-
-        return associate_duplicate(cursor)
 
 def get_geneset_annotations(gs_ids):
     """
-    Returns the set of ontology annotations for each given gene set.
+    Returns gene set annotations for the given list of gene set IDs.
 
     arguments
         gs_ids: list of gene set ids to retrieve annotations for
 
     returns
-        a 1:N mapping of gene set IDs to ontology annotations.
-        The value of each key in the returned dict is a list of tuples.
-        Each tuple comprises a single annotation and contains two elements:
-        1, an internal GW ID which represents an ontology term (ont_id);
-        2, the external ontology term id used by the source ontology.
-            e.g. {123456: (7890, 'GO:1234567')}
+        a dataframe containing geneset annotations which include the internal GW
+        ontology id (ont_id) and the ontology term reference (ont_ref_id)
     """
 
     gs_ids = tuplify(gs_ids)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT      go.gs_id, go.ont_id, o.ont_ref_id
             FROM        extsrc.geneset_ontology AS go
             INNER JOIN  extsrc.ontology AS o
-            ON          USING (ont_id)
+            USING       (ont_id)
             WHERE       gs_id IN %s;
-            ''', (gs_ids,)
+            ''',
+            conn,
+            params=(gs_ids,)
         )
 
-        gs2ann = {}
-
-        for row in cursor:
-            gs_id = row[0]
-
-            if gs_id in gs2ann:
-                gs2ann[gs_id].append(tuple(row[1:]))
-            else:
-                gs2ann[gs_id] = [tuple(row[1:])]
-
-        return gs2ann
-
-def get_annotation_by_refs(ont_refs):
+def get_ontology_ids_by_refs(ont_refs):
     """
-    Maps ontology reference IDs (e.g. GO:0123456, MP:0123456) to the internal
-    ontology IDs used by GW.
+    Returns a dataframe containing internal GW ontology IDs and the external 
+    reference IDs (e.g. GO:0123456, MP:0123456) they are associated with.
 
     arguments
         ont_refs: a list of external ontology reference IDs
 
     returns
-        a bijection of ontology term references to GW ontology IDs
+        a dataframe containing GW ontology IDs (ont_id) and reference IDs (ont_ref_id)
     """
 
     ont_refs = tuplify(ont_refs)
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT ont_ref_id, ont_id
             FROM   extsrc.ontology
             WHERE  ont_ref_id IN %s
-            ''', (ont_refs,)
+            ''',
+            conn,
+            params=(ont_refs,)
         )
-
-        return associate(cursor)
 
 def get_ontologies():
     """
@@ -1293,44 +1086,17 @@ def get_ontologies():
     set annotations.
 
     returns
-        a list of dicts whose fields match the ontologydb table. Each entry in
-        the list is a row in the table.
+        a dataframe containing ontologies supported by GW
     """
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
-            SELECT ontdb_id, ontdb_name, ontdb_prefix, ontdb_date
+            SELECT ontdb_id, ontdb_name, ontdb_prefix, ontdb_linkout_url, ontdb_date
             FROM   odestatic.ontologydb;
-            '''
+            ''',
+            conn
         )
-
-        return dictify(cursor)
-
-def get_ontdb_id(name):
-    """
-    Retrieves the ontologydb ID for the given ontology name.
-
-    args
-        name: ontology name
-
-    returns
-        an int ID for the corresponding ontologydb entry. None is returned if
-        the ontology name is not found in the database.
-    """
-
-    with PooledCursor() as cursor:
-
-        cursor.execute(
-            '''
-            SELECT ontdb_id
-            FROM   odestatic.ontologydb
-            WHERE  LOWER(ontdb_name) = LOWER(%s);
-            ''', (name,)
-        )
-
-        return None if not cursor.rowcount else cursor.fetchone()[0]
 
 def get_ontology_terms_by_ontdb(ontdb_id):
     """
@@ -1340,40 +1106,39 @@ def get_ontology_terms_by_ontdb(ontdb_id):
         ontdb_id: the ID representing an ontology
 
     returns
-        a list of dicts whose fields match the columns in the ontology table.
+        a dataframe containing ontology term metadata for a given ontology
     """
 
-    with PooledCursor() as cursor:
-
-        cursor.execute(
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
             '''
             SELECT *
             FROM   extsrc.ontology
             WHERE  ontdb_id = %s;
-            ''', (ontdb_id,)
+            ''',
+            conn,
+            params=(ontdb_id,)
         )
-
-        return dictify(cursor)
 
 def get_threshold_types(lower=False):
     """
-    Returns a bijection of threshold type names to their IDs.
+    Returns a dataframe of threshold type names to their IDs.
     This data should be stored in the DB but it's not so we hardcode it here.
 
     arguments
         lower: optional argument which lower cases names if it is set to True
 
     returns
-        a mapping of threshold types to IDs (gs_threshold_type)
+        a dataframe containing threshold types and their IDs (gs_threshold_type)
     """
 
     types = ['P-value', 'Q-value', 'Binary', 'Correlation', 'Effect']
     type_ids = [1, 2, 3, 4, 5]
 
     if lower:
-        return dict(zip([t.lower() for t in types], type_ids))
+        types = [t.lower() for t in types]
 
-    return dict(zip(types, type_ids))
+    return pd.DataFrame(zip(types, type_ids), columns=['type_name', 'gs_threshold_type'])
 
     ## INSERTIONS ##
     ################

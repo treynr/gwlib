@@ -2,6 +2,23 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+Added
+'''''
+
+- Add PooledConnection class
+
+
+Changed
+'''''''
+
+- Update SELECT queries to return uniform datatypes (dataframes)
+
+- Update PooledCursor to actually use pooled connections
+
+
 1.2.1 - 2019.02.27
 ------------------
 
@@ -9,6 +26,7 @@ Added
 '''''
 
 - Add default_color parameter to logging messages
+
 
 1.2.0 - 2019.02.16
 ------------------
@@ -26,6 +44,7 @@ Changed
 '''''''
 
 - Update ``get_geneset_values`` to ignore variant gene types.
+
 
 1.1.0 - 2019.01.31
 ------------------
@@ -59,3 +78,4 @@ Fixed
 ------------------
 
 - Initial public release.
+
