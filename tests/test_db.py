@@ -80,6 +80,7 @@ def test_get_species(connect):
 
     assert res.equals(pd.DataFrame(
         [
+            ['', 0],
             ['Mus musculus', 1],
             ['Homo sapiens', 2],
             ['Rattus norvegicus', 3]
@@ -93,6 +94,7 @@ def test_get_species_with_taxid(connect):
 
     assert res.equals(pd.DataFrame(
         [
+            ['', 0, 0],
             ['Mus musculus', 1, 10090],
             ['Homo sapiens', 2, 9606],
             ['Rattus norvegicus', 3, 10116]
@@ -494,6 +496,7 @@ def test_get_ontologies(connect):
 
     res = db.get_ontologies()
 
+    print(res)
     assert res.equals(pd.DataFrame(
         [
             [1, 'Gene Ontology', 'GO', 'url', datetime.date.today()],
@@ -527,6 +530,7 @@ def test_dictify(connect):
     res = db.dictify(db.get_species())
 
     assert res == [
+        {'sp_name': '', 'sp_id': 0},
         {'sp_name': 'Mus musculus', 'sp_id': 1},
         {'sp_name': 'Homo sapiens', 'sp_id': 2},
         {'sp_name': 'Rattus norvegicus', 'sp_id': 3}
@@ -538,6 +542,7 @@ def test_listify_1(connect):
 
     assert (
         res == np.array([
+            ('', 0),
             ('Mus musculus', 1),
             ('Homo sapiens', 2),
             ('Rattus norvegicus', 3)
@@ -548,7 +553,7 @@ def test_listify_1(connect):
 
     res = db.listify(db.get_species(), key='sp_id')
 
-    assert (res == np.array([1, 2, 3])).all()
+    assert (res == np.array([0, 1, 2, 3])).all()
 
 """
 def test_insert_geneset_values():

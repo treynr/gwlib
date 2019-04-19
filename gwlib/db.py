@@ -706,6 +706,37 @@ def get_gene_homologs(genes, source='Homologene'):
             params=(genes, source)
         )
 
+def get_gene_homologs_using_source(genes, source='Homologene'):
+    """
+    Returns a dataframe contaiing internal GW homology IDs for the given
+    list of gene IDs.
+    Uses a dev table, homology_source, to select the mapping.
+
+    arguments
+        genes:  list of internal GeneWeaver gene identifiers (ode_gene_id)
+        source: the homology mapping data source to use, default is Homologene
+
+    returns
+        a dataframe containing GW gene IDs (ode_gene_id) and their associated
+        homology IDs (hom_id)
+    """
+
+    genes = tuplify(genes)
+
+    with CONNPOOL as conn:
+        return pd.read_sql_query(
+            '''
+            SELECT     ode_gene_id, hom_id
+            FROM       extsrc.homology h
+            INNER JOIN extsrc.homology_source hs
+            USING      (hom_source_uid)
+            WHERE      hs.hom_source_name = %s AND
+                       h.ode_gene_id IN %s;
+            ''',
+            conn,
+            params=(source, genes)
+        )
+
 def get_publication(pmid):
     """
     Returns the GW publication ID associated with the given PubMed ID.
