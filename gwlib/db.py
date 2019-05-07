@@ -6,7 +6,6 @@
 ## auth: TR
 #
 
-from collections import OrderedDict as od
 from psycopg2.extras import execute_values
 from psycopg2.pool import ThreadedConnectionPool
 import pandas as pd
@@ -169,7 +168,7 @@ def dictify_and_map(cursor):
 def listify(df, key=None):
     """
     Converts the query result into a 2D numpy array.
-    If key is given, then produces a 1D array using values from the column 
+    If key is given, then produces a 1D array using values from the column
     specified by key.
 
     arguments
@@ -1901,7 +1900,7 @@ def get_variants_by_refs(refs, build):
             ''', (build, refs)
         )
 
-        return associate(cursor)
+        return cursor.fetchal()
 
 def get_variant_odes_by_refs(refs, build):
     """
@@ -1947,7 +1946,7 @@ def get_variant_odes_by_refs(refs, build):
             ''', (build, refs)
         )
 
-        return associate(cursor)
+        return cursor.fetchall()
 
 def get_variant_refs_by_odes(odes, build):
     """
@@ -1981,7 +1980,7 @@ def get_variant_refs_by_odes(odes, build):
             ''', (build, odes)
         )
 
-        return associate(cursor)
+        return cursor.fetchall()
 
 def roll_up_variants_from_odes(odes, mapping=('Variant',)):
     """
@@ -2056,7 +2055,7 @@ def is_variant_set(gsids):
             ''', (gsids,)
         )
 
-        return associate(cursor)
+        return cursor.fetchall()
 
 
 ## Can get rid of all the insert variant functions

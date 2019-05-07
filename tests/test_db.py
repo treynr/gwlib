@@ -412,7 +412,6 @@ def test_get_platforms(connect):
 
     res = db.get_platforms()
 
-    print(res)
     assert res.equals(pd.DataFrame(
         [
             [92,  'Affymetrix Human Gene 1.0 ST', 'HuGene-1_0-st', 'GPL10739'],
@@ -496,7 +495,6 @@ def test_get_ontologies(connect):
 
     res = db.get_ontologies()
 
-    print(res)
     assert res.equals(pd.DataFrame(
         [
             [1, 'Gene Ontology', 'GO', 'url', datetime.date.today()],
